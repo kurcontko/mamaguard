@@ -1,0 +1,88 @@
+# MamaGuard Demo Script (< 3 minutes)
+
+## Pre-demo checklist
+- [ ] Cloud Run agent healthy (curl agent card returns 200)
+- [ ] BYO Agent published on PO Marketplace
+- [ ] Maria patient ID ready: 881f534f-d041-425d-a542-cbf669f43e18
+- [ ] All inputs pre-copied (no typing during recording)
+
+---
+
+## Scene 1: Introduction (0:00 - 0:15)
+
+**Voiceover:** "MamaGuard is an AI care coordination agent for maternal and pediatric health. It analyzes FHIR patient records using three specialist agents — maternal risk, pediatric transitions, and social determinants — and pauses for clinician review on critical findings."
+
+**Visual:** Architecture diagram (3 agents, FHIR tools, Liaison pattern)
+
+## Scene 2: Launch from Marketplace (0:15 - 0:30)
+
+**Action:** Open PO Marketplace → find "MamaGuard" → Launch
+
+**Voiceover:** "MamaGuard is available on the Prompt Opinion Marketplace as a BYO Agent. Clinicians launch it directly from the launchpad."
+
+**Action:** Select patient Maria (881f534f)
+
+## Scene 3: Maternal Risk Assessment (0:30 - 1:15)
+
+**Input:** "Assess maternal risk for this patient"
+
+**Wait for response.** Expected output shows:
+- URGENT risk level
+- BP trend: consistently >140/90, spike to 170/98 postpartum
+- HbA1c trend: diabetes range
+- 6 pregnancies, 5 losses
+- CLINICIAN REVIEW REQUIRED for BP management
+
+**Voiceover:** "The maternal agent queries the FHIR server for BP trends, glucose, pregnancy history, and medications. It identifies Stage 2 hypertension and recurrent pregnancy loss — flagging clinician review before any treatment recommendations."
+
+**Flash:** Briefly show the FHIR JSON in the response (resource IDs, dates, values)
+
+## Scene 4: SDOH Screening (1:15 - 1:45)
+
+**Input:** "Screen for social determinants and insurance status"
+
+**Wait for response.** Expected output shows:
+- No insurance coverage found
+- Primary language: French (language barrier)
+- Recommended: Medicaid enrollment, interpreter services, WIC referral
+- CommunicationRequest resource created
+
+**Voiceover:** "The SDOH agent screens from FHIR data only — no external APIs. It detects Maria has no insurance, speaks French, and creates an outreach request in the health record."
+
+## Scene 5: Pediatric Handoff (1:45 - 2:15)
+
+**Voiceover:** "For the pediatric transition, the clinician switches to the child's record — respecting the patient-scoped security model."
+
+**Action:** Switch patient context to a pediatric patient (newborn)
+
+**Input:** "Check immunization status and developmental milestones"
+
+**Wait for response.** Expected output shows:
+- Immunization gap analysis against CDC schedule
+- Developmental screening status per AAP Bright Futures
+- Maternal risk factors noted (DM2 → screen for neonatal hypoglycemia)
+
+## Scene 6: Technical Depth (2:15 - 2:45)
+
+**Flash through quickly:**
+1. Agent card JSON at `/.well-known/agent-card.json` (4 skills, FHIR extension)
+2. `clinician_review` object in tool response (Liaison pattern)
+3. CommunicationRequest resource written to FHIR (bidirectional)
+4. API key security + FHIR token never in LLM prompt
+
+**Voiceover:** "Under the hood: A2A protocol with FHIR context extension, Liaison Agent pattern for human-in-the-loop, bidirectional FHIR write-back, and credentials never exposed to the LLM."
+
+## Scene 7: Closing (2:45 - 3:00)
+
+**Voiceover:** "MamaGuard targets the coordination gap responsible for 80% of preventable maternal deaths. Three specialist agents, twelve FHIR tools, one unified care plan — with the clinician always in control."
+
+**Visual:** Impact metrics table from Devpost description
+
+---
+
+## Pre-copied inputs
+```
+Assess maternal risk for this patient
+Screen for social determinants and insurance status
+Check immunization status and developmental milestones
+```

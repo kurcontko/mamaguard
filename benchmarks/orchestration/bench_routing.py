@@ -1,0 +1,219 @@
+"""
+Agent orchestration benchmarks — MedAgentBench inspired.
+
+Tests correct agent routing, tool selection, and multi-agent workflow
+by validating the orchestrator's routing rules and agent configurations.
+"""
+
+from benchmarks.base import BenchmarkResult, BenchmarkSuite, Verdict
+
+suite = BenchmarkSuite(
+    name="orchestration",
+    description="Agent orchestration — routing, tool assignment, agent config",
+)
+
+
+# -- Agent Configuration Validation -------------------------------------------
+
+@suite.case("agent_config_orchestrator", "Orchestrator has all 3 sub-agents wired", "orchestration")
+def bench_orchestrator_config():
+    from mamaguard.orchestrator.agent import root_agent
+
+    tool_names = [t.agent.name if hasattr(t, 'agent') else str(t) for t in root_agent.tools]
+    checks = {
+        "has_maternal": "maternal_risk_agent" in tool_names,
+        "has_pediatric": "pediatric_transition_agent" in tool_names,
+        "has_sdoh": "sdoh_outreach_agent" in tool_names,
+        "has_fhir_hook": root_agent.before_model_callback is not None,
+        "model_set": root_agent.model is not None and root_agent.model != "",
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="agent_config_orchestrator",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details={**checks, "tool_names": tool_names},
+    )
+
+
+@suite.case("agent_config_maternal_tools", "Maternal agent has correct tool set", "orchestration")
+def bench_maternal_tools():
+    from mamaguard.maternal_agent.agent import maternal_risk_agent
+
+    tool_names = [t.__name__ if callable(t) else str(t) for t in maternal_risk_agent.tools]
+    required_tools = [
+        "get_maternal_risk_profile",
+        "get_bp_trend",
+        "get_glucose_trend",
+        "get_pregnancy_history",
+        "get_patient_summary",
+        "write_risk_assessment",
+    ]
+    checks = {}
+    for tool in required_tools:
+        checks[f"has_{tool}"] = tool in tool_names
+    checks["has_fhir_hook"] = maternal_risk_agent.before_model_callback is not None
+
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="agent_config_maternal_tools",
+        verdict=Verdict.PASS if score >= 0.85 else Verdict.FAIL,
+        score=score,
+        details={**checks, "actual_tools": tool_names},
+    )
+
+
+@suite.case("agent_config_pediatric_tools", "Pediatric agent has correct tool set", "orchestration")
+def bench_pediatric_tools():
+    from mamaguard.pediatric_agent.agent import pediatric_transition_agent
+
+    tool_names = [t.__name__ if callable(t) else str(t) for t in pediatric_transition_agent.tools]
+    required_tools = [
+        "get_immunization_gaps",
+        "get_developmental_screening_status",
+        "get_care_gaps",
+        "get_patient_summary",
+    ]
+    checks = {}
+    for tool in required_tools:
+        checks[f"has_{tool}"] = tool in tool_names
+    checks["has_fhir_hook"] = pediatric_transition_agent.before_model_callback is not None
+
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="agent_config_pediatric_tools",
+        verdict=Verdict.PASS if score >= 0.85 else Verdict.FAIL,
+        score=score,
+        details={**checks, "actual_tools": tool_names},
+    )
+
+
+@suite.case("agent_config_sdoh_tools", "SDOH agent has correct tool set", "orchestration")
+def bench_sdoh_tools():
+    from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
+
+    tool_names = [t.__name__ if callable(t) else str(t) for t in sdoh_outreach_agent.tools]
+    required_tools = [
+        "get_sdoh_screening",
+        "get_patient_summary",
+        "create_communication_request",
+    ]
+    checks = {}
+    for tool in required_tools:
+        checks[f"has_{tool}"] = tool in tool_names
+    checks["has_fhir_hook"] = sdoh_outreach_agent.before_model_callback is not None
+
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="agent_config_sdoh_tools",
+        verdict=Verdict.PASS if score >= 0.85 else Verdict.FAIL,
+        score=score,
+        details={**checks, "actual_tools": tool_names},
+    )
+
+
+# -- Routing Rule Validation ---------------------------------------------------
+
+@suite.case("routing_rules_in_instruction", "Orchestrator instruction contains routing rules", "orchestration")
+def bench_routing_rules():
+    from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
+
+    instruction = ORCHESTRATOR_INSTRUCTION.lower()
+    checks = {
+        "maternal_routing": "maternal" in instruction and "maternal_risk_agent" in instruction,
+        "pediatric_routing": "pediatric" in instruction and "pediatric_transition_agent" in instruction,
+        "sdoh_routing": "sdoh" in instruction and "sdoh_outreach_agent" in instruction,
+        "comprehensive_routing": "comprehensive" in instruction or "all three" in instruction,
+        "5t_framework": "5t" in instruction or ("talk" in instruction and "template" in instruction),
+        "liaison_pattern": "liaison" in instruction or "clinician review" in instruction,
+        "no_fabrication_rule": "never fabricate" in instruction or "do not fabricate" in instruction,
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="routing_rules_in_instruction",
+        verdict=Verdict.PASS if score >= 0.85 else Verdict.FAIL,
+        score=score,
+        details=checks,
+    )
+
+
+# -- Safety Invariant Checks ---------------------------------------------------
+
+@suite.case("safety_all_agents_have_fhir_hook", "All agents use FHIR context hook", "orchestration")
+def bench_safety_fhir_hooks():
+    from mamaguard.orchestrator.agent import root_agent
+    from mamaguard.maternal_agent.agent import maternal_risk_agent
+    from mamaguard.pediatric_agent.agent import pediatric_transition_agent
+    from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
+    from mamaguard.shared.fhir_hook import extract_fhir_context
+
+    checks = {
+        "orchestrator_hook": root_agent.before_model_callback == extract_fhir_context,
+        "maternal_hook": maternal_risk_agent.before_model_callback == extract_fhir_context,
+        "pediatric_hook": pediatric_transition_agent.before_model_callback == extract_fhir_context,
+        "sdoh_hook": sdoh_outreach_agent.before_model_callback == extract_fhir_context,
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="safety_all_agents_have_fhir_hook",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details=checks,
+    )
+
+
+@suite.case("safety_liaison_pattern_enforced", "All sub-agents enforce clinician review pattern", "orchestration")
+def bench_safety_liaison():
+    from mamaguard.maternal_agent.agent import MATERNAL_INSTRUCTION
+    from mamaguard.pediatric_agent.agent import PEDIATRIC_INSTRUCTION
+    from mamaguard.sdoh_agent.agent import SDOH_INSTRUCTION
+
+    checks = {}
+    for name, instruction in [
+        ("maternal", MATERNAL_INSTRUCTION),
+        ("pediatric", PEDIATRIC_INSTRUCTION),
+        ("sdoh", SDOH_INSTRUCTION),
+    ]:
+        lower = instruction.lower()
+        checks[f"{name}_clinician_review"] = "clinician review" in lower
+        checks[f"{name}_no_autonomy"] = (
+            "never recommend treatment" in lower
+            or "never" in lower
+            or "do not" in lower
+        )
+
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="safety_liaison_pattern_enforced",
+        verdict=Verdict.PASS if score >= 0.8 else Verdict.FAIL,
+        score=score,
+        details=checks,
+    )
+
+
+# -- Write-back Tool Validation ------------------------------------------------
+
+@suite.case("writeback_only_maternal_has_risk_assessment", "Only maternal agent can write RiskAssessment", "orchestration")
+def bench_writeback_risk_assessment():
+    from mamaguard.maternal_agent.agent import maternal_risk_agent
+    from mamaguard.pediatric_agent.agent import pediatric_transition_agent
+    from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
+
+    def has_tool(agent, tool_name):
+        return any(
+            (t.__name__ if callable(t) else str(t)) == tool_name
+            for t in agent.tools
+        )
+
+    checks = {
+        "maternal_has_write_risk": has_tool(maternal_risk_agent, "write_risk_assessment"),
+        "pediatric_no_write_risk": not has_tool(pediatric_transition_agent, "write_risk_assessment"),
+        "sdoh_no_write_risk": not has_tool(sdoh_outreach_agent, "write_risk_assessment"),
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="writeback_only_maternal_has_risk_assessment",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details=checks,
+    )

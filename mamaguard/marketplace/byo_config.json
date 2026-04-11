@@ -1,0 +1,15 @@
+{
+  "name": "MamaGuard: Maternal-Pediatric Care Coordinator",
+  "scope": "patient",
+  "model": "gemini-2.5-flash",
+  "fhir_context_enabled": true,
+  "external_agent_url": "https://mamaguard-xxxxx.run.app",
+  "guardrails": [],
+  "response_format": "5T",
+  "skills": [
+    "maternal-risk-assessment",
+    "pediatric-care-transition",
+    "sdoh-screening-outreach",
+    "comprehensive-care-plan"
+  ]
+}
