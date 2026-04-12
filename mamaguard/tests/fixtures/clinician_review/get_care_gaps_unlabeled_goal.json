@@ -1,0 +1,9 @@
+{
+  "confidence": 0.7,
+  "evidence_basis": [
+    "Goal/goal-unlabeled is active but lacks description"
+  ],
+  "reason": "1 care gap(s) identified",
+  "recommendation": "Goal/goal-unlabeled is active but lacks description",
+  "required": true
+}

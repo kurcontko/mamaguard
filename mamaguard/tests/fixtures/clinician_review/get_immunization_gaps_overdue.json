@@ -1,0 +1,28 @@
+{
+  "confidence": 0.9,
+  "evidence_basis": [
+    "Hepatitis B dose 2 (due at 1 months)",
+    "Diphtheria, Tetanus, Pertussis dose 1 (due at 2 months)",
+    "Polio dose 1 (due at 2 months)",
+    "Haemophilus influenzae type b dose 1 (due at 2 months)",
+    "Pneumococcal dose 1 (due at 2 months)",
+    "Rotavirus dose 1 (due at 2 months)",
+    "Diphtheria, Tetanus, Pertussis dose 2 (due at 4 months)",
+    "Polio dose 2 (due at 4 months)",
+    "Haemophilus influenzae type b dose 2 (due at 4 months)",
+    "Pneumococcal dose 2 (due at 4 months)",
+    "Rotavirus dose 2 (due at 4 months)",
+    "Hepatitis B dose 3 (due at 6 months)",
+    "Diphtheria, Tetanus, Pertussis dose 3 (due at 6 months)",
+    "Pneumococcal dose 3 (due at 6 months)",
+    "Influenza (annual) dose 1 (due at 6 months)",
+    "Measles, Mumps, Rubella dose 1 (due at 12 months)",
+    "Varicella dose 1 (due at 12 months)",
+    "Hepatitis A dose 1 (due at 12 months)",
+    "Pneumococcal dose 4 (due at 12 months)",
+    "Diphtheria, Tetanus, Pertussis dose 4 (due at 15 months)"
+  ],
+  "reason": "20 overdue immunizations detected",
+  "recommendation": "Schedule catch-up immunizations",
+  "required": true
+}

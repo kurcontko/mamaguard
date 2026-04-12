@@ -1,0 +1,12 @@
+{
+  "confidence": 0.75,
+  "evidence_basis": [
+    "Input: Z59.0",
+    "ZIP: 02139",
+    "Resolved category: housing",
+    "Resource source: curated"
+  ],
+  "reason": "SDOH resource referral recommended -- clinician should review match and initiate outreach.",
+  "recommendation": "Record the selected resource on a FHIR CarePlan + Goal via write_care_plan so the care team has a trackable intervention tied to the patient record.",
+  "required": true
+}

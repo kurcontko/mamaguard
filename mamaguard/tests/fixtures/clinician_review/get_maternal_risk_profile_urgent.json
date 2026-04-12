@@ -1,0 +1,14 @@
+{
+  "confidence": 0.85,
+  "evidence_basis": [
+    "Observation/bp-severe-1 (BP 168/112 on 2026-03-15T10:00:00Z)",
+    "Observation/bp-elevated-1 (BP 145/92 on 2026-03-20T10:00:00Z)",
+    "Observation/hba1c-1 (HbA1c 7.2% on 2026-02-01)",
+    "Observation/hba1c-2 (HbA1c 7.8% on 2026-03-01)",
+    "Condition/preg-miscarriage-2 (Miscarriage \u2014 miscarriage, onset 2025-02-10)",
+    "Condition/preg-miscarriage-1 (Miscarriage \u2014 miscarriage, onset 2024-06-15)"
+  ],
+  "reason": "Risk level: URGENT. Factors: Stage 2 hypertension (>160/110); Diabetes range HbA1c (>6.5%); Recurrent pregnancy loss (2 losses)",
+  "recommendation": "Comprehensive maternal risk review recommended",
+  "required": true
+}

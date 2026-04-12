@@ -1,0 +1,10 @@
+{
+  "confidence": 0.8,
+  "evidence_basis": [
+    "No Coverage resources found for patient",
+    "Patient primary language: Spanish"
+  ],
+  "reason": "Insurance coverage gap detected -- may affect medication access and care continuity",
+  "recommendation": "Verify insurance status; consider Medicaid enrollment or community health resources",
+  "required": true
+}
