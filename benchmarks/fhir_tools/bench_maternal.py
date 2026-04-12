@@ -44,7 +44,7 @@ def _run_bp_trend(bp_bundle: dict, patient_id: str) -> dict:
     with patch("mamaguard.shared.tools.maternal._fhir_get") as mock:
         mock.return_value = bp_bundle
         ctx = MockToolContext(patient_id=patient_id)
-        return get_bp_trend(tool_context=ctx)
+        return get_bp_trend(tool_context=ctx)  # type: ignore[arg-type]
 
 
 @suite.case("bp_severe_detection", "Detect Stage 2 HTN (>160/110) in Maria's readings", "fhir_tools")
@@ -135,7 +135,7 @@ def _run_glucose_trend(hba1c_bundle: dict, glucose_bundle: dict, patient_id: str
     with patch("mamaguard.shared.tools.maternal._fhir_get") as mock:
         mock.side_effect = side_effect
         ctx = MockToolContext(patient_id=patient_id)
-        return get_glucose_trend(tool_context=ctx)
+        return get_glucose_trend(tool_context=ctx)  # type: ignore[arg-type]
 
 
 @suite.case("glucose_diabetes_detection", "Detect diabetes-range HbA1c in Maria", "fhir_tools")
@@ -188,7 +188,7 @@ def _run_pregnancy_history(pregnancy_bundles: dict, patient_id: str) -> dict:
     with patch("mamaguard.shared.tools.maternal._fhir_get") as mock:
         mock.side_effect = side_effect
         ctx = MockToolContext(patient_id=patient_id)
-        return get_pregnancy_history(tool_context=ctx)
+        return get_pregnancy_history(tool_context=ctx)  # type: ignore[arg-type]
 
 
 @suite.case("pregnancy_recurrent_loss", "Detect recurrent pregnancy loss in Maria", "fhir_tools")

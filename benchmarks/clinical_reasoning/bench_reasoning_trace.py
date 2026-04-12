@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from benchmarks.base import BenchmarkResult, BenchmarkSuite, MockToolContext, Verdict
@@ -50,7 +51,7 @@ PATIENT_ID = "compound-maria-001"
 
 # Two recent BP readings, both severe (>160 systolic OR >110 diastolic), a
 # third older reading that is elevated but not severe. Trend = increasing.
-_BP_BUNDLE = {
+_BP_BUNDLE: dict[str, Any] = {
     "resourceType": "Bundle",
     "type": "searchset",
     "entry": [
@@ -96,7 +97,7 @@ _BP_BUNDLE = {
     ],
 }
 
-_HBA1C_BUNDLE = {
+_HBA1C_BUNDLE: dict[str, Any] = {
     "resourceType": "Bundle",
     "type": "searchset",
     "entry": [{
@@ -109,7 +110,7 @@ _HBA1C_BUNDLE = {
     }],
 }
 
-_GLUCOSE_BUNDLE = {
+_GLUCOSE_BUNDLE: dict[str, Any] = {
     "resourceType": "Bundle",
     "type": "searchset",
     "entry": [{
@@ -124,7 +125,7 @@ _GLUCOSE_BUNDLE = {
 
 # One resolved normal pregnancy (the recent live birth — context for postpartum
 # flag), no recurrent losses.
-_PREGNANCY_BUNDLE = {
+_PREGNANCY_BUNDLE: dict[str, Any] = {
     "resourceType": "Bundle",
     "type": "searchset",
     "entry": [{
@@ -143,7 +144,7 @@ _PREGNANCY_BUNDLE = {
 # All-conditions bundle returned by sdoh.get_sdoh_screening: includes the
 # housing Z-code equivalent (SNOMED 105531004) plus the (clinically noisy but
 # harmless) resolved normal pregnancy.
-_ALL_CONDITIONS_BUNDLE = {
+_ALL_CONDITIONS_BUNDLE: dict[str, Any] = {
     "resourceType": "Bundle",
     "type": "searchset",
     "entry": [
@@ -174,7 +175,7 @@ _ALL_CONDITIONS_BUNDLE = {
     ],
 }
 
-_PATIENT_RESOURCE = {
+_PATIENT_RESOURCE: dict[str, Any] = {
     "resourceType": "Patient",
     "id": PATIENT_ID,
     "communication": [{
@@ -188,7 +189,7 @@ _PATIENT_RESOURCE = {
 }
 
 # Empty Coverage bundle — this is the Medicaid gap.
-_EMPTY_COVERAGE_BUNDLE = {"resourceType": "Bundle", "type": "searchset", "entry": []}
+_EMPTY_COVERAGE_BUNDLE: dict[str, Any] = {"resourceType": "Bundle", "type": "searchset", "entry": []}
 
 
 def _maternal_fhir_side_effect(fhir_url, token, path, params=None):
@@ -299,8 +300,8 @@ def mamaguard_synthesis() -> dict:
 
     with patch.object(maternal_mod, "_fhir_get", side_effect=_maternal_fhir_side_effect), \
          patch.object(sdoh_mod, "_fhir_get", side_effect=_sdoh_fhir_side_effect):
-        maternal_profile = get_maternal_risk_profile(tool_context=ctx)
-        sdoh_profile = get_sdoh_screening(tool_context=ctx)
+        maternal_profile = get_maternal_risk_profile(tool_context=ctx)  # type: ignore[arg-type]
+        sdoh_profile = get_sdoh_screening(tool_context=ctx)  # type: ignore[arg-type]
 
     # Cross-factor synthesis — what the liaison layer uses to compose the
     # clinician-facing summary after both specialist agents return. This is

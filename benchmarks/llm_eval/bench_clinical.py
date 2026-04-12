@@ -7,6 +7,8 @@ accurate, safe, complete clinical assessments.
 Uses both programmatic checks (deterministic) and LLM-as-judge (nuanced).
 """
 
+from typing import Any
+
 from benchmarks.base import BenchmarkCase, BenchmarkResult, BenchmarkSuite, Verdict
 from benchmarks.llm_eval.client import LLMConfig, chat_completion
 from benchmarks.llm_eval.judge import (
@@ -51,8 +53,8 @@ def _eval_clinical(scenario, config: LLMConfig, judge_config: LLMConfig | None) 
     content = resp.content
     expected = scenario.expected
 
-    checks = {}
-    scores = []
+    checks: dict[str, Any] = {}
+    scores: list[float] = []
 
     # -- Programmatic checks --
 

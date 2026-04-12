@@ -58,7 +58,7 @@ def _run_risk_profile(bp, glucose, preg, patient_id: str = "test-patient") -> di
         mock_glu.return_value = glucose
         mock_preg.return_value = preg
         ctx = MockToolContext(patient_id=patient_id)
-        return get_maternal_risk_profile(tool_context=ctx)
+        return get_maternal_risk_profile(tool_context=ctx)  # type: ignore[arg-type]
 
 
 @suite.case("risk_classification_urgent", "URGENT when severe HTN present", "clinical_reasoning")

@@ -44,7 +44,7 @@ def _run_sdoh_screening(patient: dict, conditions: dict, coverage: dict, patient
     with patch("mamaguard.shared.tools.sdoh._fhir_get") as mock:
         mock.side_effect = side_effect
         ctx = MockToolContext(patient_id=patient_id)
-        return get_sdoh_screening(tool_context=ctx)
+        return get_sdoh_screening(tool_context=ctx)  # type: ignore[arg-type]
 
 
 @suite.case("sdoh_maria_uninsured_french", "Detect Maria's language barrier + coverage gap", "fhir_tools")

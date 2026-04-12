@@ -450,8 +450,8 @@ def mamaguard_synthesis(case: CaseFixture) -> dict:
 
     with patch.object(maternal_mod, "_fhir_get", side_effect=_maternal_side_effect_for(case)), \
          patch.object(sdoh_mod, "_fhir_get", side_effect=_sdoh_side_effect_for(case)):
-        maternal_profile = get_maternal_risk_profile(tool_context=ctx)
-        sdoh_profile = get_sdoh_screening(tool_context=ctx)
+        maternal_profile = get_maternal_risk_profile(tool_context=ctx)  # type: ignore[arg-type]
+        sdoh_profile = get_sdoh_screening(tool_context=ctx)  # type: ignore[arg-type]
 
     cross_factor_insights = _compose_cross_factor_insights(maternal_profile, sdoh_profile)
 
