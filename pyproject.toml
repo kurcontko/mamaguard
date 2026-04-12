@@ -1,3 +1,12 @@
+[tool.pytest.ini_options]
+testpaths = ["mamaguard/tests"]
+filterwarnings = [
+    # Google ADK A2A support is experimental — expected, nothing we can do.
+    'ignore:\[EXPERIMENTAL\]:UserWarning',
+    # Test-only HMAC keys are intentionally short; production uses 32+ byte secrets.
+    "ignore::jwt.warnings.InsecureKeyLengthWarning",
+]
+
 [tool.mypy]
 python_version = "3.11"
 warn_unused_configs = true
