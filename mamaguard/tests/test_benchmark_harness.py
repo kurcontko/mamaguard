@@ -9,7 +9,9 @@ Covers:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import io
+import os
 import sys
 import time
 import unittest
@@ -838,6 +840,105 @@ class TestEndToEndPipeline(unittest.TestCase):
         self.assertEqual(scores["suites"]["fhir_test"]["failed"], 1)
         self.assertEqual(scores["suites"]["fhir_test"]["errors"], 1)
         self.assertAlmostEqual(scores["suites"]["fhir_test"]["avg_score"], 0.25)
+
+
+# ---------------------------------------------------------------------------
+# agent_factory.py — build_generation_config
+# ---------------------------------------------------------------------------
+
+from benchmarks.e2e.agent_factory import build_generation_config
+
+
+class TestBuildGenerationConfig(unittest.TestCase):
+    def test_gemini_returns_none(self):
+        self.assertIsNone(build_generation_config("gemini"))
+
+    def test_vllm_defaults(self):
+        """vllm backend uses Nemotron vendor defaults without env vars."""
+        # Clear any env vars that might interfere
+        env_backup = {}
+        for key in ("BENCH_TEMPERATURE", "BENCH_TOP_P", "BENCH_MAX_TOKENS"):
+            env_backup[key] = os.environ.pop(key, None)
+        try:
+            cfg = build_generation_config("vllm")
+            self.assertIsNotNone(cfg)
+            self.assertAlmostEqual(cfg.temperature, 1.0)
+            self.assertAlmostEqual(cfg.top_p, 0.95)
+            self.assertEqual(cfg.max_output_tokens, 4096)
+        finally:
+            for key, val in env_backup.items():
+                if val is not None:
+                    os.environ[key] = val
+
+    def test_vllm_env_override(self):
+        """vllm backend reads BENCH_ env vars."""
+        old = {}
+        for key in ("BENCH_TEMPERATURE", "BENCH_TOP_P", "BENCH_MAX_TOKENS"):
+            old[key] = os.environ.get(key)
+        try:
+            os.environ["BENCH_TEMPERATURE"] = "0.7"
+            os.environ["BENCH_TOP_P"] = "0.9"
+            os.environ["BENCH_MAX_TOKENS"] = "2048"
+            cfg = build_generation_config("vllm")
+            self.assertAlmostEqual(cfg.temperature, 0.7)
+            self.assertAlmostEqual(cfg.top_p, 0.9)
+            self.assertEqual(cfg.max_output_tokens, 2048)
+        finally:
+            for key, val in old.items():
+                if val is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = val
+
+    def test_unknown_backend_returns_none(self):
+        self.assertIsNone(build_generation_config("something_else"))
+
+
+_has_litellm = importlib.util.find_spec("litellm") is not None
+
+
+@unittest.skipUnless(_has_litellm, "litellm not installed")
+class TestAgentTreeGenerationConfig(unittest.TestCase):
+    """Verify generate_content_config is wired into agents for vllm backend."""
+
+    def test_vllm_agents_have_config(self):
+        """When using vllm backend, all agents should have generate_content_config."""
+        old = {}
+        for key in ("BENCH_API_BASE", "BENCH_MODEL", "BENCH_API_KEY",
+                     "BENCH_TEMPERATURE", "BENCH_TOP_P", "BENCH_MAX_TOKENS"):
+            old[key] = os.environ.get(key)
+        try:
+            os.environ["BENCH_API_BASE"] = "http://localhost:9999/v1"
+            os.environ["BENCH_MODEL"] = "test-model"
+            os.environ["BENCH_API_KEY"] = "test-key"
+            # Clear gen param env vars to use defaults
+            for key in ("BENCH_TEMPERATURE", "BENCH_TOP_P", "BENCH_MAX_TOKENS"):
+                os.environ.pop(key, None)
+
+            from benchmarks.e2e.agent_factory import build_agent_tree
+            tree = build_agent_tree(backend="vllm")
+
+            # Orchestrator has config
+            self.assertIsNotNone(tree.generate_content_config)
+            self.assertAlmostEqual(tree.generate_content_config.temperature, 1.0)
+            self.assertAlmostEqual(tree.generate_content_config.top_p, 0.95)
+            self.assertEqual(tree.generate_content_config.max_output_tokens, 4096)
+
+            # Sub-agents have config too (via AgentTool wrappers)
+            for tool in tree.tools:
+                sub = getattr(tool, "agent", None)
+                if sub is not None:
+                    self.assertIsNotNone(
+                        sub.generate_content_config,
+                        f"{sub.name} missing generate_content_config",
+                    )
+                    self.assertAlmostEqual(sub.generate_content_config.temperature, 1.0)
+        finally:
+            for key, val in old.items():
+                if val is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = val
 
 
 if __name__ == "__main__":

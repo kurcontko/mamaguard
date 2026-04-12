@@ -6,6 +6,15 @@ Supports:
   - "vllm"    — LiteLlm wrapper around OpenAI-compatible vLLM endpoint
                 (uses BENCH_API_BASE, BENCH_MODEL, BENCH_API_KEY)
 
+Generation parameters (temperature, top_p, max_output_tokens) are passed via
+Agent(generate_content_config=...), NOT via LiteLlm constructor kwargs.
+ADK flows the config through LlmRequest → _get_completion_inputs → litellm.acompletion().
+
+Env vars (vllm backend only):
+  BENCH_TEMPERATURE — default 1.0 (Nemotron vendor default)
+  BENCH_TOP_P       — default 0.95 (Nemotron vendor default)
+  BENCH_MAX_TOKENS  — default 4096
+
 Builds a fresh agent tree so tool-call traces and callbacks can be attached
 without contaminating the production module-level root_agent.
 """
@@ -17,6 +26,7 @@ from typing import Any, Callable
 
 from google.adk.agents import Agent
 from google.adk.tools.agent_tool import AgentTool
+from google.genai import types as genai_types
 
 from mamaguard.shared.fhir_hook import extract_fhir_context
 from mamaguard.shared.tools import (
@@ -77,6 +87,29 @@ def build_model(backend: str = "gemini") -> Any:
     raise ValueError(f"Unknown backend: {backend!r}. Use 'gemini' or 'vllm'.")
 
 
+def build_generation_config(backend: str) -> genai_types.GenerateContentConfig | None:
+    """
+    Build generation config with appropriate defaults for the backend.
+
+    For vllm (Nemotron), reads BENCH_TEMPERATURE/BENCH_TOP_P/BENCH_MAX_TOKENS
+    env vars with Nemotron vendor defaults (temperature=1.0, top_p=0.95).
+    Returns None for gemini (use Gemini's own defaults).
+    """
+    if backend != "vllm":
+        return None
+
+    temperature = float(os.environ.get("BENCH_TEMPERATURE", "1.0"))
+    top_p_raw = os.environ.get("BENCH_TOP_P", "0.95")
+    top_p = float(top_p_raw) if top_p_raw else None
+    max_output_tokens = int(os.environ.get("BENCH_MAX_TOKENS", "4096"))
+
+    return genai_types.GenerateContentConfig(
+        temperature=temperature,
+        top_p=top_p,
+        max_output_tokens=max_output_tokens,
+    )
+
+
 def build_agent_tree(
     backend: str = "gemini",
     before_tool_callback: Callable | None = None,
@@ -94,10 +127,13 @@ def build_agent_tree(
         The orchestrator Agent ready for Runner execution.
     """
     model = build_model(backend)
+    gen_config = build_generation_config(backend)
 
     common_kwargs: dict[str, Any] = {
         "before_model_callback": extract_fhir_context,
     }
+    if gen_config is not None:
+        common_kwargs["generate_content_config"] = gen_config
     if before_tool_callback is not None:
         common_kwargs["before_tool_callback"] = before_tool_callback
     if after_tool_callback is not None:
