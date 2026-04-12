@@ -166,7 +166,7 @@ HAPI_FHIR_URL=http://localhost:8090/fhir python3 -m benchmarks.runner --e2e
 ## Testing
 
 ```bash
-# Unit tests (826 tests)
+# Unit tests (879 tests)
 python3 -m pytest mamaguard/tests/ -v
 
 # Tier-1 deterministic benchmarks (57 cases)
@@ -180,9 +180,9 @@ python3 -m benchmarks.runner
 ```
 
 **Test coverage:**
-- 826 unit tests across 19 test modules
+- 879 unit tests across 20 test modules
 - 57/57 Tier-1 benchmark cases at 100.0%
-- Agent routing, tool invocation, error paths, FHIR base utilities, FHIR writeback, SMART tickets, middleware, golden-file contract tests, LLM-as-judge care plan checkers, FHIR hook, logging utilities, mother-child handoff, MCP protocol integration, SDOH resource classification, A2A app factory and agent card endpoint, benchmark harness infrastructure
+- Agent routing, tool invocation, error paths, FHIR base utilities, FHIR writeback, SMART tickets, middleware, golden-file contract tests, LLM-as-judge care plan checkers, FHIR hook, logging utilities, mother-child handoff, MCP protocol integration, SDOH resource classification, A2A app factory and agent card endpoint, benchmark harness infrastructure, post-processing safety filter
 
 ---
 
@@ -223,7 +223,7 @@ mamaguard/
 |   +-- smart_tickets.py         # SMART Permission Tickets (Mandel spec)
 |   +-- sdoh_resources.py        # Offline SDOH resource map
 +-- marketplace/                 # Marketplace submission configs (both tracks)
-+-- tests/                       # 826 unit tests
++-- tests/                       # 879 unit tests
 +-- app.py                       # A2A entry point
 +-- Dockerfile                   # Cloud Run deployment
 +-- docker-compose.yml           # Local dev stack (MamaGuard + HAPI FHIR)

@@ -102,7 +102,7 @@ Prompt Opinion ──┬── BYO Agent → A2A JSON-RPC ─┐
 
 ## Safety and Evaluation
 
-MamaGuard includes a 3-tier benchmark suite with 826 unit tests and 57 deterministic Tier-1 benchmarks (100% pass rate):
+MamaGuard includes a 3-tier benchmark suite with 879 unit tests and 57 deterministic Tier-1 benchmarks (100% pass rate):
 
 - **Liaison pattern** — Every FHIR-reading tool returns a `clinician_review` object. All URGENT findings pause the agent (INPUT_REQUIRED) for clinician approval. AI never prescribes treatments, names drugs, or provides dosages.
 - **No fabrication** — Every numeric value in the output must originate from a tool result. Reference-only thresholds in the agent prompt are labeled as such and may not be cited as patient data.
