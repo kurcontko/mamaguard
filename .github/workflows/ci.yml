@@ -131,13 +131,33 @@ jobs:
           print(f"Done — {len(ALL_PATIENTS)} patients ready")
           EOF
 
+      - name: Check GOOGLE_API_KEY availability
+        id: check-key
+        run: |
+          if [ -n "$GOOGLE_API_KEY" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+            echo "GOOGLE_API_KEY is available — e2e benchmarks will run"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "GOOGLE_API_KEY not configured — e2e benchmarks will be skipped (Tier-1 only)"
+          fi
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
       - name: Run Tier-1 + Tier-2 smoke
         env:
           HAPI_FHIR_URL: http://localhost:8090/fhir
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
-          python -m benchmarks.runner \
-            --e2e --no-fhir-setup \
-            --json | tee /tmp/bench-tier2.json
+          if [ "${{ steps.check-key.outputs.has_key }}" = "true" ]; then
+            python -m benchmarks.runner \
+              --e2e --no-fhir-setup \
+              --json | tee /tmp/bench-tier2.json
+          else
+            echo "Skipping e2e (no GOOGLE_API_KEY) — running Tier-1 deterministic only"
+            python -m benchmarks.runner \
+              --json | tee /tmp/bench-tier2.json
+          fi
 
       - name: Report Tier-2 scores
         if: always()
