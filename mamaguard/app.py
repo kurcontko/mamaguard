@@ -25,9 +25,12 @@ a2a_app = create_a2a_app(
     agent=root_agent,
     name="MamaGuard Care Coordinator",
     description=(
-        "Maternal-pediatric care coordination agent. Monitors high-risk pregnancies, "
-        "manages mother-to-child care transitions, screens for SDOH, coordinates "
-        "outreach. Pauses for clinician review on critical decisions."
+        "Maternal-pediatric care coordination agent with 14 FHIR tools. "
+        "Monitors high-risk pregnancies, manages mother-to-child care transitions, "
+        "screens for SDOH with actionable community resource referrals, and writes "
+        "back RiskAssessment, CommunicationRequest, Goal, and CarePlan resources. "
+        "Pauses for clinician review on critical decisions (Liaison Agent pattern). "
+        "Requires FHIR context (server URL, bearer token, patient ID)."
     ),
     url=os.getenv("MAMAGUARD_URL", os.getenv("BASE_URL", "http://localhost:8001")),
     port=8001,
@@ -36,25 +39,52 @@ a2a_app = create_a2a_app(
         AgentSkill(
             id="maternal-risk-assessment",
             name="Maternal Risk Assessment",
-            description="Analyzes maternal risk factors: BP trends, glucose, pregnancy history, postpartum complications. Pauses for clinician review.",
+            description=(
+                "Analyzes maternal risk factors using 7 FHIR tools: BP trends, "
+                "glucose/HbA1c control, pregnancy history, medication review, and "
+                "compound risk profile. Flags Stage 2 HTN, uncontrolled diabetes, "
+                "and recurrent pregnancy loss. Writes RiskAssessment to FHIR. "
+                "Example: 'Assess maternal risk for this patient' or "
+                "'What are this patient's BP trends?'"
+            ),
             tags=["maternal", "risk", "pregnancy", "fhir"],
         ),
         AgentSkill(
             id="pediatric-care-transition",
             name="Pediatric Care Transition",
-            description="Manages newborn screening, immunization schedule, developmental milestones per CDC/AAP guidelines.",
+            description=(
+                "Manages pediatric care using 5 FHIR tools: immunization gap "
+                "analysis against CDC schedule, developmental screening per AAP "
+                "Bright Futures, and preventive care gap detection. Creates "
+                "CommunicationRequest for follow-up. Considers maternal risk "
+                "factors for newborns. "
+                "Example: 'Check immunization status and developmental milestones'"
+            ),
             tags=["pediatric", "immunization", "screening", "newborn"],
         ),
         AgentSkill(
             id="sdoh-screening-outreach",
             name="SDOH Screening & Outreach",
-            description="Screens for SDOH risks, insurance gaps, connects to community resources, generates outreach requests.",
-            tags=["sdoh", "social-determinants", "outreach"],
+            description=(
+                "Screens for social determinants using 6 FHIR tools: insurance "
+                "coverage gaps, language barriers, Z-code conditions (housing, food, "
+                "economic). Looks up concrete community resources (211, WIC, SNAP, "
+                "Medicaid). Writes FHIR Goal + CarePlan for trackable referrals and "
+                "CommunicationRequest for outreach. "
+                "Example: 'Screen for social determinants and find resources'"
+            ),
+            tags=["sdoh", "social-determinants", "outreach", "care-plan"],
         ),
         AgentSkill(
             id="comprehensive-care-plan",
             name="Comprehensive Care Plan",
-            description="Synthesizes maternal, pediatric, and SDOH findings into prioritized care coordination plan.",
+            description=(
+                "Runs all three specialists sequentially — maternal risk, pediatric "
+                "transition, SDOH screening — then synthesizes findings into a "
+                "prioritized 5T care coordination plan (Talk, Template, Table, Task, "
+                "Transaction). Best for full patient assessments. "
+                "Example: 'Run a comprehensive assessment for this patient'"
+            ),
             tags=["care-plan", "coordination", "summary"],
         ),
     ],
