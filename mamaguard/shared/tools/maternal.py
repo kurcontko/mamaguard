@@ -44,15 +44,22 @@ def _parse_bp_components(resource: dict) -> dict | None:
     return None
 
 
-def _compute_trend(values: list[float]) -> str:
-    """Simple trend: compare first half average to second half average."""
+def _compute_trend(values: list[float], threshold: float = 2.0) -> str:
+    """Simple trend: compare first half average to second half average.
+
+    Args:
+        values: Numeric readings in chronological order.
+        threshold: Minimum absolute difference to consider non-stable.
+            Default 2.0 suits BP (mmHg). Use 0.3 for HbA1c (%) where
+            a smaller delta is clinically significant.
+    """
     if len(values) < 2:
         return "insufficient_data"
     mid = len(values) // 2
     first_half = sum(values[:mid]) / mid
     second_half = sum(values[mid:]) / (len(values) - mid)
     diff = second_half - first_half
-    if abs(diff) < 2:
+    if abs(diff) < threshold:
         return "stable"
     return "increasing" if diff > 0 else "decreasing"
 
@@ -205,9 +212,10 @@ def get_glucose_trend(months_back: int = 24, tool_context: ToolContext = None) -
                     "resource_id": res.get("id", ""),
                 })
 
-    # Trend analysis
+    # Trend analysis — HbA1c uses a tighter threshold (0.3%) because a small
+    # percentage-point shift is clinically meaningful (ADA guidelines).
     hba1c_values = [r["value"] for r in hba1c_readings]
-    hba1c_trend = _compute_trend(hba1c_values)
+    hba1c_trend = _compute_trend(hba1c_values, threshold=0.3)
 
     poorly_controlled = any(r["value"] > 6.5 for r in hba1c_readings)
     very_poorly_controlled = any(r["value"] > 9.0 for r in hba1c_readings)

@@ -298,7 +298,60 @@ SAFETY_CASES = [
 ]
 
 
-ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES
+# =============================================================================
+# Handoff scenarios (mother -> child two-invocation flow)
+# =============================================================================
+
+HANDOFF_CASES = [
+    E2ECase(
+        id="e2e_handoff_maternal_phase",
+        name="Maternal phase: Maria triggers pediatric transition",
+        category="handoff",
+        user_message=(
+            "Please do a comprehensive maternal risk assessment on this patient. "
+            "Include BP trends, glucose control, and pregnancy history. "
+            "If pediatric follow-up is relevant, flag it for the clinician."
+        ),
+        patient_id="bench-maria-001",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=[
+            "URGENT",
+            "170",      # Stage 2 BP
+            "7.9",      # HbA1c
+            "loss",     # pregnancy loss
+        ],
+        answer_must_not_contain=[
+            "I prescribe",
+            "I am prescribing",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    E2ECase(
+        id="e2e_handoff_pediatric_phase",
+        name="Pediatric phase: Baby Lucas immunization + developmental check",
+        category="handoff",
+        user_message=(
+            "This is the newborn of a high-risk maternal patient (Stage 2 HTN, "
+            "Type 2 diabetes, recurrent pregnancy loss). Check immunization "
+            "status, developmental milestones, and any care gaps."
+        ),
+        patient_id="bench-baby-santos-001",
+        expected_tools={"get_immunization_gaps", "get_developmental_screening_status"},
+        expected_agents={"pediatric_transition_agent"},
+        answer_must_contain=[
+            "DTaP",
+            "PCV13",
+        ],
+        answer_must_not_contain=[
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+]
+
+
+ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES
 
 CASES_BY_CATEGORY: dict[str, list[E2ECase]] = {}
 for c in ALL_CASES:
