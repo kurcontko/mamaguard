@@ -22,7 +22,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .fhir_hook import extract_fhir_from_payload
-from .logging_utils import redact_headers, safe_pretty_json, token_fingerprint
+from .logging_utils import redact_headers, redact_payload, safe_pretty_json, token_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -91,16 +91,16 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         parsed: dict[str, Any] = {}
         try:
             parsed = json.loads(body_text) if body_text else {}
-            pretty_body = safe_pretty_json(parsed)
         except json.JSONDecodeError:
-            pretty_body = body_text
+            pass
 
         if LOG_FULL_PAYLOAD:
+            redacted_body = safe_pretty_json(redact_payload(parsed)) if parsed else body_text
             logger.info(
                 "incoming_http_request path=%s method=%s headers=%s\npayload=\n%s",
                 request.url.path, request.method,
                 safe_pretty_json(redact_headers(dict(request.headers))),
-                pretty_body,
+                redacted_body,
             )
 
         # Bridge FHIR metadata from message.metadata -> params.metadata

@@ -473,5 +473,122 @@ class TestActivateExtensionHelper(unittest.TestCase):
         )
 
 
+class TestPayloadTokenRedactionInLogs(unittest.TestCase):
+    """When LOG_FULL_PAYLOAD is True, FHIR tokens in the logged payload
+    must be redacted so they don't appear in plaintext in Cloud Run logs."""
+
+    def test_fhir_token_not_in_log_output(self):
+        """The raw fhirToken value must not appear in any log message."""
+        secret_token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.secret"
+        payload = {
+            "params": {
+                "message": {
+                    "metadata": {
+                        FHIR_KEY: {
+                            "fhirUrl": "https://fhir.example.com",
+                            "fhirToken": secret_token,
+                            "patientId": "Patient/1",
+                        }
+                    }
+                }
+            }
+        }
+        with patch.object(mw, "VALID_API_KEYS", {"good-key"}), \
+             patch.object(mw, "LOG_FULL_PAYLOAD", True), \
+             patch("mamaguard.shared.middleware.logger") as mock_logger:
+            client = _client()
+            resp = client.post(
+                "/echo", json=payload, headers={"X-API-Key": "good-key"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        # Check every info/debug/warning call — the raw token must never appear.
+        for call in mock_logger.info.call_args_list:
+            msg = call[0][0] % call[0][1:] if len(call[0]) > 1 else str(call[0][0])
+            self.assertNotIn(
+                secret_token, msg,
+                f"Raw fhirToken leaked in log message: {msg[:200]}...",
+            )
+
+    def test_redacted_marker_present_in_log_output(self):
+        """The logged payload should contain a [REDACTED ...] marker for the token."""
+        payload = {
+            "params": {
+                "message": {
+                    "metadata": {
+                        FHIR_KEY: {
+                            "fhirUrl": "https://fhir.example.com",
+                            "fhirToken": "secret-bearer-token",
+                            "patientId": "Patient/1",
+                        }
+                    }
+                }
+            }
+        }
+        with patch.object(mw, "VALID_API_KEYS", {"good-key"}), \
+             patch.object(mw, "LOG_FULL_PAYLOAD", True), \
+             patch("mamaguard.shared.middleware.logger") as mock_logger:
+            client = _client()
+            client.post("/echo", json=payload, headers={"X-API-Key": "good-key"})
+        # Find the incoming_http_request log call
+        found_redacted = False
+        for call in mock_logger.info.call_args_list:
+            msg = call[0][0] % call[0][1:] if len(call[0]) > 1 else str(call[0][0])
+            if "incoming_http_request" in msg and "[REDACTED " in msg:
+                found_redacted = True
+                break
+        self.assertTrue(found_redacted, "Expected [REDACTED ...] marker in payload log")
+
+    def test_non_sensitive_fields_still_logged(self):
+        """fhirUrl and patientId must remain visible in the logged payload."""
+        payload = {
+            "params": {
+                "message": {
+                    "metadata": {
+                        FHIR_KEY: {
+                            "fhirUrl": "https://fhir.example.com",
+                            "fhirToken": "secret-token",
+                            "patientId": "Patient/42",
+                        }
+                    }
+                }
+            }
+        }
+        with patch.object(mw, "VALID_API_KEYS", {"good-key"}), \
+             patch.object(mw, "LOG_FULL_PAYLOAD", True), \
+             patch("mamaguard.shared.middleware.logger") as mock_logger:
+            client = _client()
+            client.post("/echo", json=payload, headers={"X-API-Key": "good-key"})
+        payload_log = ""
+        for call in mock_logger.info.call_args_list:
+            msg = call[0][0] % call[0][1:] if len(call[0]) > 1 else str(call[0][0])
+            if "incoming_http_request" in msg:
+                payload_log = msg
+                break
+        self.assertIn("https://fhir.example.com", payload_log)
+        self.assertIn("Patient/42", payload_log)
+
+    def test_permission_ticket_also_redacted(self):
+        """permissionTicket should also be redacted alongside fhirToken."""
+        payload = {
+            "params": {
+                "metadata": {
+                    FHIR_KEY: {
+                        "fhirToken": "bearer-secret",
+                        "permissionTicket": "jwt-ticket-secret",
+                    }
+                }
+            }
+        }
+        with patch.object(mw, "VALID_API_KEYS", {"good-key"}), \
+             patch.object(mw, "LOG_FULL_PAYLOAD", True), \
+             patch("mamaguard.shared.middleware.logger") as mock_logger:
+            client = _client()
+            client.post("/echo", json=payload, headers={"X-API-Key": "good-key"})
+        for call in mock_logger.info.call_args_list:
+            msg = call[0][0] % call[0][1:] if len(call[0]) > 1 else str(call[0][0])
+            self.assertNotIn("bearer-secret", msg)
+            self.assertNotIn("jwt-ticket-secret", msg)
+
+
 if __name__ == "__main__":
     unittest.main()

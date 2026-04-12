@@ -38,6 +38,7 @@ from mamaguard.shared.logging_utils import (
     _AnsiColorFormatter,
     configure_logging,
     redact_headers,
+    redact_payload,
     safe_pretty_json,
     serialize_for_log,
     token_fingerprint,
@@ -375,6 +376,93 @@ class TestTokenFingerprint(unittest.TestCase):
         secret = "highly-sensitive-bearer-token-please-do-not-leak"
         out = token_fingerprint(secret)
         self.assertNotIn(secret, out)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# redact_payload
+# ─────────────────────────────────────────────────────────────────────────────
+class TestRedactPayload(unittest.TestCase):
+    def test_fhirToken_is_redacted(self):
+        payload = {"params": {"metadata": {"fhirToken": "eyJ0eXAiOiJKV1Q"}}}
+        out = redact_payload(payload)
+        self.assertIn("[REDACTED ", out["params"]["metadata"]["fhirToken"])
+        self.assertNotIn("eyJ0eXAiOiJKV1Q", str(out))
+
+    def test_permissionTicket_is_redacted(self):
+        payload = {"permissionTicket": "eyJhbGciOi.payload.sig"}
+        out = redact_payload(payload)
+        self.assertIn("[REDACTED ", out["permissionTicket"])
+        self.assertNotIn("eyJhbGciOi", str(out))
+
+    def test_case_insensitive_key_matching(self):
+        payload = {"FHIRTOKEN": "secret", "PermissionTicket": "jwt"}
+        out = redact_payload(payload)
+        self.assertIn("[REDACTED ", out["FHIRTOKEN"])
+        self.assertIn("[REDACTED ", out["PermissionTicket"])
+
+    def test_non_sensitive_keys_pass_through(self):
+        payload = {"fhirUrl": "https://fhir.example.com", "patientId": "Patient/123"}
+        out = redact_payload(payload)
+        self.assertEqual(out["fhirUrl"], "https://fhir.example.com")
+        self.assertEqual(out["patientId"], "Patient/123")
+
+    def test_deeply_nested_token_redacted(self):
+        payload = {
+            "params": {
+                "message": {
+                    "metadata": {
+                        "fhir-context": {
+                            "fhirUrl": "https://fhir.example.com",
+                            "fhirToken": "bearer-token-secret-123",
+                            "patientId": "Patient/1",
+                            "permissionTicket": "jwt-ticket-abc",
+                        }
+                    }
+                }
+            }
+        }
+        out = redact_payload(payload)
+        ctx = out["params"]["message"]["metadata"]["fhir-context"]
+        self.assertEqual(ctx["fhirUrl"], "https://fhir.example.com")
+        self.assertEqual(ctx["patientId"], "Patient/1")
+        self.assertIn("[REDACTED ", ctx["fhirToken"])
+        self.assertIn("[REDACTED ", ctx["permissionTicket"])
+        self.assertNotIn("bearer-token-secret-123", str(out))
+        self.assertNotIn("jwt-ticket-abc", str(out))
+
+    def test_empty_token_value(self):
+        payload = {"fhirToken": ""}
+        out = redact_payload(payload)
+        self.assertEqual(out["fhirToken"], "[REDACTED empty]")
+
+    def test_none_token_value(self):
+        payload = {"fhirToken": None}
+        out = redact_payload(payload)
+        self.assertEqual(out["fhirToken"], "[REDACTED empty]")
+
+    def test_list_values_recursed(self):
+        payload = [{"fhirToken": "secret"}, {"safe": "value"}]
+        out = redact_payload(payload)
+        self.assertIn("[REDACTED ", out[0]["fhirToken"])
+        self.assertEqual(out[1]["safe"], "value")
+
+    def test_non_dict_non_list_passthrough(self):
+        self.assertEqual(redact_payload("string"), "string")
+        self.assertEqual(redact_payload(42), 42)
+        self.assertIsNone(redact_payload(None))
+
+    def test_original_payload_not_mutated(self):
+        original_token = "my-secret-token"
+        payload = {"fhirToken": original_token}
+        redact_payload(payload)
+        self.assertEqual(payload["fhirToken"], original_token)
+
+    def test_redacted_token_includes_fingerprint(self):
+        token = "bearer-abc-123"
+        payload = {"fhirToken": token}
+        out = redact_payload(payload)
+        fp = token_fingerprint(token)
+        self.assertIn(fp, out["fhirToken"])
 
 
 if __name__ == "__main__":  # pragma: no cover

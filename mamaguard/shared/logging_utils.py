@@ -108,3 +108,26 @@ def token_fingerprint(token: str) -> str:
         return "empty"
     digest = hashlib.sha256(token.encode()).hexdigest()[:12]
     return f"len={len(token)} sha256={digest}"
+
+
+# Keys whose values are replaced by a fingerprint in payload logs.
+_SENSITIVE_PAYLOAD_KEYS = {"fhirtoken", "permissionticket"}
+
+
+def redact_payload(obj: object) -> object:
+    """Deep-copy *obj*, replacing sensitive token values with fingerprints.
+
+    Sensitive keys (case-insensitive): ``fhirToken``, ``permissionTicket``.
+    Non-dict/list values pass through unchanged.
+    """
+    if isinstance(obj, dict):
+        out: dict[str, object] = {}
+        for key, value in obj.items():
+            if isinstance(key, str) and key.lower() in _SENSITIVE_PAYLOAD_KEYS:
+                out[key] = f"[REDACTED {token_fingerprint(str(value))}]" if value else "[REDACTED empty]"
+            else:
+                out[key] = redact_payload(value)
+        return out
+    if isinstance(obj, list):
+        return [redact_payload(item) for item in obj]
+    return obj
