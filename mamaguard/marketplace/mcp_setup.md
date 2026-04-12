@@ -129,7 +129,7 @@ MCP_TRANSPORT=sse MCP_PORT=8080 python -m mamaguard.mcp_server.server
 # Run MCP server tests
 python -m pytest mamaguard/tests/test_mcp_server.py -v
 
-# Full test suite (269 tests)
+# Full test suite (747 tests)
 python -m pytest mamaguard/tests/ -v
 ```
 
