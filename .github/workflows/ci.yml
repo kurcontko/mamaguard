@@ -110,25 +110,22 @@ jobs:
           HAPI_FHIR_URL: http://localhost:8090/fhir
         run: |
           python - <<'EOF'
-          import os, json, glob, httpx
+          import os, httpx
+          from benchmarks.e2e.fhir_bundles import ALL_PATIENTS
 
           fhir_url = os.environ["HAPI_FHIR_URL"]
-          bundle_files = sorted(glob.glob("benchmarks/e2e/fhir_bundles/*.json"))
-          if not bundle_files:
-              print("No FHIR bundles found — skipping load step")
-          else:
-              print(f"Loading {len(bundle_files)} bundle(s) into {fhir_url}")
-              for path in bundle_files:
-                  with open(path) as f:
-                      bundle = json.load(f)
-                  resp = httpx.post(
-                      fhir_url,
-                      json=bundle,
-                      headers={"Content-Type": "application/fhir+json"},
-                      timeout=30,
-                  )
-                  resp.raise_for_status()
-                  print(f"  loaded {os.path.basename(path)}: {resp.status_code}")
+          print(f"Loading {len(ALL_PATIENTS)} patient bundle(s) into {fhir_url}")
+          for patient_id, meta in ALL_PATIENTS.items():
+              resp = httpx.post(
+                  fhir_url,
+                  json=meta["bundle"],
+                  headers={"Content-Type": "application/fhir+json"},
+                  timeout=30,
+              )
+              resp.raise_for_status()
+              entries = len(meta["bundle"].get("entry", []))
+              print(f"  {meta['label']} ({patient_id}): {entries} resources loaded")
+          print(f"Done — {len(ALL_PATIENTS)} patients ready")
           EOF
 
       - name: Run Tier-1 + Tier-2 smoke
