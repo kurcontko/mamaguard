@@ -57,6 +57,76 @@ class TestWriteRiskAssessment(unittest.TestCase):
         )
         self.assertEqual(result["status"], "error")
 
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_write_rejected_400_bad_request(self, mock_post):
+        """A 4xx that isn't 405 should still surface http_status cleanly."""
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        response = MagicMock()
+        response.status_code = 400
+        response.text = "Bad Request"
+        mock_post.side_effect = httpx.HTTPStatusError("", request=MagicMock(), response=response)
+
+        result = write_risk_assessment(
+            risk_type="test", probability=0.5, basis="test", mitigation="test",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "write_failed")
+        self.assertEqual(result["resource_type"], "RiskAssessment")
+        self.assertEqual(result["http_status"], 400)
+        self.assertIn("400", result["error_message"])
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_write_rejected_500_server_error(self, mock_post):
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        response = MagicMock()
+        response.status_code = 500
+        response.text = "Internal Server Error"
+        mock_post.side_effect = httpx.HTTPStatusError("", request=MagicMock(), response=response)
+
+        result = write_risk_assessment(
+            risk_type="test", probability=0.5, basis="test", mitigation="test",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["http_status"], 500)
+        self.assertEqual(result["resource_type"], "RiskAssessment")
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_network_error_connect(self, mock_post):
+        """`except Exception` branch -- network unreachable."""
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        mock_post.side_effect = httpx.ConnectError("connection refused")
+
+        result = write_risk_assessment(
+            risk_type="test", probability=0.5, basis="test", mitigation="test",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "write_failed")
+        self.assertEqual(result["resource_type"], "RiskAssessment")
+        self.assertNotIn("http_status", result)
+        self.assertIn("Could not reach FHIR server", result["error_message"])
+        self.assertIn("connection refused", result["error_message"])
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_network_error_timeout(self, mock_post):
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        mock_post.side_effect = httpx.ReadTimeout("read timed out")
+
+        result = write_risk_assessment(
+            risk_type="test", probability=0.5, basis="test", mitigation="test",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["resource_type"], "RiskAssessment")
+        self.assertNotIn("http_status", result)
+        self.assertIn("Could not reach FHIR server", result["error_message"])
+
 
 class TestCreateCommunicationRequest(unittest.TestCase):
     @patch("mamaguard.shared.tools.writeback._fhir_post")
@@ -90,6 +160,66 @@ class TestCreateCommunicationRequest(unittest.TestCase):
         )
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["http_status"], 403)
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_write_rejected_422_unprocessable(self, mock_post):
+        from mamaguard.shared.tools.writeback import create_communication_request
+
+        response = MagicMock()
+        response.status_code = 422
+        response.text = "Unprocessable Entity"
+        mock_post.side_effect = httpx.HTTPStatusError("", request=MagicMock(), response=response)
+
+        result = create_communication_request(
+            medium="phone", content="test", tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "write_failed")
+        self.assertEqual(result["resource_type"], "CommunicationRequest")
+        self.assertEqual(result["http_status"], 422)
+        self.assertIn("422", result["error_message"])
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_write_rejected_500_server_error(self, mock_post):
+        from mamaguard.shared.tools.writeback import create_communication_request
+
+        response = MagicMock()
+        response.status_code = 500
+        response.text = "Internal Server Error"
+        mock_post.side_effect = httpx.HTTPStatusError("", request=MagicMock(), response=response)
+
+        result = create_communication_request(
+            medium="sms", content="test", tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["http_status"], 500)
+        self.assertEqual(result["resource_type"], "CommunicationRequest")
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_network_error(self, mock_post):
+        """`except Exception` branch -- network unreachable."""
+        from mamaguard.shared.tools.writeback import create_communication_request
+
+        mock_post.side_effect = httpx.ConnectError("name or service not known")
+
+        result = create_communication_request(
+            medium="phone", content="test", tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "write_failed")
+        self.assertEqual(result["resource_type"], "CommunicationRequest")
+        self.assertNotIn("http_status", result)
+        self.assertIn("Could not reach FHIR server", result["error_message"])
+        self.assertIn("name or service not known", result["error_message"])
+
+    def test_missing_context(self):
+        from mamaguard.shared.tools.writeback import create_communication_request
+
+        ctx = MockToolContext(fhir_url="", fhir_token="", patient_id="")
+        result = create_communication_request(
+            medium="phone", content="test", tool_context=ctx,
+        )
+        self.assertEqual(result["status"], "error")
 
 
 class TestWriteCarePlan(unittest.TestCase):
@@ -201,6 +331,112 @@ class TestWriteCarePlan(unittest.TestCase):
             tool_context=ctx,
         )
         self.assertEqual(result["status"], "error")
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_goal_rejected_500_server_error(self, mock_post):
+        """5xx on the Goal POST short-circuits before CarePlan is attempted."""
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        response = MagicMock()
+        response.status_code = 500
+        response.text = "Internal Server Error"
+        mock_post.side_effect = httpx.HTTPStatusError("", request=MagicMock(), response=response)
+
+        result = write_care_plan(
+            category="housing",
+            goal_description="test",
+            resource_name="211",
+            resource_contact="Dial 211",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "write_failed")
+        self.assertEqual(result["resource_type"], "Goal")
+        self.assertEqual(result["http_status"], 500)
+        # Only Goal attempted — CarePlan never posted.
+        self.assertEqual(mock_post.call_count, 1)
+        self.assertEqual(mock_post.call_args_list[0].args[2], "Goal")
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_goal_network_error(self, mock_post):
+        """Network error on Goal POST → generic Exception branch, no http_status."""
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        mock_post.side_effect = httpx.ConnectError("connection refused")
+
+        result = write_care_plan(
+            category="housing",
+            goal_description="test",
+            resource_name="211",
+            resource_contact="Dial 211",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "write_failed")
+        self.assertEqual(result["resource_type"], "Goal")
+        self.assertNotIn("http_status", result)
+        self.assertIn("Could not reach FHIR server", result["error_message"])
+        self.assertIn("connection refused", result["error_message"])
+        self.assertEqual(mock_post.call_count, 1)
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_care_plan_rejected_500_returns_partial(self, mock_post):
+        """Goal succeeds, CarePlan hits 5xx → partial with goal_id preserved."""
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        def side_effect(fhir_url, token, resource_type, body):
+            if resource_type == "Goal":
+                return {"resourceType": "Goal", "id": "goal-9"}
+            response = MagicMock()
+            response.status_code = 500
+            response.text = "Internal Server Error"
+            raise httpx.HTTPStatusError("", request=MagicMock(), response=response)
+
+        mock_post.side_effect = side_effect
+
+        result = write_care_plan(
+            category="transportation",
+            goal_description="Schedule non-emergency medical transport",
+            resource_name="Local NEMT",
+            resource_contact="1-555-0100",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["action"], "care_plan_write_failed")
+        self.assertEqual(result["resource_type"], "CarePlan")
+        self.assertEqual(result["http_status"], 500)
+        self.assertEqual(result["goal_id"], "goal-9")
+        self.assertTrue(result["goal_created"])
+        self.assertEqual(mock_post.call_count, 2)
+
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_care_plan_network_error_returns_partial(self, mock_post):
+        """Goal succeeds, CarePlan hits network error → partial, no http_status."""
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        def side_effect(fhir_url, token, resource_type, body):
+            if resource_type == "Goal":
+                return {"resourceType": "Goal", "id": "goal-12"}
+            raise httpx.ReadTimeout("read timed out")
+
+        mock_post.side_effect = side_effect
+
+        result = write_care_plan(
+            category="food",
+            goal_description="Enroll in SNAP",
+            resource_name="SNAP",
+            resource_contact="1-800-221-5689",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["action"], "care_plan_write_failed")
+        self.assertEqual(result["resource_type"], "CarePlan")
+        self.assertEqual(result["goal_id"], "goal-12")
+        self.assertTrue(result["goal_created"])
+        self.assertNotIn("http_status", result)
+        self.assertIn("Could not reach FHIR server", result["error_message"])
+        self.assertIn("read timed out", result["error_message"])
+        self.assertEqual(mock_post.call_count, 2)
 
 
 if __name__ == "__main__":
