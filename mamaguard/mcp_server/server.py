@@ -1,7 +1,7 @@
 """
 MamaGuard MCP Server
 
-Exposes all 12 FHIR tools from mamaguard/shared/tools/ via the MCP protocol.
+Exposes all 14 FHIR tools from mamaguard/shared/tools/ via the MCP protocol.
 Shares tool implementations with the ADK agents — no duplication.
 
 SHARP context: each tool accepts fhir_url, fhir_token, and patient_id as
