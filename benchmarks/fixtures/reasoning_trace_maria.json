@@ -1,0 +1,188 @@
+{
+  "case_name": "compound_maria_postpartum",
+  "description": "Compound synthesis scenario: postpartum Stage-2 HTN + HbA1c diabetes-range + housing instability Z-code + Spanish language preference + Medicaid gap. Demonstrates AI Factor lift of MamaGuard's liaison-pattern synthesis vs. a naive rule engine.",
+  "rule_engine_baseline": {
+    "engine": "rule_based_baseline",
+    "flags": [
+      "HIGH_BP",
+      "DIABETES",
+      "HOUSING_ISSUE",
+      "LANGUAGE_BARRIER",
+      "NO_COVERAGE"
+    ]
+  },
+  "mamaguard_synthesis": {
+    "engine": "mamaguard_synthesis",
+    "patient_id": "compound-maria-001",
+    "maternal_profile": {
+      "status": "success",
+      "patient_id": "compound-maria-001",
+      "data": {
+        "risk_level": "URGENT",
+        "risk_factors": [
+          "Stage 2 hypertension (>160/110)",
+          "Diabetes range HbA1c (>6.5%)"
+        ],
+        "bp_summary": {
+          "readings": [
+            {
+              "date": "2026-03-20",
+              "systolic": 162,
+              "diastolic": 104,
+              "resource_id": "bp-compound-1"
+            },
+            {
+              "date": "2026-03-10",
+              "systolic": 158,
+              "diastolic": 98,
+              "resource_id": "bp-compound-2"
+            },
+            {
+              "date": "2026-02-15",
+              "systolic": 144,
+              "diastolic": 92,
+              "resource_id": "bp-compound-3"
+            }
+          ],
+          "count": 3,
+          "trend": "decreasing",
+          "alert_elevated": true,
+          "alert_severe": true
+        },
+        "glucose_summary": {
+          "glucose_readings": [
+            {
+              "date": "2026-03-18",
+              "value": 148,
+              "unit": "mg/dL",
+              "resource_id": "glucose-compound-1"
+            }
+          ],
+          "hba1c_readings": [
+            {
+              "date": "2026-03-18",
+              "value": 7.2,
+              "unit": "%",
+              "resource_id": "hba1c-compound-1"
+            }
+          ],
+          "hba1c_trend": "insufficient_data",
+          "diabetes_range": true,
+          "poorly_controlled": false
+        },
+        "pregnancy_summary": {
+          "pregnancies": [
+            {
+              "condition": "Normal pregnancy",
+              "snomed_code": "72892002",
+              "clinical_status": "resolved",
+              "outcome": "live_birth",
+              "onset": "2025-05-10",
+              "abatement": "2026-02-14",
+              "resource_id": "preg-compound-1"
+            }
+          ],
+          "total_count": 1,
+          "live_births": 1,
+          "losses": 0,
+          "high_risk": false
+        }
+      },
+      "clinician_review": {
+        "required": true,
+        "reason": "Risk level: URGENT. Factors: Stage 2 hypertension (>160/110); Diabetes range HbA1c (>6.5%)",
+        "recommendation": "Comprehensive maternal risk review recommended",
+        "evidence_basis": [
+          "Observation/bp-compound-1 (BP 162/104 on 2026-03-20)",
+          "Observation/bp-compound-2 (BP 158/98 on 2026-03-10)",
+          "Observation/bp-compound-3 (BP 144/92 on 2026-02-15)",
+          "Observation/hba1c-compound-1 (HbA1c 7.2% on 2026-03-18)"
+        ],
+        "confidence": 0.85
+      }
+    },
+    "sdoh_profile": {
+      "status": "success",
+      "patient_id": "compound-maria-001",
+      "data": {
+        "sdoh_conditions": [
+          {
+            "condition": "Housing problem",
+            "resource_id": "sdoh-housing-1",
+            "clinical_status": "active"
+          }
+        ],
+        "coverage": [],
+        "language": "Spanish",
+        "risk_factors": [
+          "Language barrier: primary language is Spanish",
+          "SDOH condition: Housing problem",
+          "No insurance coverage found -- potential uninsured patient"
+        ]
+      },
+      "clinician_review": {
+        "required": true,
+        "reason": "Insurance coverage gap detected -- may affect medication access and care continuity",
+        "recommendation": "Verify insurance status; consider Medicaid enrollment or community health resources",
+        "evidence_basis": [
+          "No Coverage resources found for patient",
+          "Patient primary language: Spanish",
+          "Condition/sdoh-housing-1 (Housing problem)"
+        ],
+        "confidence": 0.8
+      }
+    },
+    "cross_factor_insights": {
+      "compound_risk_level": "URGENT",
+      "clinical_sdoh_interactions": [
+        "Severe hypertension co-occurs with a coverage gap: antihypertensive access is at risk. Treat as an urgent continuity-of-care issue, not just a medication adjustment.",
+        "Postpartum severe BP teaching must be delivered in the patient's preferred language (Spanish); English-only discharge instructions are a known driver of readmission for postpartum preeclampsia.",
+        "Diabetes management is incompatible with unstable housing (refrigeration for insulin, consistent meal timing). SDOH team should be looped in before any glycemic medication change.",
+        "Overlap of postpartum hypertension and diabetes range HbA1c raises long-term cardiovascular risk \u2014 flag for extended postpartum follow-up beyond the 6-week standard.",
+        "All three social determinants (housing, coverage, language) are present simultaneously \u2014 escalate to SDOH navigator for bundled wraparound referral, not three independent referrals."
+      ],
+      "recommended_priorities": [
+        "urgent_coverage_bridge",
+        "spanish_bp_education",
+        "housing_before_glycemic_plan",
+        "extended_postpartum_followup",
+        "bundled_sdoh_navigation"
+      ],
+      "synthesis_confidence": 0.85
+    }
+  },
+  "synthesis_advantage": {
+    "baseline_flag_count": 5,
+    "baseline_has_compound_risk_level": false,
+    "baseline_has_evidence_basis": false,
+    "baseline_has_clinician_reason": false,
+    "baseline_has_cross_factor_insights": false,
+    "synthesis_risk_level": "URGENT",
+    "synthesis_risk_factor_count": 2,
+    "synthesis_evidence_ref_count": 7,
+    "synthesis_evidence_refs": [
+      "Observation/bp-compound-1 (BP 162/104 on 2026-03-20)",
+      "Observation/bp-compound-2 (BP 158/98 on 2026-03-10)",
+      "Observation/bp-compound-3 (BP 144/92 on 2026-02-15)",
+      "Observation/hba1c-compound-1 (HbA1c 7.2% on 2026-03-18)",
+      "No Coverage resources found for patient",
+      "Patient primary language: Spanish",
+      "Condition/sdoh-housing-1 (Housing problem)"
+    ],
+    "synthesis_has_clinician_reason": true,
+    "synthesis_has_recommendation": true,
+    "synthesis_has_confidence": true,
+    "synthesis_has_language_context": true,
+    "synthesis_has_coverage_context": true,
+    "synthesis_cross_factor_insight_count": 5,
+    "synthesis_cross_factor_priorities": [
+      "urgent_coverage_bridge",
+      "spanish_bp_education",
+      "housing_before_glycemic_plan",
+      "extended_postpartum_followup",
+      "bundled_sdoh_navigation"
+    ],
+    "affordances_added_by_synthesis": 6,
+    "evidence_multiplier": 1.4
+  }
+}
