@@ -128,6 +128,73 @@ class MamaGuardHarness:
             events=events,
         )
 
+    async def _run_multi_turn_async(
+        self,
+        messages: list[str],
+        patient_id: str,
+        user_id: str = "bench_user",
+    ) -> AgentRunResult:
+        """Send multiple user messages in sequence within one session.
+
+        The trace accumulates across all turns. The final_text is from the
+        last turn only. Elapsed time covers all turns.
+        """
+        self.trace.reset()
+
+        session_id = f"bench-{uuid.uuid4().hex[:8]}"
+        initial_state = {
+            "fhir_url": self.fhir_base_url,
+            "fhir_token": "bench-no-auth",
+            "patient_id": patient_id,
+        }
+
+        await self.session_service.create_session(
+            app_name="mamaguard_bench",
+            user_id=user_id,
+            session_id=session_id,
+            state=initial_state,
+        )
+
+        t0 = time.perf_counter()
+        all_events: list[Any] = []
+        error: str | None = None
+        final_text = ""
+
+        try:
+            for user_text in messages:
+                msg = genai_types.Content(
+                    role="user",
+                    parts=[genai_types.Part(text=user_text)],
+                )
+                turn_text = ""
+                async for event in self.runner.run_async(
+                    user_id=user_id,
+                    session_id=session_id,
+                    new_message=msg,
+                ):
+                    all_events.append(event)
+                    content = getattr(event, "content", None)
+                    if content is not None:
+                        parts = getattr(content, "parts", None) or []
+                        for part in parts:
+                            text = getattr(part, "text", None)
+                            if text:
+                                turn_text = text
+                final_text = turn_text  # keep last turn's response
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+
+        return AgentRunResult(
+            final_text=final_text,
+            trace=self.trace,
+            elapsed_ms=elapsed_ms,
+            event_count=len(all_events),
+            error=error,
+            events=all_events,
+        )
+
     def run(
         self,
         user_message: str,
@@ -137,6 +204,17 @@ class MamaGuardHarness:
         """Synchronous wrapper around run_async."""
         return asyncio.run(
             self._run_once_async(user_message, patient_id, user_id)
+        )
+
+    def run_multi_turn(
+        self,
+        messages: list[str],
+        patient_id: str,
+        user_id: str = "bench_user",
+    ) -> AgentRunResult:
+        """Run a multi-turn conversation. Synchronous wrapper."""
+        return asyncio.run(
+            self._run_multi_turn_async(messages, patient_id, user_id)
         )
 
     async def close(self) -> None:

@@ -43,10 +43,17 @@ def _score_case(
 ) -> BenchmarkResult:
     """Run one e2e case and score it."""
     try:
-        run = harness.run(
-            user_message=case.user_message,
-            patient_id=case.patient_id,
-        )
+        if case.follow_up_messages:
+            all_messages = [case.user_message] + case.follow_up_messages
+            run = harness.run_multi_turn(
+                messages=all_messages,
+                patient_id=case.patient_id,
+            )
+        else:
+            run = harness.run(
+                user_message=case.user_message,
+                patient_id=case.patient_id,
+            )
     except Exception as e:
         return BenchmarkResult(
             name=case.id,
@@ -160,8 +167,13 @@ def _score_case(
     # -- 6. LLM-as-judge (optional) ------------------------------------------
     judge_scores: dict = {}
     if judge_config and final:
+        if case.follow_up_messages:
+            all_msgs = [case.user_message] + case.follow_up_messages
+            user_ctx = " → ".join(all_msgs)
+        else:
+            user_ctx = case.user_message
         context_str = (
-            f"User: {case.user_message}\n"
+            f"User: {user_ctx}\n"
             f"Patient: {case.patient_id}\n"
             f"Tool calls: {sorted(tools_called)}"
         )

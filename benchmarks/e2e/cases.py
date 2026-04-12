@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 class E2ECase:
     id: str
     name: str
-    category: str   # routing, maternal, pediatric, sdoh, safety
+    category: str   # routing, maternal, pediatric, sdoh, safety, multi_turn
     user_message: str
     patient_id: str
     expected_tools: set[str] = field(default_factory=set)
@@ -30,6 +30,9 @@ class E2ECase:
     answer_must_not_contain: list[str] = field(default_factory=list)
     rubric_dimensions: list[str] = field(default_factory=lambda: ["clinical_accuracy", "safety"])
     max_tool_calls: int = 20  # hard cap to catch runaway loops
+    # Multi-turn: follow-up messages sent in sequence after user_message,
+    # all within the same session. Scoring applies to the final turn's response.
+    follow_up_messages: list[str] = field(default_factory=list)
 
 
 # =============================================================================
@@ -546,7 +549,69 @@ EQUITY_CASES = [
 ]
 
 
-ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES + EQUITY_CASES
+# =============================================================================
+# Multi-turn scenarios (same session, follow-up messages)
+#
+# These test context retention and cross-domain routing within a single session.
+# =============================================================================
+
+MULTI_TURN_CASES = [
+    # (a) Maternal risk → baby check → insurance
+    E2ECase(
+        id="e2e_multi_maternal_peds_sdoh",
+        name="Multi-turn: maternal risk → baby check → insurance inquiry",
+        category="multi_turn",
+        user_message="Assess maternal risk for this patient.",
+        follow_up_messages=[
+            "Now check the baby.",
+            "What about insurance?",
+        ],
+        patient_id="bench-maria-001",
+        expected_tools={"get_maternal_risk_profile", "get_sdoh_screening"},
+        expected_agents={"maternal_risk_agent", "sdoh_outreach_agent"},
+        answer_must_contain=["insur"],
+        answer_must_not_contain=["I prescribe"],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+        max_tool_calls=30,
+    ),
+    # (b) Full assessment → explain BP trend detail
+    E2ECase(
+        id="e2e_multi_assess_then_detail",
+        name="Multi-turn: full assessment → explain BP trend in detail",
+        category="multi_turn",
+        user_message="Full assessment for this patient.",
+        follow_up_messages=[
+            "Explain the BP trend in more detail.",
+        ],
+        patient_id="bench-elena-003",
+        expected_tools={"get_bp_trend"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["184"],
+        answer_must_not_contain=["I prescribe"],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+        max_tool_calls=30,
+    ),
+    # (c) SDOH screen → care plan for housing
+    E2ECase(
+        id="e2e_multi_sdoh_then_care_plan",
+        name="Multi-turn: SDOH screen → write care plan for housing",
+        category="multi_turn",
+        user_message="Screen for SDOH risk factors for this patient.",
+        follow_up_messages=[
+            "Write a care plan for the housing issue.",
+        ],
+        patient_id="bench-maria-001",
+        expected_tools={"get_sdoh_screening", "write_care_plan"},
+        expected_agents={"sdoh_outreach_agent"},
+        answer_must_contain=["housing", "CarePlan"],
+        answer_must_not_contain=["I prescribe"],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+        max_tool_calls=30,
+    ),
+]
+
+
+ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES + EQUITY_CASES + MULTI_TURN_CASES
 
 CASES_BY_CATEGORY: dict[str, list[E2ECase]] = {}
 for c in ALL_CASES:
