@@ -19,5 +19,8 @@ ENV PORT=8001
 
 EXPOSE ${PORT}
 
+HEALTHCHECK --interval=10s --timeout=5s --retries=6 --start-period=15s \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/.well-known/agent-card.json')" || exit 1
+
 # Use exec so uvicorn receives SIGTERM directly from Cloud Run for graceful shutdown.
 CMD exec uvicorn ${AGENT_MODULE} --host 0.0.0.0 --port ${PORT}

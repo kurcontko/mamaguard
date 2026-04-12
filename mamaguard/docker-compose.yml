@@ -1,3 +1,18 @@
+# MamaGuard local development stack.
+#
+# Usage:
+#   cp .env.example .env          # edit GOOGLE_API_KEY at minimum
+#   docker compose up -d          # start all services
+#   python3 scripts/load_bundles.py   # load patient data into HAPI (from repo root)
+#
+# Services:
+#   mamaguard   — A2A agent at http://localhost:8001
+#   hapi        — HAPI FHIR R4 server at http://localhost:8090/fhir
+#
+# After loading bundles, test with:
+#   curl http://localhost:8001/.well-known/agent-card.json
+#   curl http://localhost:8090/fhir/Patient?_count=5
+
 services:
   mamaguard:
     build: .
@@ -8,3 +23,29 @@ services:
     environment:
       - AGENT_MODULE=mamaguard.app:a2a_app
       - PORT=8001
+    depends_on:
+      hapi:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/.well-known/agent-card.json')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  hapi:
+    image: hapiproject/hapi:latest
+    ports:
+      - "8090:8080"
+    environment:
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.allow_multiple_delete: "true"
+      hapi.fhir.validation.requests_enabled: "false"
+      hapi.fhir.validation.responses_enabled: "false"
+      spring.datasource.url: "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/fhir/metadata"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
