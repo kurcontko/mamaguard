@@ -53,6 +53,7 @@ from benchmarks.clinical_reasoning.bench_risk_assessment import suite as clinica
 from benchmarks.clinical_reasoning.bench_reasoning_trace import suite as reasoning_trace_suite
 from benchmarks.clinical_reasoning.bench_baseline_comparison import suite as baseline_comparison_suite
 from benchmarks.clinical_reasoning.bench_care_plan_synthesis import suite as care_plan_synthesis_suite
+from benchmarks.clinical_reasoning.bench_ai_factor_comparison import suite as ai_factor_comparison_suite
 from benchmarks.orchestration.bench_routing import suite as orchestration_suite
 
 DETERMINISTIC_SUITES: dict[str, BenchmarkSuite] = {
@@ -63,6 +64,7 @@ DETERMINISTIC_SUITES: dict[str, BenchmarkSuite] = {
     "reasoning_trace": reasoning_trace_suite,
     "baseline_comparison": baseline_comparison_suite,
     "care_plan_synthesis": care_plan_synthesis_suite,
+    "ai_factor_comparison": ai_factor_comparison_suite,
     "orchestration": orchestration_suite,
 }
 
