@@ -21,6 +21,8 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from typing import Any
+
 import jwt
 
 logger = logging.getLogger(__name__)
@@ -258,7 +260,7 @@ def check_tool_scope(ticket: PermissionTicket, tool_name: str) -> str | None:
 # Full enforcement helper (used by _get_fhir_context)
 # ---------------------------------------------------------------------------
 
-def enforce_smart_ticket(state: dict, tool_name: str) -> dict | None:
+def enforce_smart_ticket(state: Any, tool_name: str) -> dict | None:
     """
     If SMART tickets are enabled, validate the stored ticket against *tool_name*.
 

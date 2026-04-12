@@ -28,6 +28,9 @@ from mcp.server.fastmcp import FastMCP
 
 from .context import FhirContext
 
+# FhirContext duck-types ToolContext (implements .state dict) for MCP use.
+# mypy can't verify structural compatibility, so tool calls use type: ignore.
+
 # -- Shared tool imports (single source of truth) ----------------------------
 from mamaguard.shared.tools.fhir_base import (
     get_patient_summary as _get_patient_summary,
@@ -98,7 +101,7 @@ def get_patient_summary(
         fhir_token: Bearer token for FHIR server authentication
         patient_id: FHIR Patient resource ID
     """
-    return _json(_get_patient_summary(_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_patient_summary(_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +124,7 @@ def get_active_medications(
         fhir_token: Bearer token for FHIR server authentication
         patient_id: FHIR Patient resource ID
     """
-    return _json(_get_active_medications(_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_active_medications(_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +151,7 @@ def get_bp_trend(
         patient_id: FHIR Patient resource ID
         months_back: How many months of history to retrieve (default 24)
     """
-    return _json(_get_bp_trend(months_back=months_back, tool_context=_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_bp_trend(months_back=months_back, tool_context=_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +177,7 @@ def get_glucose_trend(
         patient_id: FHIR Patient resource ID
         months_back: How many months of history to retrieve (default 24)
     """
-    return _json(_get_glucose_trend(months_back=months_back, tool_context=_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_glucose_trend(months_back=months_back, tool_context=_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +202,7 @@ def get_pregnancy_history(
         fhir_token: Bearer token for FHIR server authentication
         patient_id: FHIR Patient resource ID
     """
-    return _json(_get_pregnancy_history(tool_context=_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_pregnancy_history(tool_context=_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +227,7 @@ def get_maternal_risk_profile(
         fhir_token: Bearer token for FHIR server authentication
         patient_id: FHIR Patient resource ID
     """
-    return _json(_get_maternal_risk_profile(tool_context=_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_maternal_risk_profile(tool_context=_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +252,7 @@ def get_immunization_gaps(
         fhir_token: Bearer token for FHIR server authentication
         patient_id: FHIR Patient resource ID
     """
-    return _json(_get_immunization_gaps(tool_context=_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_immunization_gaps(tool_context=_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +277,7 @@ def get_developmental_screening_status(
         fhir_token: Bearer token for FHIR server authentication
         patient_id: FHIR Patient resource ID
     """
-    return _json(_get_developmental_screening_status(tool_context=_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_developmental_screening_status(tool_context=_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +302,7 @@ def get_care_gaps(
         fhir_token: Bearer token for FHIR server authentication
         patient_id: FHIR Patient resource ID
     """
-    return _json(_get_care_gaps(tool_context=_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_care_gaps(tool_context=_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +327,7 @@ def get_sdoh_screening(
         fhir_token: Bearer token for FHIR server authentication
         patient_id: FHIR Patient resource ID
     """
-    return _json(_get_sdoh_screening(tool_context=_ctx(fhir_url, fhir_token, patient_id)))
+    return _json(_get_sdoh_screening(tool_context=_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +366,7 @@ def write_risk_assessment(
         probability=probability,
         basis=basis,
         mitigation=mitigation,
-        tool_context=_ctx(fhir_url, fhir_token, patient_id),
+        tool_context=_ctx(fhir_url, fhir_token, patient_id),  # type: ignore[arg-type]
     ))
 
 
@@ -399,7 +402,7 @@ def create_communication_request(
         medium=medium,
         content=content,
         priority=priority,
-        tool_context=_ctx(fhir_url, fhir_token, patient_id),
+        tool_context=_ctx(fhir_url, fhir_token, patient_id),  # type: ignore[arg-type]
     ))
 
 
@@ -436,7 +439,7 @@ def find_sdoh_resources(
     return _json(_find_sdoh_resources(
         category_or_code=category_or_code,
         zip_code=zip_code,
-        tool_context=_ctx(fhir_url, fhir_token, patient_id),
+        tool_context=_ctx(fhir_url, fhir_token, patient_id),  # type: ignore[arg-type]
     ))
 
 
@@ -484,7 +487,7 @@ def write_care_plan(
         resource_contact=resource_contact,
         resource_url=resource_url,
         z_code=z_code,
-        tool_context=_ctx(fhir_url, fhir_token, patient_id),
+        tool_context=_ctx(fhir_url, fhir_token, patient_id),  # type: ignore[arg-type]
     ))
 
 
@@ -497,6 +500,6 @@ if __name__ == "__main__":
     if transport == "sse":
         host = os.environ.get("MCP_HOST", "0.0.0.0")
         port = int(os.environ.get("MCP_PORT", "8080"))
-        mcp.run(transport="sse", host=host, port=port)
+        mcp.run(transport="sse", host=host, port=port)  # type: ignore[call-arg]
     else:
         mcp.run(transport="stdio")

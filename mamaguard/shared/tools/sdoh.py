@@ -48,7 +48,7 @@ _SDOH_SNOMED_CODES = {
 }
 
 
-def get_sdoh_screening(tool_context: ToolContext = None) -> dict:
+def get_sdoh_screening(tool_context: ToolContext | None = None) -> dict:
     """
     Screen for social determinants of health from FHIR data.
 
@@ -250,7 +250,7 @@ def _fetch_external_resources(
 def find_sdoh_resources(
     category_or_code: str,
     zip_code: str,
-    tool_context: ToolContext = None,
+    tool_context: ToolContext | None = None,
 ) -> dict:
     """
     Look up concrete SDOH resources for a Z-code / category + ZIP.

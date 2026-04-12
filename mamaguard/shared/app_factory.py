@@ -66,16 +66,16 @@ def create_a2a_app(
         description=description,
         url=url,
         version=version,
-        defaultInputModes=["text/plain"],
-        defaultOutputModes=["text/plain"],
+        default_input_modes=["text/plain"],
+        default_output_modes=["text/plain"],
         capabilities=AgentCapabilities(
             streaming=True,
-            pushNotifications=False,
-            stateTransitionHistory=True,
+            push_notifications=False,
+            state_transition_history=True,
             extensions=extensions,
         ),
         skills=skills or [],
-        securitySchemes=security_schemes,
+        security_schemes=security_schemes,
         security=security,
     )
 

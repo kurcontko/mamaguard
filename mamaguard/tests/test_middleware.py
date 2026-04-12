@@ -32,7 +32,7 @@ from mamaguard.shared.middleware import ApiKeyMiddleware
 FHIR_KEY = "https://app.promptopinion.ai/schemas/a2a/v1/fhir-context"
 
 
-async def _echo(request: Request) -> JSONResponse:
+async def _echo(request: Request) -> JSONResponse | PlainTextResponse:
     """Return the JSON-parsed body so tests can assert bridging downstream."""
     body = await request.body()
     try:

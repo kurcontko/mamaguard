@@ -41,7 +41,7 @@ def write_risk_assessment(
     probability: float,
     basis: str,
     mitigation: str,
-    tool_context: ToolContext = None,
+    tool_context: ToolContext | None = None,
 ) -> dict:
     """
     Write a RiskAssessment resource to the FHIR server.
@@ -137,7 +137,7 @@ def create_communication_request(
     medium: str,
     content: str,
     priority: str = "routine",
-    tool_context: ToolContext = None,
+    tool_context: ToolContext | None = None,
 ) -> dict:
     """
     Create a CommunicationRequest resource on the FHIR server.
@@ -236,7 +236,7 @@ def write_care_plan(
     resource_contact: str,
     resource_url: str = "",
     z_code: str = "",
-    tool_context: ToolContext = None,
+    tool_context: ToolContext | None = None,
 ) -> dict:
     """
     Create a linked FHIR Goal + CarePlan documenting an SDOH referral.

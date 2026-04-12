@@ -19,7 +19,7 @@ _FHIR_TIMEOUT = 15  # seconds
 
 # -- Private helpers ----------------------------------------------------------
 
-def _get_fhir_context(tool_context: ToolContext, tool_name: str = ""):
+def _get_fhir_context(tool_context: ToolContext | None, tool_name: str = ""):
     """
     Read FHIR credentials from session state.
     Returns (fhir_url, fhir_token, patient_id) or error dict.
@@ -28,6 +28,12 @@ def _get_fhir_context(tool_context: ToolContext, tool_name: str = ""):
     validates that the session ticket grants the required scopes before
     returning credentials.
     """
+    if tool_context is None:
+        return {
+            "status": "error",
+            "error_message": "FHIR context is not available -- no tool context provided.",
+        }
+
     fhir_url = tool_context.state.get("fhir_url", "").rstrip("/")
     fhir_token = tool_context.state.get("fhir_token", "")
     patient_id = tool_context.state.get("patient_id", "")

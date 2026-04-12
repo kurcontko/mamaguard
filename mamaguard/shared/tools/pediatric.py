@@ -97,7 +97,7 @@ def _compute_age_months(birth_date_str: str) -> int | None:
         return None
 
 
-def get_immunization_gaps(tool_context: ToolContext = None) -> dict:
+def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
     """
     Check immunization status against CDC recommended schedule.
 
@@ -211,7 +211,7 @@ def get_immunization_gaps(tool_context: ToolContext = None) -> dict:
     }
 
 
-def get_developmental_screening_status(tool_context: ToolContext = None) -> dict:
+def get_developmental_screening_status(tool_context: ToolContext | None = None) -> dict:
     """
     Check developmental screening status against AAP Bright Futures schedule.
 
@@ -313,7 +313,7 @@ def get_developmental_screening_status(tool_context: ToolContext = None) -> dict
     }
 
 
-def get_care_gaps(tool_context: ToolContext = None) -> dict:
+def get_care_gaps(tool_context: ToolContext | None = None) -> dict:
     """
     Identify care gaps -- overdue screenings, missed appointments, unmet goals.
 
