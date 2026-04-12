@@ -26,6 +26,26 @@ from benchmarks.e2e.fhir_bundles import (
     toddler_jones,
 )
 
+def get_bundle_refs(patient_id: str) -> set[str]:
+    """Return the set of all FHIR resource references in a patient's bundle.
+
+    Each reference is ``ResourceType/id`` (e.g. ``Observation/bench-m-bp1``).
+    Returns an empty set for unknown patient IDs.
+    """
+    info = ALL_PATIENTS.get(patient_id)
+    if info is None:
+        return set()
+    bundle = info["bundle"]
+    refs: set[str] = set()
+    for entry in bundle.get("entry", []):
+        res = entry.get("resource", {})
+        rtype = res.get("resourceType")
+        rid = res.get("id")
+        if rtype and rid:
+            refs.add(f"{rtype}/{rid}")
+    return refs
+
+
 ALL_PATIENTS: dict[str, dict] = {
     # patient_id -> {"bundle": <Bundle>, "label": <human name>, "scenario": <str>}
     maria_high_risk.PATIENT_ID: {

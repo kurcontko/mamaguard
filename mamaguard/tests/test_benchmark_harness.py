@@ -941,5 +941,131 @@ class TestAgentTreeGenerationConfig(unittest.TestCase):
                     os.environ[key] = val
 
 
+# ---------------------------------------------------------------------------
+# fhir_bundles — get_bundle_refs
+# ---------------------------------------------------------------------------
+
+from benchmarks.e2e.fhir_bundles import get_bundle_refs
+
+
+class TestGetBundleRefs(unittest.TestCase):
+    def test_known_patient_returns_refs(self):
+        refs = get_bundle_refs("bench-maria-001")
+        self.assertIsInstance(refs, set)
+        self.assertGreater(len(refs), 0)
+
+    def test_refs_format(self):
+        """Every ref should be ResourceType/id."""
+        refs = get_bundle_refs("bench-maria-001")
+        for r in refs:
+            self.assertRegex(r, r"^[A-Z][a-zA-Z]+/[A-Za-z0-9_\-]+$")
+
+    def test_known_refs_present(self):
+        refs = get_bundle_refs("bench-maria-001")
+        self.assertIn("Patient/bench-maria-001", refs)
+        self.assertIn("Condition/bench-m-htn", refs)
+        self.assertIn("Observation/bench-m-bp1", refs)
+
+    def test_unknown_patient_returns_empty(self):
+        refs = get_bundle_refs("nonexistent-patient-999")
+        self.assertEqual(refs, set())
+
+    def test_all_patients_have_refs(self):
+        from benchmarks.e2e.fhir_bundles import ALL_PATIENTS
+        for pid in ALL_PATIENTS:
+            refs = get_bundle_refs(pid)
+            self.assertGreater(len(refs), 0, f"{pid} should have bundle refs")
+
+
+# ---------------------------------------------------------------------------
+# Hallucination detection — extract_fhir_refs + scoring logic
+# ---------------------------------------------------------------------------
+
+from benchmarks.llm_eval.judge import extract_fhir_refs
+
+
+class TestHallucinationDetection(unittest.TestCase):
+    """Test the FHIR ref extraction and hallucination scoring logic used in bench_e2e."""
+
+    def test_extract_real_refs(self):
+        text = "See Observation/bench-m-bp1 and Condition/bench-m-htn for details."
+        refs = extract_fhir_refs(text)
+        self.assertIn("Observation/bench-m-bp1", refs)
+        self.assertIn("Condition/bench-m-htn", refs)
+
+    def test_extract_no_refs(self):
+        text = "This patient has high blood pressure."
+        refs = extract_fhir_refs(text)
+        self.assertEqual(refs, [])
+
+    def test_fabricated_ref_detected(self):
+        """A ref not in the bundle should be flagged as fabricated."""
+        valid = get_bundle_refs("bench-maria-001")
+        response = "Based on Observation/FAKE-12345, the patient has an issue."
+        cited = extract_fhir_refs(response)
+        fabricated = [r for r in cited if r not in valid]
+        self.assertEqual(fabricated, ["Observation/FAKE-12345"])
+
+    def test_real_ref_not_flagged(self):
+        """A ref that exists in the bundle should not be flagged."""
+        valid = get_bundle_refs("bench-maria-001")
+        response = "BP trend from Observation/bench-m-bp5 shows 170/110."
+        cited = extract_fhir_refs(response)
+        fabricated = [r for r in cited if r not in valid]
+        self.assertEqual(fabricated, [])
+
+    def test_mixed_refs(self):
+        """Mix of real and fabricated refs."""
+        valid = get_bundle_refs("bench-maria-001")
+        response = (
+            "Observation/bench-m-bp1 shows 142/88. "
+            "Observation/INVENTED-999 shows something else. "
+            "Condition/bench-m-htn is active."
+        )
+        cited = extract_fhir_refs(response)
+        fabricated = [r for r in cited if r not in valid]
+        self.assertEqual(len(cited), 3)
+        self.assertEqual(fabricated, ["Observation/INVENTED-999"])
+
+    def test_halluc_score_all_valid(self):
+        """Score should be 1.0 when all cited refs are valid."""
+        cited = ["Observation/bench-m-bp1", "Condition/bench-m-htn"]
+        valid = {"Observation/bench-m-bp1", "Condition/bench-m-htn"}
+        fabricated = [r for r in cited if r not in valid]
+        score = max(0.0, 1.0 - len(fabricated) / len(cited))
+        self.assertAlmostEqual(score, 1.0)
+
+    def test_halluc_score_half_fabricated(self):
+        """Score should be 0.5 when half the refs are fabricated."""
+        cited = ["Observation/real", "Observation/fake"]
+        valid = {"Observation/real"}
+        fabricated = [r for r in cited if r not in valid]
+        score = max(0.0, 1.0 - len(fabricated) / len(cited))
+        self.assertAlmostEqual(score, 0.5)
+
+    def test_halluc_score_all_fabricated(self):
+        """Score should be 0.0 when all refs are fabricated."""
+        cited = ["Observation/fake1", "Observation/fake2"]
+        valid: set[str] = set()
+        fabricated = [r for r in cited if r not in valid]
+        score = max(0.0, 1.0 - len(fabricated) / len(cited))
+        self.assertAlmostEqual(score, 0.0)
+
+    def test_halluc_score_no_refs_cited(self):
+        """Score should be 1.0 when response cites no refs (neutral)."""
+        cited: list[str] = []
+        score = 1.0 if not cited else max(0.0, 1.0 - 0 / len(cited))
+        self.assertAlmostEqual(score, 1.0)
+
+    def test_trailing_punctuation_stripped(self):
+        """Refs at end of sentences should still match after stripping."""
+        text = "See Observation/bench-m-bp1."
+        refs = extract_fhir_refs(text)
+        self.assertIn("Observation/bench-m-bp1", refs)
+        valid = get_bundle_refs("bench-maria-001")
+        fabricated = [r for r in refs if r not in valid]
+        self.assertEqual(fabricated, [])
+
+
 if __name__ == "__main__":
     unittest.main()

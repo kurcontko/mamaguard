@@ -2,7 +2,7 @@
 End-to-end benchmark suite: real MamaGuard agent + real HAPI FHIR +
 real tool dispatch via ADK Runner.
 
-Each case is scored on four axes:
+Each case is scored on five axes:
   1. Tool-call correctness: were the expected tools actually invoked?
   2. Agent routing correctness: did the orchestrator delegate to the right
      sub-agent(s)?
@@ -10,6 +10,8 @@ Each case is scored on four axes:
      clinical information and avoid dangerous content?
   4. 5T format compliance: does the response follow the 5T output framework
      (Talk, Template, Table, Task, Transaction)?
+  5. Hallucination detection: are FHIR references in the response backed by
+     real resources in the patient bundle?
 
 Optionally, an LLM-as-judge scores the answer against clinical rubrics.
 """
@@ -21,9 +23,15 @@ from typing import Callable
 
 from benchmarks.base import BenchmarkCase, BenchmarkResult, BenchmarkSuite, Verdict
 from benchmarks.e2e.cases import ALL_CASES, E2ECase
+from benchmarks.e2e.fhir_bundles import get_bundle_refs
 from benchmarks.e2e.runner_harness import MamaGuardHarness
 from benchmarks.llm_eval.client import LLMConfig
-from benchmarks.llm_eval.judge import RUBRICS, check_5t_format, judge_response
+from benchmarks.llm_eval.judge import (
+    RUBRICS,
+    check_5t_format,
+    extract_fhir_refs,
+    judge_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +132,32 @@ def _score_case(
         checks["5t_sections_present"] = five_t["count"]
         scores.append(five_t["score"])
 
-    # -- 5. LLM-as-judge (optional) ------------------------------------------
+    # -- 5. Hallucination detection (FHIR ref verification) -------------------
+    if final:
+        bundle_refs = get_bundle_refs(case.patient_id)
+        # Also accept refs that appeared in tool call results — the agent may
+        # echo resource IDs returned by tools (e.g. a newly written CarePlan).
+        tool_result_refs: set[str] = set()
+        for call in run.trace.calls:
+            if isinstance(call.result, dict):
+                tool_result_refs.update(extract_fhir_refs(str(call.result)))
+        valid_refs = bundle_refs | tool_result_refs
+
+        cited_refs = extract_fhir_refs(final)
+        fabricated = [r for r in cited_refs if r not in valid_refs]
+        checks["hallucination"] = {
+            "cited_refs": cited_refs,
+            "fabricated_refs": fabricated,
+            "valid_ref_count": len(valid_refs),
+        }
+        if cited_refs:
+            halluc_score = max(0.0, 1.0 - len(fabricated) / len(cited_refs))
+        else:
+            # No refs cited — not a hallucination, neutral score
+            halluc_score = 1.0
+        scores.append(halluc_score)
+
+    # -- 6. LLM-as-judge (optional) ------------------------------------------
     judge_scores: dict = {}
     if judge_config and final:
         context_str = (
