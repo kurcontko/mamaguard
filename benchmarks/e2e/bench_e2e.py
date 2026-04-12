@@ -2,12 +2,14 @@
 End-to-end benchmark suite: real MamaGuard agent + real HAPI FHIR +
 real tool dispatch via ADK Runner.
 
-Each case is scored on three axes:
+Each case is scored on four axes:
   1. Tool-call correctness: were the expected tools actually invoked?
   2. Agent routing correctness: did the orchestrator delegate to the right
      sub-agent(s)?
   3. Final answer quality: does the text response contain the expected
      clinical information and avoid dangerous content?
+  4. 5T format compliance: does the response follow the 5T output framework
+     (Talk, Template, Table, Task, Transaction)?
 
 Optionally, an LLM-as-judge scores the answer against clinical rubrics.
 """
@@ -21,7 +23,7 @@ from benchmarks.base import BenchmarkCase, BenchmarkResult, BenchmarkSuite, Verd
 from benchmarks.e2e.cases import ALL_CASES, E2ECase
 from benchmarks.e2e.runner_harness import MamaGuardHarness
 from benchmarks.llm_eval.client import LLMConfig
-from benchmarks.llm_eval.judge import RUBRICS, judge_response
+from benchmarks.llm_eval.judge import RUBRICS, check_5t_format, judge_response
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +117,14 @@ def _score_case(
         else:
             scores.append(1.0)
 
-    # -- 4. LLM-as-judge (optional) ------------------------------------------
+    # -- 4. 5T format compliance (deterministic) --------------------------------
+    if final:
+        five_t = check_5t_format(final)
+        checks["5t_format"] = five_t["sections"]
+        checks["5t_sections_present"] = five_t["count"]
+        scores.append(five_t["score"])
+
+    # -- 5. LLM-as-judge (optional) ------------------------------------------
     judge_scores: dict = {}
     if judge_config and final:
         context_str = (
