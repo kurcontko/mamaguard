@@ -1,0 +1,47 @@
+{
+  "name": "MamaGuard MCP Server",
+  "description": "FHIR tools for maternal-pediatric care coordination via MCP",
+  "version": "1.0.0",
+  "transport": ["stdio", "sse"],
+  "tools": [
+    {"name": "get_patient_summary", "domain": "base"},
+    {"name": "get_active_medications", "domain": "base"},
+    {"name": "get_bp_trend", "domain": "maternal"},
+    {"name": "get_glucose_trend", "domain": "maternal"},
+    {"name": "get_pregnancy_history", "domain": "maternal"},
+    {"name": "get_maternal_risk_profile", "domain": "maternal"},
+    {"name": "get_immunization_gaps", "domain": "pediatric"},
+    {"name": "get_developmental_screening_status", "domain": "pediatric"},
+    {"name": "get_care_gaps", "domain": "pediatric"},
+    {"name": "get_sdoh_screening", "domain": "sdoh"},
+    {"name": "find_sdoh_resources", "domain": "sdoh"},
+    {"name": "write_risk_assessment", "domain": "writeback"},
+    {"name": "create_communication_request", "domain": "writeback"},
+    {"name": "write_care_plan", "domain": "writeback"}
+  ],
+  "sharp_context": {
+    "enabled": true,
+    "fields": {
+      "fhir_url": "Base URL of the FHIR R4 server",
+      "fhir_token": "Bearer token for FHIR server authentication",
+      "patient_id": "FHIR Patient resource ID"
+    }
+  },
+  "environment": {
+    "required": [],
+    "optional": {
+      "MCP_TRANSPORT": "Transport protocol: 'stdio' (default) or 'sse'",
+      "MCP_HOST": "Bind host for SSE transport (default: 0.0.0.0)",
+      "MCP_PORT": "Bind port for SSE transport (default: 8080)",
+      "MAMAGUARD_SDOH_API_URL": "External SDOH directory URL (findhelp.org / 211 gateway)",
+      "MAMAGUARD_SDOH_API_KEY": "API key for external SDOH directory",
+      "MAMAGUARD_SMART_TICKETS": "Enable SMART Permission Ticket enforcement (true/false)",
+      "MAMAGUARD_SMART_TICKETS_SECRET": "HS256 signing key for dev/test tickets",
+      "MAMAGUARD_SMART_TICKETS_AUDIENCE": "Expected JWT audience claim"
+    }
+  },
+  "requirements": {
+    "python": ">=3.11",
+    "dependencies": ["mcp[server]>=1.0.0", "httpx>=0.28.0", "PyJWT>=2.8.0"]
+  }
+}

@@ -16,6 +16,7 @@ Hackathon: Agents Assemble | Deadline: May 11, 2026 | Track: A2A Agent
    - 2.5 [A2A Agent Definitions](#25-a2a-agent-definitions)
    - 2.6 [Security Architecture](#26-security-architecture)
    - 2.7 [Prompt Opinion Integration](#27-prompt-opinion-integration)
+   - 2.8 [Standalone MCP Server (Phase 2a)](#28-standalone-mcp-server-phase-2a)
 3. [Project Structure](#3-project-structure)
 4. [Tech Stack](#4-tech-stack)
 5. [FHIR Data Strategy](#5-fhir-data-strategy)
@@ -112,8 +113,8 @@ Every feature falls into one of three tiers. Only "Adopt Now" items block submis
 
 | Feature | Rationale |
 |---------|-----------|
-| Standalone MCP Server (Superpower track) | Separate submission if attempted; do not blur A2A Stage 1 adherence |
-| External SDOH APIs (211.org, findhelp.org) | Network dependency, terms-of-use risk, demo brittleness. SDOH agent uses FHIR Z-codes + Coverage only. |
+| ~~Standalone MCP Server (Superpower track)~~ | **Implemented.** See [Section 2.8](#28-standalone-mcp-server-phase-2a) below. FastMCP server exposing all 14 FHIR tools, SHARP context, stdio + SSE transports, 16 tests. Marketplace config in `marketplace/mcp_config.json`. | Done |
+| ~~External SDOH APIs (211.org, findhelp.org)~~ | **Implemented.** `find_sdoh_resources` hits external directory with 5s timeout; curated offline fallback (211, WIC, SNAP, HUD, etc.) so agent is always actionable. | Done |
 | Multi-model consensus (ClinicalMem-style) | Cost, complexity, not needed for judging criteria |
 | Wearable data integration | No FHIR source available in sandbox |
 | CDS Hooks implementation | Interesting pattern but adds protocol surface without judging payoff |
@@ -138,35 +139,32 @@ Every feature falls into one of three tiers. Only "Adopt Now" items block submis
                         │  BYO Agent (configured   │
                         │  in PO with system       │
                         │  prompt + FHIR context)  │
-                        └──────────┬──────────────┘
-                                   │ "Consult with another agent"
-                                   │ A2A JSON-RPC + FHIR metadata
-                                   ▼
-┌──────────────────────────────────────────────────────────────┐
-│              MamaGuard External Agent (Cloud Run)            │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │  Orchestrator Agent (mamaguard_orchestrator)         │    │
-│  │  ┌─────────────┐ ┌──────────────┐ ┌──────────────┐  │    │
-│  │  │  Maternal    │ │  Pediatric   │ │  SDOH +      │  │    │
-│  │  │  Risk        │ │  Transition  │ │  Outreach    │  │    │
-│  │  │  Monitor     │ │  Agent       │ │  Agent       │  │    │
-│  │  └──────┬──────┘ └──────┬───────┘ └──────┬───────┘  │    │
-│  │         │               │                │           │    │
-│  │         └───────────────┼────────────────┘           │    │
-│  │                         ▼                            │    │
-│  │              Shared FHIR Tool Layer (ADK tools)       │    │
-│  │         ┌───────────────────────────────┐            │    │
-│  │         │  12 tools: maternal, peds,    │            │    │
-│  │         │  SDOH, writeback, base        │            │    │
-│  │         └───────────────┬───────────────┘            │    │
-│  └─────────────────────────┼────────────────────────────┘    │
-│                            │ HTTPS + Bearer Token            │
-│  Middleware: X-API-Key auth + FHIR metadata bridging         │
-│  FHIR Hook: before_model_callback → session state            │
-└────────────────────────────┼─────────────────────────────────┘
+                        └──────┬──────────┬───────┘
+              A2A JSON-RPC │          │ MCP (SSE/stdio)
+              + FHIR metadata│          │ + SHARP params
+                             ▼          ▼
+┌────────────────────────────────┐  ┌──────────────────────────┐
+│  MamaGuard A2A Agent           │  │  MamaGuard MCP Server    │
+│  (Cloud Run — Agent track)     │  │  (Superpower track)      │
+│  ┌──────────────────────────┐  │  │  FastMCP, 14 tools       │
+│  │  Orchestrator            │  │  │  stdio + SSE transport   │
+│  │  ├── Maternal Agent      │  │  │                          │
+│  │  ├── Pediatric Agent     │  │  └────────────┬─────────────┘
+│  │  └── SDOH Agent          │  │               │
+│  └──────────┬───────────────┘  │               │
+│             │                  │               │
+│  Shared FHIR Tool Layer        │               │
+│  ┌──────────────────────────┐  │               │
+│  │  14 tools: base, maternal,│  │  (same tools, │
+│  │  peds, SDOH, writeback   │◄─┼───shared code)│
+│  └──────────┬───────────────┘  │               │
+│             │                  │               │
+│  Middleware + FHIR Hook        │               │
+└─────────────┼──────────────────┘               │
+              │ HTTPS + Bearer Token             │
+              └──────────────┬───────────────────┘
                              ▼
-                    FHIR R4 Server (SMART)
-                    r4.smarthealthit.org
+                    FHIR R4 Server (SMART / HAPI)
 ```
 
 ### 2.2 Agent Topology
@@ -185,8 +183,8 @@ mamaguard_orchestrator (exposed via A2A)
 - Single container, single URL, single deployment
 - `AgentTool` routing is a proven pattern from `po-adk-python`
 
-**Marketplace artifact: The BYO Agent is the submission.**
-The external A2A agent (Cloud Run) is infrastructure. The **BYO Agent configured inside Prompt Opinion** is what gets published to the Marketplace, is discoverable on the launchpad, and is directly invokable by users. The BYO Agent's system prompt orchestrates consultation with the external MamaGuard A2A agent behind the scenes. From the judge's perspective, they open the Marketplace, find "MamaGuard", launch it, select a patient, and interact — all within PO. The external agent is an implementation detail, not the submission surface.
+**Marketplace artifacts: Dual submission (Agent + Superpower tracks).**
+The **BYO Agent** (Agent track) is the primary submission — it consults the external A2A agent on Cloud Run for all clinical queries. The **MCP server** (Superpower track) is the second artifact — it exposes the same 14 FHIR tools via MCP, attachable to any BYO Agent or usable from Claude Desktop/Cursor. Both are published to the Prompt Opinion Marketplace. From the judge's perspective, they open the Marketplace, find "MamaGuard", launch it, select a patient, and interact — all within PO. The external agent and MCP server are infrastructure; the BYO Agents are the submission surface.
 
 ### 2.3 Data Flow
 
@@ -210,11 +208,11 @@ The external A2A agent (Cloud Run) is infrastructure. The **BYO Agent configured
 10. Clinician reviews, provides input → agent continues
 ```
 
-### 2.4 FHIR Tool Layer (ADK Tools, not a standalone MCP Server)
+### 2.4 FHIR Tool Layer
 
-The tools below are **Google ADK tool functions** called in-process by sub-agents, not a separate MCP server with its own runtime or publish path. The submission is purely A2A. "MCP" appears in this doc only as the protocol the tools' design patterns are borrowed from (SHARP header handling, FHIR context discovery). No standalone MCP artifact is built or published.
+The tools below are **Google ADK tool functions** called in-process by sub-agents. The same tool implementations are also exposed via the standalone MCP server (see [Section 2.8](#28-standalone-mcp-server-phase-2a)) — single source of truth, no duplication.
 
-12 tools organized by domain:
+14 tools organized by domain:
 
 #### Base Tools (reused from po-adk-python)
 
@@ -245,6 +243,7 @@ The tools below are **Google ADK tool functions** called in-process by sub-agent
 | Tool | Parameters | Returns | FHIR Queries |
 |------|-----------|---------|-------------|
 | `get_sdoh_screening` | `patient_id` | SDOH conditions (Z-codes), questionnaire responses, risk factors | Condition (SNOMED Z55-Z65), QuestionnaireResponse, Coverage |
+| `find_sdoh_resources` | `category_or_code`, `zip_code` | Concrete community resources for SDOH need + location | External directory / offline fallback |
 
 #### Write-back Tools (NEW)
 
@@ -252,6 +251,7 @@ The tools below are **Google ADK tool functions** called in-process by sub-agent
 |------|-----------|---------|-------------|
 | `write_risk_assessment` | `patient_id`, `risk_type`, `probability`, `basis`, `mitigation` | Created RiskAssessment resource ID | POST RiskAssessment |
 | `create_communication_request` | `patient_id`, `medium`, `content`, `priority` | Created CommunicationRequest resource ID | POST CommunicationRequest |
+| `write_care_plan` | `patient_id`, `category`, `goal_description`, `resource_name`, `resource_contact`, `resource_url`, `z_code` | Linked Goal + CarePlan resource IDs | POST Goal + POST CarePlan |
 
 #### Liaison Agent Pattern
 
@@ -321,7 +321,7 @@ When `required: true` → orchestrator transitions A2A task to `INPUT_REQUIRED`.
 | **Orchestrator** | `mamaguard_orchestrator` | gemini-2.5-flash | `AgentTool(maternal)`, `AgentTool(pediatric)`, `AgentTool(sdoh)` | Routes sequentially: maternal → pediatric → SDOH → synthesize. Outputs via 5T framework (Talk/Template/Table/Task/Transaction). Adds Liaison notice. |
 | **Maternal Risk Monitor** | `maternal_risk_agent` | gemini-2.5-flash | `get_maternal_risk_profile`, `get_bp_trend`, `get_glucose_trend`, `get_pregnancy_history`, `get_active_medications`, `write_risk_assessment` | Calls profile → trends → history → meds. Produces risk-stratified assessment. Marks medication changes as `clinician_review.required`. Cites FHIR resource IDs. |
 | **Pediatric Transition** | `pediatric_transition_agent` | gemini-2.5-flash | `get_patient_summary`, `get_immunization_gaps`, `get_developmental_screening_status`, `get_care_gaps`, `create_communication_request` | Maps CDC immunization schedule against received vaccines. Checks AAP Bright Futures milestones. Generates tasks with due dates. |
-| **SDOH + Outreach** | `sdoh_outreach_agent` | gemini-2.5-flash | `get_sdoh_screening`, `get_patient_summary`, `create_communication_request`, `get_care_gaps` | Identifies Z-code conditions, insurance gaps (Medicaid postpartum expiration), language barriers from FHIR data only (no external SDOH APIs). Recommends WIC/SNAP/housing based on LLM knowledge. Creates CommunicationRequest resources. |
+| **SDOH + Outreach** | `sdoh_outreach_agent` | gemini-2.5-flash | `get_sdoh_screening`, `find_sdoh_resources`, `get_patient_summary`, `create_communication_request`, `write_care_plan`, `get_care_gaps` | Identifies Z-code conditions, insurance gaps, language barriers. Looks up actionable community resources (findhelp.org / 211 gateway with offline fallback). Creates linked Goal + CarePlan for SDOH referrals. Creates CommunicationRequest resources. |
 
 All sub-agents use `before_model_callback=extract_fhir_context` for credential extraction.
 
@@ -476,6 +476,70 @@ Reference implementation of Josh Mandel's "SMART Permission Tickets" CI build dr
 - BYO agents can attach MCP servers directly
 - Guardrails: pre-prompt validation agents available
 
+### 2.8 Standalone MCP Server (Phase 2a)
+
+The MCP server is MamaGuard's **second submission artifact** — covering the Superpower track alongside the A2A Agent track. It exposes all 14 FHIR tools via the Model Context Protocol using [FastMCP](https://github.com/jlowin/fastmcp).
+
+#### Key Design
+
+- **Single source of truth:** `mamaguard/mcp_server/server.py` imports tool functions directly from `mamaguard/shared/tools/*` — zero copy-paste.
+- **SHARP via explicit parameters:** Instead of relying on middleware/session state, each tool accepts `fhir_url`, `fhir_token`, `patient_id` as the first three parameters.
+- **Dual transport:** stdio (for Claude Desktop, Cursor) and SSE (for remote/web clients).
+- **FhirContext adapter:** `mamaguard/mcp_server/context.py` wraps explicit params into the `.state` dict expected by shared tool implementations.
+
+#### Running
+
+```bash
+# stdio (Claude Desktop, Cursor, etc.)
+python -m mamaguard.mcp_server.server
+
+# SSE (remote clients, PO BYO Agent attachment)
+MCP_TRANSPORT=sse MCP_PORT=8080 python -m mamaguard.mcp_server.server
+```
+
+#### Tool Coverage
+
+All 14 tools from the ADK agents are registered: 2 base + 4 maternal + 3 pediatric + 2 SDOH + 3 write-back. Each tool returns JSON-serialized results including the `clinician_review` Liaison Agent object.
+
+#### Marketplace Publishing
+
+Two paths for the Prompt Opinion Marketplace:
+
+1. **Attach to BYO Agent:** PO BYO Agents can attach MCP servers directly. Deploy the MCP server with SSE transport and add the SSE endpoint URL in the BYO Agent config.
+2. **Standalone artifact:** Create a dedicated BYO Agent wrapper that uses the attached MCP tools for all FHIR queries.
+
+Configuration files: `marketplace/mcp_config.json` (server metadata), `marketplace/mcp_setup.md` (step-by-step setup).
+
+#### Client Configuration Examples
+
+**Claude Desktop** (`claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "mamaguard": {
+      "command": "python",
+      "args": ["-m", "mamaguard.mcp_server.server"],
+      "cwd": "/path/to/repo/mamaguard"
+    }
+  }
+}
+```
+
+**Cursor:**
+```json
+{
+  "mamaguard": {
+    "command": "python",
+    "args": ["-m", "mamaguard.mcp_server.server"],
+    "cwd": "/path/to/repo/mamaguard"
+  }
+}
+```
+
+#### Test Coverage
+
+16 test classes in `mamaguard/tests/test_mcp_server.py`: tool registration (all 14 registered, no extras), tool invocation with mocked FHIR, FhirContext construction + SHARP deserialization, and error propagation.
+
 ---
 
 ## 3. Project Structure
@@ -490,26 +554,37 @@ mamaguard/
 │   └── agent.py                 # Pediatric Transition Agent definition
 ├── sdoh_agent/
 │   └── agent.py                 # SDOH + Outreach Agent definition
+├── mcp_server/                    # Standalone MCP server (Superpower track — Phase 2a)
+│   ├── __init__.py               # Package stub
+│   ├── server.py                 # FastMCP server: 14 tools, stdio + SSE transports
+│   ├── context.py                # FhirContext adapter (SHARP params → .state dict)
+│   └── README.md                  # MCP server docs: quick start, tool reference, Docker
 ├── shared/
 │   ├── app_factory.py           # [REUSE] create_a2a_app() — AgentCard + ASGI app
 │   ├── middleware.py             # [REUSE] X-API-Key enforcement + FHIR metadata bridging
 │   ├── fhir_hook.py             # [REUSE] before_model_callback — FHIR cred extraction
+│   ├── smart_tickets.py         # SMART Permission Tickets (Phase 2b)
+│   ├── sdoh_resources.py        # Offline SDOH resource map (Phase 2c)
 │   ├── logging_utils.py         # [REUSE] ANSI-colour logger
 │   └── tools/
 │       ├── __init__.py           # Re-exports all tools
-│       ├── fhir_base.py          # [REUSE] get_patient_summary, get_active_medications
-│       ├── maternal.py           # [NEW] get_maternal_risk_profile, get_bp_trend,
-│       │                         #       get_glucose_trend, get_pregnancy_history
-│       ├── pediatric.py          # [NEW] get_immunization_gaps,
-│       │                         #       get_developmental_screening_status, get_care_gaps
-│       ├── sdoh.py               # [NEW] get_sdoh_screening
-│       └── writeback.py          # [NEW] write_risk_assessment,
-│                                 #       create_communication_request
-├── marketplace/                   # Source-controlled BYO Agent config (the submission surface)
+│       ├── fhir_base.py          # get_patient_summary, get_active_medications
+│       ├── maternal.py           # get_maternal_risk_profile, get_bp_trend,
+│       │                         #   get_glucose_trend, get_pregnancy_history
+│       ├── pediatric.py          # get_immunization_gaps,
+│       │                         #   get_developmental_screening_status, get_care_gaps
+│       ├── sdoh.py               # get_sdoh_screening, find_sdoh_resources
+│       └── writeback.py          # write_risk_assessment, create_communication_request,
+│                                 #   write_care_plan
+├── marketplace/                   # Source-controlled marketplace configs (both tracks)
 │   ├── byo_system_prompt.md      # BYO Agent system prompt (copy-paste into PO)
 │   ├── byo_consultation_prompt.md # Consultation prompt for A2A handoff
-│   ├── byo_config.json           # BYO Agent settings: scope, model, FHIR toggle, guardrails
-│   └── README.md                  # Step-by-step PO marketplace setup instructions
+│   ├── byo_config.json           # BYO Agent settings: scope, model, FHIR toggle
+│   ├── mcp_config.json           # MCP server metadata: tools, SHARP fields, env vars
+│   ├── mcp_setup.md              # Step-by-step MCP server marketplace setup
+│   ├── README.md                  # Step-by-step BYO Agent marketplace setup
+│   ├── demo_script.md            # Pre-demo checklist + 7-scene video breakdown
+│   └── devpost_description.md    # Devpost submission copy
 ├── app.py                        # A2A entry point (agent card, skills, FHIR extension)
 ├── Dockerfile                    # Single image, AGENT_MODULE env selects agent
 ├── docker-compose.yml            # Multi-agent local dev
@@ -664,6 +739,8 @@ a2a-sdk[http-server]>=0.3.0
 httpx>=0.28.0
 python-dotenv>=1.0.0
 uvicorn>=0.41.0
+mcp[server]>=1.0.0
+PyJWT>=2.8.0
 ```
 
 ---
@@ -864,12 +941,14 @@ Returns patient + ALL linked resources in one call.
 - [ ] Agent deployed to public HTTPS URL (Cloud Run)
 - [ ] Agent card served correctly
 - [ ] A2A FHIR context handling working (SHARP header patterns via ADK tools)
-- [ ] 12 FHIR tools functional (ADK in-process, not a separate MCP server)
+- [ ] 14 FHIR tools functional (ADK in-process + MCP server)
 - [ ] 4 A2A skills working
 - [ ] Liaison Agent pattern demonstrated (INPUT_REQUIRED)
-- [ ] FHIR write-back (RiskAssessment + CommunicationRequest)
+- [ ] FHIR write-back (RiskAssessment + CommunicationRequest + Goal/CarePlan)
 - [ ] X-API-Key authentication
 - [ ] Error handling for missing FHIR context
+- [ ] MCP server published (Superpower track — dual submission)
+- [ ] SMART Permission Tickets (feature-flagged)
 
 ### Demo Video
 
