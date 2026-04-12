@@ -1,0 +1,10 @@
+{
+  "confidence": 0.9,
+  "evidence_basis": [
+    "Condition/preg-miscarriage-2 (Miscarriage \u2014 miscarriage, onset 2025-02-10)",
+    "Condition/preg-miscarriage-1 (Miscarriage \u2014 miscarriage, onset 2024-06-15)"
+  ],
+  "reason": "Recurrent pregnancy loss (2 losses)",
+  "recommendation": "Review obstetric history for recurrent loss etiology",
+  "required": true
+}

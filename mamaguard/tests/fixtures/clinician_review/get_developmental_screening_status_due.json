@@ -1,0 +1,15 @@
+{
+  "confidence": 0.8,
+  "evidence_basis": [
+    "Newborn metabolic screen (due at 0 months)",
+    "Hearing screen (due at 0 months)",
+    "Developmental surveillance (due at 1 months)",
+    "Developmental surveillance (due at 2 months)",
+    "Developmental surveillance (due at 4 months)",
+    "Developmental surveillance (due at 6 months)",
+    "Developmental screening (ASQ/PEDS) (due at 9 months)"
+  ],
+  "reason": "7 developmental screenings due",
+  "recommendation": "Schedule developmental screening at next visit",
+  "required": true
+}

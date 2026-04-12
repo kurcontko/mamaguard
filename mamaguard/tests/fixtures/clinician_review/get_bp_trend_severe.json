@@ -1,0 +1,10 @@
+{
+  "confidence": 0.9,
+  "evidence_basis": [
+    "Observation/bp-severe-1 (BP 168/112 on 2026-03-15T10:00:00Z)",
+    "Observation/bp-elevated-1 (BP 145/92 on 2026-03-20T10:00:00Z)"
+  ],
+  "reason": "Stage 2 hypertension detected (>160/110 mmHg) \u2014 immediate review needed",
+  "recommendation": "Review BP management and consider medication adjustment",
+  "required": true
+}

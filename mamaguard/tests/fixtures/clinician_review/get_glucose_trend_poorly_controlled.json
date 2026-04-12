@@ -1,0 +1,10 @@
+{
+  "confidence": 0.85,
+  "evidence_basis": [
+    "Observation/hba1c-1 (HbA1c 7.2% on 2026-02-01)",
+    "Observation/hba1c-2 (HbA1c 7.8% on 2026-03-01)"
+  ],
+  "reason": "HbA1c in diabetes range (>6.5%)",
+  "recommendation": "Review glycemic management",
+  "required": true
+}
