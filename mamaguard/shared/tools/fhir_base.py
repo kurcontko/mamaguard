@@ -10,6 +10,8 @@ import logging
 import httpx
 from google.adk.tools import ToolContext
 
+from ..smart_tickets import enforce_smart_ticket
+
 logger = logging.getLogger(__name__)
 
 _FHIR_TIMEOUT = 15  # seconds
@@ -17,10 +19,14 @@ _FHIR_TIMEOUT = 15  # seconds
 
 # -- Private helpers ----------------------------------------------------------
 
-def _get_fhir_context(tool_context: ToolContext):
+def _get_fhir_context(tool_context: ToolContext, tool_name: str = ""):
     """
     Read FHIR credentials from session state.
     Returns (fhir_url, fhir_token, patient_id) or error dict.
+
+    When *tool_name* is provided and SMART Permission Tickets are enabled,
+    validates that the session ticket grants the required scopes before
+    returning credentials.
     """
     fhir_url = tool_context.state.get("fhir_url", "").rstrip("/")
     fhir_token = tool_context.state.get("fhir_token", "")
@@ -43,6 +49,12 @@ def _get_fhir_context(tool_context: ToolContext):
                 "Ensure the caller includes 'fhir-context' in the A2A message metadata."
             ),
         }
+
+    # SMART Permission Ticket scope enforcement (feature-flagged)
+    if tool_name:
+        scope_err = enforce_smart_ticket(tool_context.state, tool_name)
+        if scope_err is not None:
+            return scope_err
 
     return fhir_url, fhir_token, patient_id
 
@@ -93,7 +105,7 @@ def get_patient_summary(tool_context: ToolContext) -> dict:
     Returns demographics, active conditions, active medications, and recent vitals.
     No arguments required -- the patient identity comes from the session context.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_patient_summary")
     if isinstance(ctx, dict):
         return ctx
 
@@ -236,7 +248,7 @@ def get_active_medications(tool_context: ToolContext) -> dict:
     Returns medication names, dosage instructions, and prescribing dates.
     No arguments required.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_active_medications")
     if isinstance(ctx, dict):
         return ctx
 

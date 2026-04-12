@@ -75,7 +75,7 @@ def get_bp_trend(months_back: int = 24, tool_context: ToolContext = None) -> dic
     Args:
         months_back: How many months of history to retrieve (default 24).
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_bp_trend")
     if isinstance(ctx, dict):
         return ctx
 
@@ -171,7 +171,7 @@ def get_glucose_trend(months_back: int = 24, tool_context: ToolContext = None) -
     Args:
         months_back: How many months of history to retrieve (default 24).
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_glucose_trend")
     if isinstance(ctx, dict):
         return ctx
 
@@ -255,7 +255,7 @@ def get_pregnancy_history(tool_context: ToolContext = None) -> dict:
 
     Returns all pregnancies with outcomes, complications, and dates.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_pregnancy_history")
     if isinstance(ctx, dict):
         return ctx
 
@@ -348,7 +348,7 @@ def get_maternal_risk_profile(tool_context: ToolContext = None) -> dict:
     risk summary. Calls get_bp_trend, get_glucose_trend, and get_pregnancy_history
     internally and synthesizes the results.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_maternal_risk_profile")
     if isinstance(ctx, dict):
         return ctx
 

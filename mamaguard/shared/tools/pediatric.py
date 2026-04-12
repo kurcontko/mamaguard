@@ -107,7 +107,7 @@ def get_immunization_gaps(tool_context: ToolContext = None) -> dict:
 
     No arguments required -- patient age is computed from FHIR demographics.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_immunization_gaps")
     if isinstance(ctx, dict):
         return ctx
 
@@ -220,7 +220,7 @@ def get_developmental_screening_status(tool_context: ToolContext = None) -> dict
 
     No arguments required -- patient age is computed from FHIR demographics.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_developmental_screening_status")
     if isinstance(ctx, dict):
         return ctx
 
@@ -321,7 +321,7 @@ def get_care_gaps(tool_context: ToolContext = None) -> dict:
 
     No arguments required.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_care_gaps")
     if isinstance(ctx, dict):
         return ctx
 

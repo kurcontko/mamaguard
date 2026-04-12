@@ -57,7 +57,7 @@ def write_risk_assessment(
         basis: Evidence basis for the assessment (free text)
         mitigation: Recommended mitigation (free text)
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "write_risk_assessment")
     if isinstance(ctx, dict):
         return ctx
 
@@ -150,7 +150,7 @@ def create_communication_request(
         content: Message content or purpose (free text)
         priority: Priority level ("routine", "urgent", "asap", "stat")
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "create_communication_request")
     if isinstance(ctx, dict):
         return ctx
 
@@ -263,7 +263,7 @@ def write_care_plan(
         z_code: Optional ICD-10 Z-code -- when present, attached to the
             Goal.addresses for terminology binding.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "write_care_plan")
     if isinstance(ctx, dict):
         return ctx
 

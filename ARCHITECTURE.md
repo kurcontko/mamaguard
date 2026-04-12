@@ -104,7 +104,7 @@ Every feature falls into one of three tiers. Only "Adopt Now" items block submis
 
 | Feature | Rationale | Gate |
 |---------|-----------|------|
-| SMART Permission Tickets validation | Judge signal for Mandel; experimental extension only, not core auth. Feature-flagged in middleware. Based on CI build draft (March 6, 2026), not an authorized spec. | Phase 4, only after core flow stable |
+| ~~SMART Permission Tickets validation~~ | **Implemented.** See [SMART Permission Tickets Spec Compliance](#smart-permission-tickets-spec-compliance) below. Feature-flagged via `MAMAGUARD_SMART_TICKETS=true`. | Done |
 | FHIR AuditEvent write-back | Defensible compliance claim, but adds failure surface. Best-effort emission behind flag, HAPI-only (SMART may reject). | Phase 4, HAPI target only |
 | Automatic mother-child linkage via RelatedPerson | Optional demo enhancement only. RelatedPerson is person-to-patient, not patient-to-patient linkage. Do not center architecture on posting linkage resources to shared sandbox. | Phase 3, only if writable HAPI env is set up |
 
@@ -381,6 +381,64 @@ The orchestrator does NOT attempt to access a child's record from the mother's s
 | Output size limits | health-record-mcp (2MB grep, 500KB query) |
 | Per-request server creation (header isolation) | po-community-mcp `index.ts` |
 | FHIR context metadata URI match | `https://app.promptopinion.ai/schemas/a2a/v1/fhir-context` |
+| SMART Permission Tickets | `mamaguard/shared/smart_tickets.py` — scope-limited tool authorization |
+
+#### SMART Permission Tickets Spec Compliance
+
+Reference implementation of Josh Mandel's "SMART Permission Tickets" CI build draft (March 6, 2026). Feature-flagged via `MAMAGUARD_SMART_TICKETS=true` — disabled by default so existing flows are unaffected.
+
+**Spec elements implemented:**
+
+| Element | Status | Implementation |
+|---------|--------|---------------|
+| JWT-encoded ticket | Done | `decode_permission_ticket()` validates HS256/RS256 JWTs via PyJWT |
+| Required claims: `sub`, `scope`, `exp` | Done | Enforced at decode time; missing claims raise `TicketError` |
+| `sub` = patient ID | Done | Validated against `session.patient_id` at enforcement time |
+| `scope` = SMART v2 scopes | Done | Space-delimited string parsed to set; `patient/<Resource>.<perms>` format |
+| `exp` = expiration | Done | Checked at decode (JWT library) AND at enforcement (belt-and-suspenders for stale sessions) |
+| `aud` = audience | Done | Optional; validated when `MAMAGUARD_SMART_TICKETS_AUDIENCE` is set |
+| Scope enforcement per tool | Done | `TOOL_SCOPES` maps each of the 14 tools to required SMART scopes |
+| Wildcard resource (`patient/*.rs`) | Done | `_scope_satisfies()` handles `*` resource and permission superset matching |
+| Permission superset (`cruds` satisfies `rs`) | Done | Set-based permission letter matching |
+
+**Data flow:**
+
+1. Caller includes `permissionTicket` JWT in FHIR context metadata alongside `fhirUrl`, `fhirToken`, `patientId`.
+2. `fhir_hook.extract_fhir_context()` decodes the ticket and stores it in `callback_context.state["smart_ticket"]`.
+3. Each tool calls `_get_fhir_context(tool_context, tool_name)` which invokes `enforce_smart_ticket()`.
+4. Enforcement checks: ticket present → patient match → not expired → scopes sufficient.
+5. On any failure, tool returns a structured error dict; the FHIR call is never made.
+
+**Tool → scope mapping (SMART v2 syntax):**
+
+| Tool | Required Scopes |
+|------|----------------|
+| `get_patient_summary` | `patient/Patient.rs patient/Condition.rs patient/MedicationRequest.rs patient/Observation.rs` |
+| `get_active_medications` | `patient/MedicationRequest.rs` |
+| `get_bp_trend` | `patient/Observation.rs` |
+| `get_glucose_trend` | `patient/Observation.rs` |
+| `get_pregnancy_history` | `patient/Condition.rs` |
+| `get_maternal_risk_profile` | `patient/Observation.rs patient/Condition.rs patient/MedicationRequest.rs` |
+| `get_immunization_gaps` | `patient/Patient.rs patient/Immunization.rs` |
+| `get_developmental_screening_status` | `patient/Patient.rs patient/Observation.rs` |
+| `get_care_gaps` | `patient/CarePlan.rs patient/Goal.rs patient/Condition.rs` |
+| `get_sdoh_screening` | `patient/Patient.rs patient/Condition.rs patient/Coverage.rs` |
+| `find_sdoh_resources` | *(none — external API only)* |
+| `write_risk_assessment` | `patient/RiskAssessment.c` |
+| `create_communication_request` | `patient/CommunicationRequest.c` |
+| `write_care_plan` | `patient/Goal.c patient/CarePlan.c` |
+
+**Configuration:**
+
+| Env Variable | Purpose | Default |
+|-------------|---------|---------|
+| `MAMAGUARD_SMART_TICKETS` | Enable ticket enforcement (`true`/`false`) | `false` |
+| `MAMAGUARD_SMART_TICKETS_SECRET` | HS256 signing key for dev/test | *(empty)* |
+| `MAMAGUARD_SMART_TICKETS_AUDIENCE` | Expected `aud` claim value | *(empty — skip audience check)* |
+
+**Production path:** Replace HS256 with RS256 using a JWKS endpoint from the SMART authorization server. The `_ACCEPTED_ALGORITHMS` list already includes RS256; pass the public key to `decode_permission_ticket(signing_key=...)`.
+
+**Test coverage:** 53 tests in `mamaguard/tests/test_smart_tickets.py` covering JWT decode (valid/expired/malformed/missing claims/audience), scope checking (exact/wildcard/superset/insufficient), tool scope mapping audit, enforcement pipeline, fhir_hook integration, and 3 end-to-end scenarios.
 
 ### 2.7 Prompt Opinion Integration
 

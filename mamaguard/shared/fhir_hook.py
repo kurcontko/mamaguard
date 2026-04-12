@@ -10,6 +10,11 @@ import logging
 import os
 
 from .logging_utils import safe_pretty_json, serialize_for_log, token_fingerprint
+from .smart_tickets import (
+    SMART_TICKETS_ENABLED,
+    TicketError,
+    decode_permission_ticket,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +81,45 @@ def _extract_metadata_sources(callback_context, llm_request) -> list:
         ("callback_context.run_config.custom_metadata.a2a_metadata", a2a_metadata),
         ("llm_request.contents[-1].metadata", content_metadata),
     ]
+
+
+def _extract_smart_ticket(fhir_data: dict, state: dict, correlation: dict) -> None:
+    """
+    If SMART Permission Tickets are enabled and the FHIR context contains a
+    ``permissionTicket`` JWT, decode it and store the validated
+    ``PermissionTicket`` in ``state["smart_ticket"]``.
+
+    On decode failure the error is logged but the request is **not** blocked —
+    the tool-level enforcement in ``smart_tickets.enforce_smart_ticket`` will
+    return a structured error when the tool is actually invoked.
+    """
+    if not SMART_TICKETS_ENABLED:
+        return
+
+    raw_ticket = fhir_data.get("permissionTicket", "")
+    if not raw_ticket:
+        logger.info(
+            "smart_ticket_not_present task_id=%s",
+            correlation.get("task_id"),
+        )
+        return
+
+    try:
+        ticket = decode_permission_ticket(raw_ticket)
+        state["smart_ticket"] = ticket
+        logger.info(
+            "smart_ticket_decoded task_id=%s sub=%s scopes=%s exp=%d",
+            correlation.get("task_id"),
+            ticket.sub,
+            " ".join(sorted(ticket.scopes)),
+            ticket.exp,
+        )
+    except TicketError as exc:
+        logger.warning(
+            "smart_ticket_decode_failed task_id=%s error=%s",
+            correlation.get("task_id"),
+            exc,
+        )
 
 
 def extract_fhir_from_payload(payload: dict):
@@ -174,6 +218,9 @@ def extract_fhir_context(callback_context, llm_request):
         logger.info("FHIR_URL_FOUND value=%s", callback_context.state["fhir_url"] or "[EMPTY]")
         logger.info("FHIR_TOKEN_FOUND fingerprint=%s", token_fingerprint(callback_context.state["fhir_token"]))
         logger.info("FHIR_PATIENT_FOUND value=%s", callback_context.state["patient_id"] or "[EMPTY]")
+
+        # -- SMART Permission Ticket extraction (feature-flagged) ----------
+        _extract_smart_ticket(fhir_data, callback_context.state, correlation)
 
         logger.info(
             "hook_called_fhir_found task_id=%s context_id=%s message_id=%s "

@@ -59,7 +59,7 @@ def get_sdoh_screening(tool_context: ToolContext = None) -> dict:
 
     No external API calls -- uses FHIR data only.
     """
-    ctx = _get_fhir_context(tool_context)
+    ctx = _get_fhir_context(tool_context, "get_sdoh_screening")
     if isinstance(ctx, dict):
         return ctx
 
