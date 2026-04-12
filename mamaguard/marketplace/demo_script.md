@@ -3,7 +3,7 @@
 ## Pre-demo checklist
 - [ ] Cloud Run agent healthy (curl agent card returns 200)
 - [ ] BYO Agent published on PO Marketplace
-- [ ] Maria patient ID ready: 881f534f-d041-425d-a542-cbf669f43e18
+- [ ] Maria patient ID ready: bench-maria-001 (linked child: bench-baby-santos-001)
 - [ ] All inputs pre-copied (no typing during recording)
 
 ---
@@ -20,7 +20,7 @@
 
 **Voiceover:** "MamaGuard is available on the Prompt Opinion Marketplace as a BYO Agent. Clinicians launch it directly from the launchpad."
 
-**Action:** Select patient Maria (881f534f)
+**Action:** Select patient Maria (bench-maria-001)
 
 ## Scene 3: Maternal Risk Assessment (0:30 - 1:15)
 

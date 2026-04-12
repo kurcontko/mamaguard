@@ -188,7 +188,7 @@ python3 -m benchmarks.runner
 
 ## Demo Patient: Maria
 
-**Patient/881f534f-d041-425d-a542-cbf669f43e18** -- a 50-year-old Black, French-speaking woman with:
+**Patient/bench-maria-001** -- a 50-year-old Black, French-speaking woman with:
 
 - 6 pregnancies (5 losses), emergency delivery
 - Uncontrolled HTN (BP consistently >140/90, spike to 170/98 postpartum)

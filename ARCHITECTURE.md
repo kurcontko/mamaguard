@@ -762,7 +762,7 @@ PyJWT>=2.8.0
 | Condition | — | Diagnoses (pregnancy, comorbidities, SDOH Z-codes) |
 | Coverage | 227 | Insurance status (Medicaid gaps) |
 
-### Demo Patient: "Maria" (Patient/881f534f-d041-425d-a542-cbf669f43e18)
+### Demo Patient: "Maria" (Patient/bench-maria-001)
 
 - **Age:** 50, Black, French-speaking
 - **Chronic:** DM2, HTN (never controlled, always >140/90), metabolic syndrome, diabetic neuropathy, anemia

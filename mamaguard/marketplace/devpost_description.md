@@ -112,7 +112,7 @@ MamaGuard includes a 3-tier benchmark suite with 879 unit tests and 57 determini
 
 ## Demo
 
-The demo shows Maria (Patient/881f534f), a 50-year-old Black, French-speaking woman with:
+The demo shows Maria (Patient/bench-maria-001), a 50-year-old Black, French-speaking woman with:
 - 6 pregnancies (5 losses), emergency delivery
 - Uncontrolled HTN (BP consistently >140/90, spike to 170/98 postpartum)
 - DM2 with HbA1c trending 6.8 → 7.4 → 7.9 (diabetes range, worsening)

@@ -35,6 +35,6 @@
 ### 4. Test
 
 1. Launch MamaGuard from launchpad
-2. Select patient Maria (Patient/881f534f-d041-425d-a542-cbf669f43e18)
+2. Select patient Maria (Patient/bench-maria-001)
 3. Ask: "Assess maternal risk for this patient"
 4. Verify: BYO consults external agent > FHIR data flows > structured response returns
