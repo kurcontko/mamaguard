@@ -7,11 +7,22 @@ Covers:
 3. Tool invocation — happy path with mocked FHIR responses
 4. Error propagation — missing credentials surfaced cleanly
 5. SHARP context constructor (from_sharp)
+6. MCP protocol handshake (initialize → server info + capabilities)
+7. MCP protocol tool listing (list_tools via protocol layer)
+8. MCP protocol tool invocation (call_tool via protocol layer)
+9. FHIR/SHARP context propagation through MCP protocol
 """
 
+import asyncio
 import json
 import unittest
 from unittest.mock import MagicMock, patch
+
+import anyio
+from anyio import create_memory_object_stream
+from mcp.shared.message import SessionMessage
+from mcp.client.session import ClientSession
+from mcp.types import Implementation
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +376,585 @@ class TestWriteCarePlanTool(unittest.TestCase):
         self.assertEqual(data["status"], "success")
         self.assertEqual(data["care_plan_id"], "cp-42")
         self.assertEqual(data["goal_id"], "goal-42")
+
+
+# ---------------------------------------------------------------------------
+# MCP protocol integration tests
+# ---------------------------------------------------------------------------
+
+def _run_async(coro):
+    """Run an async coroutine in a new event loop."""
+    return asyncio.run(coro)
+
+
+async def _create_mcp_client_session():
+    """
+    Create an in-memory MCP client↔server pair.
+
+    Returns (task_group, client, cancel_fn) — the caller must `await
+    client.initialize()` inside the client async context manager and
+    cancel the task group when done.
+    """
+    from mamaguard.mcp_server.server import mcp as mcp_server
+
+    client_to_server_send, client_to_server_recv = (
+        create_memory_object_stream[SessionMessage | Exception](100)
+    )
+    server_to_client_send, server_to_client_recv = (
+        create_memory_object_stream[SessionMessage | Exception](100)
+    )
+
+    low_server = mcp_server._mcp_server
+    init_opts = low_server.create_initialization_options()
+
+    return (
+        low_server,
+        init_opts,
+        client_to_server_recv,
+        server_to_client_send,
+        ClientSession(
+            read_stream=server_to_client_recv,
+            write_stream=client_to_server_send,
+            client_info=Implementation(name="mamaguard-test-client", version="0.1"),
+        ),
+    )
+
+
+class TestMcpProtocolHandshake(unittest.TestCase):
+    """MCP protocol handshake: initialize → server info + capabilities."""
+
+    def test_initialize_returns_server_info(self):
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    result = await client.initialize()
+                    self.assertEqual(result.serverInfo.name, "mamaguard")
+                    self.assertIsNotNone(result.serverInfo.version)
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_initialize_returns_instructions(self):
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    result = await client.initialize()
+                    self.assertIn("SHARP", result.instructions)
+                    self.assertIn("fhir_url", result.instructions)
+                    self.assertIn("fhir_token", result.instructions)
+                    self.assertIn("patient_id", result.instructions)
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_initialize_advertises_tool_capability(self):
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    result = await client.initialize()
+                    self.assertIsNotNone(result.capabilities.tools)
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+
+class TestMcpProtocolListTools(unittest.TestCase):
+    """MCP protocol tool listing via the protocol layer."""
+
+    def test_list_tools_returns_all_14(self):
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    tools_result = await client.list_tools()
+                    names = {t.name for t in tools_result.tools}
+                    self.assertEqual(names, EXPECTED_TOOLS)
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_every_tool_has_sharp_params(self):
+        """Every MCP tool must accept fhir_url, fhir_token, patient_id."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    tools_result = await client.list_tools()
+                    for tool in tools_result.tools:
+                        props = tool.inputSchema.get("properties", {})
+                        for sharp_param in ("fhir_url", "fhir_token", "patient_id"):
+                            self.assertIn(
+                                sharp_param,
+                                props,
+                                f"Tool {tool.name} missing SHARP param {sharp_param}",
+                            )
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_every_tool_has_description(self):
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    tools_result = await client.list_tools()
+                    for tool in tools_result.tools:
+                        self.assertTrue(
+                            tool.description and len(tool.description) > 10,
+                            f"Tool {tool.name} has insufficient description",
+                        )
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_sharp_params_are_required(self):
+        """fhir_url, fhir_token, patient_id must be required on every tool."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    tools_result = await client.list_tools()
+                    for tool in tools_result.tools:
+                        required = tool.inputSchema.get("required", [])
+                        for sharp_param in ("fhir_url", "fhir_token", "patient_id"):
+                            self.assertIn(
+                                sharp_param,
+                                required,
+                                f"Tool {tool.name}: {sharp_param} should be required",
+                            )
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_read_tools_have_no_extra_required_beyond_sharp(self):
+        """Read-only tools (patient summary, BP trend, etc.) should only
+        require the three SHARP params (plus optional defaults)."""
+        read_tools = {
+            "get_patient_summary", "get_active_medications",
+            "get_pregnancy_history", "get_maternal_risk_profile",
+            "get_sdoh_screening",
+        }
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    tools_result = await client.list_tools()
+                    for tool in tools_result.tools:
+                        if tool.name in read_tools:
+                            required = set(tool.inputSchema.get("required", []))
+                            self.assertEqual(
+                                required,
+                                {"fhir_url", "fhir_token", "patient_id"},
+                                f"Tool {tool.name} has unexpected required params: "
+                                f"{required - {'fhir_url', 'fhir_token', 'patient_id'}}",
+                            )
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_write_tools_require_domain_params(self):
+        """Write tools must require domain-specific params beyond SHARP."""
+        write_tool_extra_required = {
+            "write_risk_assessment": {"risk_type", "probability", "basis", "mitigation"},
+            "create_communication_request": {"medium", "content"},
+            "write_care_plan": {
+                "category", "goal_description", "resource_name", "resource_contact",
+            },
+        }
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    tools_result = await client.list_tools()
+                    tool_map = {t.name: t for t in tools_result.tools}
+                    for tool_name, expected_extra in write_tool_extra_required.items():
+                        tool = tool_map[tool_name]
+                        required = set(tool.inputSchema.get("required", []))
+                        sharp = {"fhir_url", "fhir_token", "patient_id"}
+                        extra = required - sharp
+                        self.assertTrue(
+                            expected_extra.issubset(extra),
+                            f"Tool {tool_name} missing required domain params: "
+                            f"{expected_extra - extra}",
+                        )
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+
+class TestMcpProtocolCallTool(unittest.TestCase):
+    """MCP protocol tool invocation via call_tool."""
+
+    def test_call_tool_returns_json_text_content(self):
+        """call_tool response contains a TextContent with valid JSON."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock_get:
+                        mock_get.side_effect = [
+                            {
+                                "resourceType": "Patient", "id": "p1",
+                                "name": [{"family": "Garcia"}],
+                                "birthDate": "1990-03-15", "gender": "female",
+                            },
+                            {"resourceType": "Bundle", "entry": []},
+                            {"resourceType": "Bundle", "entry": []},
+                            {"resourceType": "Bundle", "entry": []},
+                        ]
+                        result = await client.call_tool("get_patient_summary", {
+                            "fhir_url": "https://r4.smarthealthit.org",
+                            "fhir_token": "tok",
+                            "patient_id": "p1",
+                        })
+                    self.assertGreater(len(result.content), 0)
+                    self.assertEqual(result.content[0].type, "text")
+                    data = json.loads(result.content[0].text)
+                    self.assertEqual(data["status"], "success")
+                    self.assertEqual(data["patient_id"], "p1")
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_call_tool_missing_credentials_returns_error(self):
+        """Empty SHARP credentials → error propagated via protocol."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    result = await client.call_tool("get_patient_summary", {
+                        "fhir_url": "",
+                        "fhir_token": "",
+                        "patient_id": "",
+                    })
+                    data = json.loads(result.content[0].text)
+                    self.assertEqual(data["status"], "error")
+                    self.assertIn("missing", data["error_message"])
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_call_tool_bp_trend_with_months_back(self):
+        """Optional months_back param flows through protocol."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    with patch("mamaguard.shared.tools.maternal._fhir_get") as mock_get:
+                        mock_get.return_value = {"resourceType": "Bundle", "entry": []}
+                        result = await client.call_tool("get_bp_trend", {
+                            "fhir_url": "https://fhir.example.org",
+                            "fhir_token": "tok",
+                            "patient_id": "p1",
+                            "months_back": 6,
+                        })
+                    data = json.loads(result.content[0].text)
+                    self.assertEqual(data["status"], "success")
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_call_tool_write_risk_assessment_via_protocol(self):
+        """Write tool invocation through the full protocol layer."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    with patch("mamaguard.shared.tools.writeback._fhir_post") as mock_post:
+                        mock_post.return_value = {
+                            "id": "ra-proto-001",
+                            "resourceType": "RiskAssessment",
+                        }
+                        result = await client.call_tool("write_risk_assessment", {
+                            "fhir_url": "https://hapi.fhir.org/baseR4",
+                            "fhir_token": "write-tok",
+                            "patient_id": "p1",
+                            "risk_type": "postpartum-hypertensive-crisis",
+                            "probability": 0.72,
+                            "basis": "BP 148/92",
+                            "mitigation": "Schedule follow-up",
+                        })
+                    data = json.loads(result.content[0].text)
+                    self.assertEqual(data["status"], "success")
+                    self.assertEqual(data["resource_id"], "ra-proto-001")
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_call_tool_find_sdoh_resources_via_protocol(self):
+        """SDOH resource lookup tool invoked through protocol."""
+        async def _test():
+            import os
+            os.environ.pop("MAMAGUARD_SDOH_API_URL", None)
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    result = await client.call_tool("find_sdoh_resources", {
+                        "fhir_url": "https://fhir.example.org",
+                        "fhir_token": "tok",
+                        "patient_id": "p1",
+                        "category_or_code": "Z59.0",
+                        "zip_code": "02139",
+                    })
+                    data = json.loads(result.content[0].text)
+                    self.assertEqual(data["status"], "success")
+                    self.assertEqual(data["category"], "housing")
+                    self.assertGreaterEqual(data["resource_count"], 1)
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+
+class TestMcpFhirContextPropagation(unittest.TestCase):
+    """Verify SHARP credentials propagate through the MCP protocol layer
+    into the shared tool implementations."""
+
+    def test_fhir_url_and_token_reach_fhir_get(self):
+        """SHARP params → FhirContext → _fhir_get called with correct URL/token."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock_get:
+                        mock_get.side_effect = [
+                            {
+                                "resourceType": "Patient", "id": "maria-42",
+                                "name": [{"family": "Garcia"}],
+                                "birthDate": "1990-03-15", "gender": "female",
+                            },
+                            {"resourceType": "Bundle", "entry": []},
+                            {"resourceType": "Bundle", "entry": []},
+                            {"resourceType": "Bundle", "entry": []},
+                        ]
+                        await client.call_tool("get_patient_summary", {
+                            "fhir_url": "https://custom-ehr.hospital.org/fhir/R4",
+                            "fhir_token": "ehr-session-bearer-xyz",
+                            "patient_id": "maria-42",
+                        })
+
+                    # Verify first call to _fhir_get received our SHARP creds
+                    first_call_args = mock_get.call_args_list[0]
+                    called_url = first_call_args[0][0]
+                    called_token = first_call_args[0][1]
+                    self.assertIn(
+                        "custom-ehr.hospital.org",
+                        called_url,
+                        "FHIR URL not propagated through MCP protocol",
+                    )
+                    self.assertEqual(
+                        called_token,
+                        "ehr-session-bearer-xyz",
+                        "FHIR token not propagated through MCP protocol",
+                    )
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_patient_id_reaches_fhir_get(self):
+        """patient_id flows through MCP → FhirContext → FHIR resource path."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock_get:
+                        mock_get.side_effect = [
+                            {
+                                "resourceType": "Patient", "id": "synthea-maria-881f",
+                                "name": [{"family": "Santos"}],
+                                "birthDate": "1991-06-20", "gender": "female",
+                            },
+                            {"resourceType": "Bundle", "entry": []},
+                            {"resourceType": "Bundle", "entry": []},
+                            {"resourceType": "Bundle", "entry": []},
+                        ]
+                        await client.call_tool("get_patient_summary", {
+                            "fhir_url": "https://r4.smarthealthit.org",
+                            "fhir_token": "tok",
+                            "patient_id": "synthea-maria-881f",
+                        })
+
+                    # _fhir_get(fhir_url, token, resource_path, ...) —
+                    # patient_id appears in the resource path (arg[2]) and/or
+                    # query params, not the base URL (arg[0]).
+                    all_args_str = " ".join(
+                        str(c) for c in mock_get.call_args_list
+                    )
+                    self.assertIn(
+                        "synthea-maria-881f",
+                        all_args_str,
+                        "patient_id not propagated through MCP protocol to FHIR calls",
+                    )
+                    # First call fetches Patient/{id}
+                    first_call_resource_path = mock_get.call_args_list[0][0][2]
+                    self.assertEqual(
+                        first_call_resource_path,
+                        "Patient/synthea-maria-881f",
+                    )
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_trailing_slash_stripped_through_protocol(self):
+        """Trailing slash on fhir_url is stripped before reaching _fhir_get."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock_get:
+                        mock_get.side_effect = [
+                            {
+                                "resourceType": "Patient", "id": "p1",
+                                "name": [{"family": "Test"}],
+                                "birthDate": "1990-01-01", "gender": "female",
+                            },
+                            {"resourceType": "Bundle", "entry": []},
+                            {"resourceType": "Bundle", "entry": []},
+                            {"resourceType": "Bundle", "entry": []},
+                        ]
+                        await client.call_tool("get_patient_summary", {
+                            "fhir_url": "https://r4.smarthealthit.org/",
+                            "fhir_token": "tok",
+                            "patient_id": "p1",
+                        })
+
+                    first_call_url = mock_get.call_args_list[0][0][0]
+                    self.assertFalse(
+                        first_call_url.startswith("https://r4.smarthealthit.org//"),
+                        f"Double slash in URL — trailing slash not stripped: {first_call_url}",
+                    )
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_context_propagation_through_write_tool(self):
+        """SHARP creds propagate through MCP → write tool → _fhir_post."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    with patch("mamaguard.shared.tools.writeback._fhir_post") as mock_post:
+                        mock_post.return_value = {
+                            "id": "ra-001",
+                            "resourceType": "RiskAssessment",
+                        }
+                        await client.call_tool("write_risk_assessment", {
+                            "fhir_url": "https://write-ehr.hospital.org/fhir",
+                            "fhir_token": "write-bearer-abc",
+                            "patient_id": "write-patient-99",
+                            "risk_type": "test-risk",
+                            "probability": 0.5,
+                            "basis": "test",
+                            "mitigation": "test",
+                        })
+
+                    call_args = mock_post.call_args
+                    called_url = call_args[0][0]  # fhir_url
+                    called_token = call_args[0][1]  # token
+                    self.assertIn("write-ehr.hospital.org", called_url)
+                    self.assertEqual(called_token, "write-bearer-abc")
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
+
+    def test_context_propagation_through_sdoh_tool(self):
+        """SHARP creds propagate to SDOH read tool through MCP."""
+        async def _test():
+            low_server, init_opts, c2s_recv, s2c_send, client = (
+                await _create_mcp_client_session()
+            )
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
+                async with client:
+                    await client.initialize()
+                    with patch("mamaguard.shared.tools.sdoh._fhir_get") as mock_get:
+                        mock_get.return_value = {"resourceType": "Bundle", "entry": []}
+                        await client.call_tool("get_sdoh_screening", {
+                            "fhir_url": "https://sdoh-ehr.org/fhir",
+                            "fhir_token": "sdoh-bearer-tok",
+                            "patient_id": "sdoh-patient-7",
+                        })
+
+                    # SDOH screening makes multiple FHIR calls (Patient, Condition, Coverage, etc.)
+                    self.assertGreater(mock_get.call_count, 0)
+                    first_call_url = mock_get.call_args_list[0][0][0]
+                    first_call_token = mock_get.call_args_list[0][0][1]
+                    self.assertIn("sdoh-ehr.org", first_call_url)
+                    self.assertEqual(first_call_token, "sdoh-bearer-tok")
+                    tg.cancel_scope.cancel()
+
+        _run_async(_test())
 
 
 if __name__ == "__main__":
