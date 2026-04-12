@@ -26,7 +26,7 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from mamaguard.shared import middleware as mw
-from mamaguard.shared.middleware import ApiKeyMiddleware
+from mamaguard.shared.middleware import ApiKeyMiddleware, _is_valid_key
 
 
 FHIR_KEY = "https://app.promptopinion.ai/schemas/a2a/v1/fhir-context"
@@ -246,6 +246,54 @@ class TestFhirMetadataBridging(unittest.TestCase):
         self.assertEqual(
             received["params"]["message"]["metadata"][FHIR_KEY], stringified
         )
+
+
+class TestTimingSafeKeyValidation(unittest.TestCase):
+    """Verify the ``_is_valid_key`` helper uses timing-safe comparison."""
+
+    def test_valid_key_accepted(self):
+        with patch.object(mw, "VALID_API_KEYS", {"alpha-key"}):
+            self.assertTrue(_is_valid_key("alpha-key"))
+
+    def test_invalid_key_rejected(self):
+        with patch.object(mw, "VALID_API_KEYS", {"alpha-key"}):
+            self.assertFalse(_is_valid_key("wrong-key"))
+
+    def test_multiple_keys_any_match(self):
+        with patch.object(mw, "VALID_API_KEYS", {"key-1", "key-2", "key-3"}):
+            self.assertTrue(_is_valid_key("key-2"))
+
+    def test_multiple_keys_none_match(self):
+        with patch.object(mw, "VALID_API_KEYS", {"key-1", "key-2"}):
+            self.assertFalse(_is_valid_key("key-9"))
+
+    def test_empty_candidate_rejected(self):
+        with patch.object(mw, "VALID_API_KEYS", {"key-1"}):
+            self.assertFalse(_is_valid_key(""))
+
+    def test_prefix_not_sufficient(self):
+        """A prefix of a valid key must not pass (compare_digest requires exact match)."""
+        with patch.object(mw, "VALID_API_KEYS", {"long-secret-key-value"}):
+            self.assertFalse(_is_valid_key("long-secret"))
+
+    def test_suffix_not_sufficient(self):
+        with patch.object(mw, "VALID_API_KEYS", {"long-secret-key-value"}):
+            self.assertFalse(_is_valid_key("key-value"))
+
+    def test_uses_secrets_compare_digest(self):
+        """Confirm the function calls ``secrets.compare_digest``."""
+        with patch.object(mw, "VALID_API_KEYS", {"test-key"}):
+            with patch("mamaguard.shared.middleware.secrets.compare_digest", return_value=True) as mock_cd:
+                result = _is_valid_key("test-key")
+        self.assertTrue(result)
+        mock_cd.assert_called_once_with("test-key", "test-key")
+
+    def test_iterates_all_keys_even_after_match(self):
+        """Must not short-circuit — iterate all keys to avoid leaking set size."""
+        with patch.object(mw, "VALID_API_KEYS", {"a", "b", "c"}):
+            with patch("mamaguard.shared.middleware.secrets.compare_digest", side_effect=[True, False, False]) as mock_cd:
+                _is_valid_key("a")
+        self.assertEqual(mock_cd.call_count, 3)
 
 
 class TestBodyEdgeCases(unittest.TestCase):

@@ -8,6 +8,7 @@ The only public endpoint is /.well-known/agent-card.json.
 import json
 import logging
 import os
+import secrets
 from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -24,6 +25,26 @@ LOG_FULL_PAYLOAD = os.getenv("LOG_FULL_PAYLOAD", "true").lower() == "true"
 # Load API keys from environment. Fallback to defaults for local dev only.
 _env_keys = os.getenv("MAMAGUARD_API_KEYS", os.getenv("MAMAGUARD_API_KEY", ""))
 VALID_API_KEYS: set = {k.strip() for k in _env_keys.split(",") if k.strip()} or {"dev-key-local"}
+
+if VALID_API_KEYS == {"dev-key-local"}:
+    logger.warning(
+        "SECURITY_DEV_KEY_ACTIVE No MAMAGUARD_API_KEY(S) configured — "
+        "using default dev-key-local. Set MAMAGUARD_API_KEY before deploying."
+    )
+
+
+def _is_valid_key(candidate: str) -> bool:
+    """Timing-safe API key validation.
+
+    Uses ``secrets.compare_digest`` so response time does not leak
+    information about valid keys.  Always iterates all keys to avoid
+    leaking the set size.
+    """
+    result = False
+    for valid_key in VALID_API_KEYS:
+        if secrets.compare_digest(candidate, valid_key):
+            result = True
+    return result
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
@@ -90,7 +111,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 content={"error": "Unauthorized", "detail": "X-API-Key header is required"},
             )
 
-        if api_key not in VALID_API_KEYS:
+        if not _is_valid_key(api_key):
             logger.warning(
                 "security_rejected_invalid_api_key path=%s method=%s key_prefix=%s",
                 request.url.path, request.method, api_key[:6],
