@@ -107,8 +107,8 @@ pip install -r mamaguard/requirements.txt
 cp mamaguard/.env.example mamaguard/.env
 # Edit .env: set GOOGLE_API_KEY and MAMAGUARD_API_KEY
 
-# Run the A2A agent
-cd mamaguard && python app.py
+# Run the A2A agent (from repo root)
+uvicorn mamaguard.app:a2a_app --host 0.0.0.0 --port 8001
 # Agent card: http://localhost:8001/.well-known/agent-card.json
 
 # Or run the MCP server (stdio -- for Claude Desktop, Cursor)
@@ -146,7 +146,7 @@ docker run -p 8001:8001 \
 # Unit tests (747 tests)
 python3 -m pytest mamaguard/tests/ -v
 
-# Tier-1 deterministic benchmarks (47 cases)
+# Tier-1 deterministic benchmarks (54 cases)
 python3 -m benchmarks.runner
 
 # Pre-deploy check (unit tests + benchmarks, exit 1 if score < 95%)
@@ -158,7 +158,7 @@ python3 -m benchmarks.runner
 
 **Test coverage:**
 - 747 unit tests across 18 test modules
-- 47/47 Tier-1 benchmark cases at 100.0%
+- 54/54 Tier-1 benchmark cases at 100.0%
 - Agent routing, tool invocation, error paths, FHIR base utilities, FHIR writeback, SMART tickets, middleware, golden-file contract tests, LLM-as-judge care plan checkers, FHIR hook, logging utilities, mother-child handoff, MCP protocol integration, SDOH resource classification, A2A app factory and agent card endpoint, benchmark harness infrastructure
 
 ---
