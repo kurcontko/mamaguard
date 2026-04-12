@@ -1,0 +1,245 @@
+{
+  "artefact": "baseline_comparison_table",
+  "purpose": "Side-by-side rule-engine vs. MamaGuard synthesis across mild / moderate / severe clinical cases. Evidence for the 'AI Factor' judging axis \u2014 shows the concrete affordances (compound risk level, evidence citation, cross-factor insight) that a non-AI rule engine cannot produce from the same FHIR inputs.",
+  "cases": [
+    {
+      "case_id": "low_routine_postpartum",
+      "display_name": "Routine postpartum \u2014 low complexity",
+      "tier": "low",
+      "narrative": "Postpartum follow-up, BP 128/82 and 124/78, HbA1c 5.4%, English speaker, active Medicaid coverage, no SDOH Z-codes. A correctly calibrated system should keep this case at ROUTINE and NOT flag clinician review.",
+      "rule_engine_baseline": {
+        "engine": "rule_based_baseline",
+        "flags": []
+      },
+      "mamaguard_synthesis": {
+        "maternal_risk_level": "ROUTINE",
+        "maternal_risk_factors": [],
+        "maternal_clinician_review": {
+          "required": false,
+          "reason": "",
+          "recommendation": "",
+          "evidence_basis": [],
+          "confidence": 0.85
+        },
+        "sdoh_language": "English",
+        "sdoh_has_coverage": true,
+        "sdoh_conditions": [],
+        "sdoh_clinician_review": {
+          "required": false,
+          "reason": "",
+          "recommendation": "",
+          "evidence_basis": [],
+          "confidence": 0.8
+        },
+        "cross_factor_insights": {
+          "compound_risk_level": "ROUTINE",
+          "clinical_sdoh_interactions": [],
+          "recommended_priorities": [],
+          "synthesis_confidence": 0.6
+        }
+      },
+      "synthesis_advantage": {
+        "baseline_flag_count": 0,
+        "baseline_flags": [],
+        "synthesis_risk_level": "ROUTINE",
+        "synthesis_risk_factor_count": 0,
+        "synthesis_evidence_ref_count": 0,
+        "synthesis_has_clinician_reason": false,
+        "synthesis_has_recommendation": false,
+        "synthesis_has_confidence": true,
+        "synthesis_has_language_context": true,
+        "synthesis_has_coverage_context": true,
+        "synthesis_cross_factor_insight_count": 0,
+        "synthesis_cross_factor_priorities": [],
+        "affordances_added_by_synthesis": 4,
+        "evidence_multiplier": 0.0
+      }
+    },
+    {
+      "case_id": "moderate_gdm_language",
+      "display_name": "Moderate \u2014 elevated BP + borderline A1c + language",
+      "tier": "moderate",
+      "narrative": "Two-week postpartum: BP 146/92 and 142/88 (Stage 1), HbA1c 6.8% (diabetes range), Spanish-preferred, active Medicaid, no housing/food Z-codes. The rule engine should surface three flat flags (HIGH_BP, DIABETES, LANGUAGE_BARRIER); the liaison synthesis should lift this to HIGH risk with a BP-diabetes extended-postpartum-followup interaction and a Spanish education priority.",
+      "rule_engine_baseline": {
+        "engine": "rule_based_baseline",
+        "flags": [
+          "HIGH_BP",
+          "DIABETES",
+          "LANGUAGE_BARRIER"
+        ]
+      },
+      "mamaguard_synthesis": {
+        "maternal_risk_level": "HIGH",
+        "maternal_risk_factors": [
+          "Elevated BP (>140/90)",
+          "Diabetes range HbA1c (>6.5%)"
+        ],
+        "maternal_clinician_review": {
+          "required": true,
+          "reason": "Risk level: HIGH. Factors: Elevated BP (>140/90); Diabetes range HbA1c (>6.5%)",
+          "recommendation": "Comprehensive maternal risk review recommended",
+          "evidence_basis": [
+            "Observation/bp-mod-1 (BP 146/92 on 2026-03-25)",
+            "Observation/bp-mod-2 (BP 142/88 on 2026-03-12)",
+            "Observation/hba1c-mod-1 (HbA1c 6.8% on 2026-03-22)"
+          ],
+          "confidence": 0.85
+        },
+        "sdoh_language": "Spanish",
+        "sdoh_has_coverage": true,
+        "sdoh_conditions": [],
+        "sdoh_clinician_review": {
+          "required": false,
+          "reason": "",
+          "recommendation": "",
+          "evidence_basis": [
+            "Patient primary language: Spanish"
+          ],
+          "confidence": 0.8
+        },
+        "cross_factor_insights": {
+          "compound_risk_level": "HIGH",
+          "clinical_sdoh_interactions": [
+            "Postpartum BP teaching must be delivered in the patient's preferred language; English-only discharge instructions are a known driver of postpartum readmission.",
+            "Overlap of postpartum hypertension and diabetes-range HbA1c raises long-term cardiovascular risk \u2014 flag for extended postpartum follow-up beyond the 6-week standard."
+          ],
+          "recommended_priorities": [
+            "spanish_bp_education",
+            "extended_postpartum_followup"
+          ],
+          "synthesis_confidence": 0.85
+        }
+      },
+      "synthesis_advantage": {
+        "baseline_flag_count": 3,
+        "baseline_flags": [
+          "HIGH_BP",
+          "DIABETES",
+          "LANGUAGE_BARRIER"
+        ],
+        "synthesis_risk_level": "HIGH",
+        "synthesis_risk_factor_count": 2,
+        "synthesis_evidence_ref_count": 4,
+        "synthesis_has_clinician_reason": true,
+        "synthesis_has_recommendation": true,
+        "synthesis_has_confidence": true,
+        "synthesis_has_language_context": true,
+        "synthesis_has_coverage_context": true,
+        "synthesis_cross_factor_insight_count": 2,
+        "synthesis_cross_factor_priorities": [
+          "spanish_bp_education",
+          "extended_postpartum_followup"
+        ],
+        "affordances_added_by_synthesis": 6,
+        "evidence_multiplier": 1.3333333333333333
+      }
+    },
+    {
+      "case_id": "severe_compound_postpartum",
+      "display_name": "Severe compound \u2014 HTN + A1c + housing + language + coverage gap",
+      "tier": "severe",
+      "narrative": "Three-week postpartum: BP 164/106 and 160/100 (Stage 2), HbA1c 7.4% (diabetes range), active housing-problem Z-code (SNOMED 105531004), Spanish-preferred, no active Coverage resource (Medicaid gap). The liaison synthesis should produce URGENT risk with 4+ cross-factor interactions \u2014 the rule engine can only emit 5 flat, isolated flags.",
+      "rule_engine_baseline": {
+        "engine": "rule_based_baseline",
+        "flags": [
+          "HIGH_BP",
+          "DIABETES",
+          "HOUSING_ISSUE",
+          "LANGUAGE_BARRIER",
+          "NO_COVERAGE"
+        ]
+      },
+      "mamaguard_synthesis": {
+        "maternal_risk_level": "URGENT",
+        "maternal_risk_factors": [
+          "Stage 2 hypertension (>160/110)",
+          "Diabetes range HbA1c (>6.5%)"
+        ],
+        "maternal_clinician_review": {
+          "required": true,
+          "reason": "Risk level: URGENT. Factors: Stage 2 hypertension (>160/110); Diabetes range HbA1c (>6.5%)",
+          "recommendation": "Comprehensive maternal risk review recommended",
+          "evidence_basis": [
+            "Observation/bp-sev-1 (BP 164/106 on 2026-03-30)",
+            "Observation/bp-sev-2 (BP 160/100 on 2026-03-20)",
+            "Observation/hba1c-sev-1 (HbA1c 7.4% on 2026-03-28)"
+          ],
+          "confidence": 0.85
+        },
+        "sdoh_language": "Spanish",
+        "sdoh_has_coverage": false,
+        "sdoh_conditions": [
+          {
+            "condition": "Housing problem",
+            "resource_id": "cond-housing-sev",
+            "clinical_status": "active"
+          }
+        ],
+        "sdoh_clinician_review": {
+          "required": true,
+          "reason": "Insurance coverage gap detected -- may affect medication access and care continuity",
+          "recommendation": "Verify insurance status; consider Medicaid enrollment or community health resources",
+          "evidence_basis": [
+            "No Coverage resources found for patient",
+            "Patient primary language: Spanish",
+            "Condition/cond-housing-sev (Housing problem)"
+          ],
+          "confidence": 0.8
+        },
+        "cross_factor_insights": {
+          "compound_risk_level": "URGENT",
+          "clinical_sdoh_interactions": [
+            "Severe hypertension co-occurs with a coverage gap: antihypertensive access is at risk. Treat as an urgent continuity-of-care issue, not just a medication adjustment.",
+            "Postpartum BP teaching must be delivered in the patient's preferred language; English-only discharge instructions are a known driver of postpartum readmission.",
+            "Diabetes management is incompatible with unstable housing (refrigeration for insulin, consistent meal timing). SDOH team should be looped in before any glycemic medication change.",
+            "Overlap of postpartum hypertension and diabetes-range HbA1c raises long-term cardiovascular risk \u2014 flag for extended postpartum follow-up beyond the 6-week standard.",
+            "All three social determinants (housing, coverage, language) are present simultaneously \u2014 escalate to SDOH navigator for bundled wraparound referral, not three independent referrals."
+          ],
+          "recommended_priorities": [
+            "urgent_coverage_bridge",
+            "spanish_bp_education",
+            "housing_before_glycemic_plan",
+            "extended_postpartum_followup",
+            "bundled_sdoh_navigation"
+          ],
+          "synthesis_confidence": 0.85
+        }
+      },
+      "synthesis_advantage": {
+        "baseline_flag_count": 5,
+        "baseline_flags": [
+          "HIGH_BP",
+          "DIABETES",
+          "HOUSING_ISSUE",
+          "LANGUAGE_BARRIER",
+          "NO_COVERAGE"
+        ],
+        "synthesis_risk_level": "URGENT",
+        "synthesis_risk_factor_count": 2,
+        "synthesis_evidence_ref_count": 6,
+        "synthesis_has_clinician_reason": true,
+        "synthesis_has_recommendation": true,
+        "synthesis_has_confidence": true,
+        "synthesis_has_language_context": true,
+        "synthesis_has_coverage_context": true,
+        "synthesis_cross_factor_insight_count": 5,
+        "synthesis_cross_factor_priorities": [
+          "urgent_coverage_bridge",
+          "spanish_bp_education",
+          "housing_before_glycemic_plan",
+          "extended_postpartum_followup",
+          "bundled_sdoh_navigation"
+        ],
+        "affordances_added_by_synthesis": 6,
+        "evidence_multiplier": 1.2
+      }
+    }
+  ],
+  "totals": {
+    "cases": 3,
+    "total_baseline_flags": 8,
+    "total_synthesis_evidence_refs": 10,
+    "total_cross_factor_insights": 7,
+    "cases_at_urgent_or_high": 2
+  }
+}
