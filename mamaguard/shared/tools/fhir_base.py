@@ -295,3 +295,91 @@ def get_active_medications(tool_context: ToolContext) -> dict:
         "count": len(medications),
         "medications": medications,
     }
+
+
+# -- Tool: find linked newborn ------------------------------------------------
+
+_CHILD_RELATIONSHIP_CODES = {"CHILD", "SON", "DAU", "NCHILD", "child"}
+_LINKED_PATIENT_SYSTEM = "urn:mamaguard:linked-patient-id"
+
+
+def find_linked_newborn(
+    mother_patient_id: str,
+    tool_context: ToolContext | None = None,
+) -> dict:
+    """
+    Find newborn Patient resources linked to a maternal patient via FHIR
+    RelatedPerson resources.
+
+    Queries RelatedPerson where patient = mother_patient_id and relationship
+    indicates a child (CHILD, SON, DAU). Returns linked newborn patient IDs,
+    names, and birth dates so the orchestrator can initiate a pediatric
+    assessment in the same session.
+
+    Args:
+        mother_patient_id: The FHIR Patient ID of the mother.
+    """
+    ctx = _get_fhir_context(tool_context, "find_linked_newborn")
+    if isinstance(ctx, dict):
+        return ctx
+
+    fhir_url, fhir_token, _patient_id = ctx
+    logger.info(
+        "tool_find_linked_newborn mother_patient_id=%s", mother_patient_id,
+    )
+
+    try:
+        bundle = _fhir_get(
+            fhir_url, fhir_token, "RelatedPerson",
+            params={"patient": mother_patient_id, "_count": "50"},
+        )
+    except httpx.HTTPStatusError as e:
+        return _http_error_result(e)
+    except Exception as e:
+        return _connection_error_result(e)
+
+    linked_newborns: list[dict] = []
+    for entry in bundle.get("entry", []):
+        res = entry.get("resource", {})
+
+        # Check relationship codes for child types
+        is_child = False
+        for rel in res.get("relationship", []):
+            for coding in rel.get("coding", []):
+                if coding.get("code", "") in _CHILD_RELATIONSHIP_CODES:
+                    is_child = True
+                    break
+            if is_child:
+                break
+
+        if not is_child:
+            continue
+
+        # Extract child Patient ID from identifier
+        child_patient_id = None
+        for ident in res.get("identifier", []):
+            if ident.get("system") == _LINKED_PATIENT_SYSTEM:
+                child_patient_id = ident.get("value")
+                break
+
+        # Extract name
+        names = res.get("name", [])
+        name_record = names[0] if names else {}
+        given = " ".join(name_record.get("given", []))
+        family = name_record.get("family", "")
+        child_name = f"{given} {family}".strip() or "Unknown"
+
+        linked_newborns.append({
+            "child_patient_id": child_patient_id,
+            "name": child_name,
+            "birth_date": res.get("birthDate"),
+            "gender": res.get("gender"),
+            "related_person_id": res.get("id", ""),
+        })
+
+    return {
+        "status": "success",
+        "mother_patient_id": mother_patient_id,
+        "count": len(linked_newborns),
+        "linked_newborns": linked_newborns,
+    }

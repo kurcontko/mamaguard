@@ -992,5 +992,233 @@ class TestGetActiveMedicationsEdgeCases(unittest.TestCase):
         self.assertEqual(result["medications"][0]["dosage"], "No dosage text")
 
 
+# ===========================================================================
+# find_linked_newborn
+# ===========================================================================
+
+class TestFindLinkedNewborn(unittest.TestCase):
+    """Tests for find_linked_newborn tool."""
+
+    CHILD_RELATED_PERSON = {
+        "resourceType": "RelatedPerson",
+        "id": "rp-maria-lucas-001",
+        "patient": {"reference": "Patient/bench-maria-001"},
+        "relationship": [{
+            "coding": [{
+                "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                "code": "CHILD",
+                "display": "child",
+            }],
+        }],
+        "name": [{"family": "Santos", "given": ["Lucas"]}],
+        "birthDate": "2026-02-09",
+        "gender": "male",
+        "identifier": [{
+            "system": "urn:mamaguard:linked-patient-id",
+            "value": "bench-baby-santos-001",
+        }],
+    }
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_finds_linked_child(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        mock_fhir_get.return_value = {
+            "resourceType": "Bundle",
+            "entry": [{"resource": self.CHILD_RELATED_PERSON}],
+        }
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["mother_patient_id"], "bench-maria-001")
+        self.assertEqual(result["count"], 1)
+        child = result["linked_newborns"][0]
+        self.assertEqual(child["child_patient_id"], "bench-baby-santos-001")
+        self.assertEqual(child["name"], "Lucas Santos")
+        self.assertEqual(child["birth_date"], "2026-02-09")
+        self.assertEqual(child["gender"], "male")
+        self.assertEqual(child["related_person_id"], "rp-maria-lucas-001")
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_empty_bundle_no_children(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        mock_fhir_get.return_value = {"resourceType": "Bundle", "entry": []}
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["count"], 0)
+        self.assertEqual(result["linked_newborns"], [])
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_filters_non_child_relationships(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        spouse_rp = {
+            "resourceType": "RelatedPerson",
+            "id": "rp-spouse",
+            "relationship": [{
+                "coding": [{"code": "SPS", "display": "spouse"}],
+            }],
+            "name": [{"family": "Santos", "given": ["Carlos"]}],
+        }
+        mock_fhir_get.return_value = {
+            "resourceType": "Bundle",
+            "entry": [
+                {"resource": spouse_rp},
+                {"resource": self.CHILD_RELATED_PERSON},
+            ],
+        }
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["linked_newborns"][0]["name"], "Lucas Santos")
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_recognizes_son_relationship_code(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        son_rp = {
+            "resourceType": "RelatedPerson",
+            "id": "rp-son",
+            "relationship": [{"coding": [{"code": "SON"}]}],
+            "name": [{"family": "Santos", "given": ["Lucas"]}],
+            "identifier": [{
+                "system": "urn:mamaguard:linked-patient-id",
+                "value": "bench-baby-santos-001",
+            }],
+        }
+        mock_fhir_get.return_value = {
+            "resourceType": "Bundle",
+            "entry": [{"resource": son_rp}],
+        }
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["count"], 1)
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_recognizes_dau_relationship_code(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        dau_rp = {
+            "resourceType": "RelatedPerson",
+            "id": "rp-dau",
+            "relationship": [{"coding": [{"code": "DAU"}]}],
+            "name": [{"family": "Smith", "given": ["Emma"]}],
+            "identifier": [{
+                "system": "urn:mamaguard:linked-patient-id",
+                "value": "baby-emma-001",
+            }],
+        }
+        mock_fhir_get.return_value = {
+            "resourceType": "Bundle",
+            "entry": [{"resource": dau_rp}],
+        }
+        result = find_linked_newborn("mother-001", tool_context=_valid_ctx())
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["linked_newborns"][0]["name"], "Emma Smith")
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_missing_identifier_returns_none_patient_id(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        rp_no_id = {
+            "resourceType": "RelatedPerson",
+            "id": "rp-no-link",
+            "relationship": [{"coding": [{"code": "CHILD"}]}],
+            "name": [{"family": "Santos", "given": ["Lucas"]}],
+        }
+        mock_fhir_get.return_value = {
+            "resourceType": "Bundle",
+            "entry": [{"resource": rp_no_id}],
+        }
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["count"], 1)
+        self.assertIsNone(result["linked_newborns"][0]["child_patient_id"])
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_missing_name_returns_unknown(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        rp_no_name = {
+            "resourceType": "RelatedPerson",
+            "id": "rp-anon",
+            "relationship": [{"coding": [{"code": "CHILD"}]}],
+            "identifier": [{
+                "system": "urn:mamaguard:linked-patient-id",
+                "value": "baby-001",
+            }],
+        }
+        mock_fhir_get.return_value = {
+            "resourceType": "Bundle",
+            "entry": [{"resource": rp_no_name}],
+        }
+        result = find_linked_newborn("mother-001", tool_context=_valid_ctx())
+        self.assertEqual(result["linked_newborns"][0]["name"], "Unknown")
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_http_error(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        mock_fhir_get.side_effect = _make_http_error(500, "Server Error")
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["http_status"], 500)
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_connect_error(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        mock_fhir_get.side_effect = httpx.ConnectError("connection refused")
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["status"], "error")
+        self.assertIn("connection refused", result["error_message"])
+
+    def test_missing_context(self):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        result = find_linked_newborn("bench-maria-001", tool_context=None)
+        self.assertEqual(result["status"], "error")
+
+    def test_missing_credentials(self):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        result = find_linked_newborn("bench-maria-001", tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_bundle_without_entry_key(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        mock_fhir_get.return_value = {"resourceType": "Bundle"}
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["count"], 0)
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_multiple_children(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import find_linked_newborn
+
+        child2 = {
+            "resourceType": "RelatedPerson",
+            "id": "rp-child2",
+            "relationship": [{"coding": [{"code": "CHILD"}]}],
+            "name": [{"family": "Santos", "given": ["Sofia"]}],
+            "birthDate": "2024-05-01",
+            "gender": "female",
+            "identifier": [{
+                "system": "urn:mamaguard:linked-patient-id",
+                "value": "bench-sofia-001",
+            }],
+        }
+        mock_fhir_get.return_value = {
+            "resourceType": "Bundle",
+            "entry": [
+                {"resource": self.CHILD_RELATED_PERSON},
+                {"resource": child2},
+            ],
+        }
+        result = find_linked_newborn("bench-maria-001", tool_context=_valid_ctx())
+        self.assertEqual(result["count"], 2)
+        names = {c["name"] for c in result["linked_newborns"]}
+        self.assertEqual(names, {"Lucas Santos", "Sofia Santos"})
+
+
 if __name__ == "__main__":
     unittest.main()

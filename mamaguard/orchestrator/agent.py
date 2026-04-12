@@ -12,6 +12,7 @@ from mamaguard.maternal_agent.agent import maternal_risk_agent
 from mamaguard.pediatric_agent.agent import pediatric_transition_agent
 from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.tools import find_linked_newborn
 
 ORCHESTRATOR_INSTRUCTION = """\
 You are MamaGuard, a maternal-pediatric care coordination agent. You coordinate \
@@ -124,11 +125,21 @@ When any sub-agent flags that clinician review is required:
 - Do NOT proceed with treatment changes -- present the information and wait
 - In multi-agent synthesis, collect ALL clinician review flags into one section
 
-**Mother-to-Child Handoff:**
+**Mother-to-Child Seamless Handoff:**
 When assessing a maternal patient and pediatric follow-up is needed:
-- Include a "Pediatric Transition -- Action Required" section
-- List maternal risk factors that should inform the pediatric assessment
-- Instruct the clinician to switch patient context to the child
+1. Call **find_linked_newborn** with the mother's Patient ID to discover linked \
+children via FHIR RelatedPerson resources.
+2. If a linked newborn is found, include the child's Patient ID, name, and birth \
+date in a "Pediatric Transition -- Linked Newborn Found" section.
+3. List maternal risk factors that should inform the pediatric assessment \
+(e.g., GDM → neonatal hypoglycemia monitoring, preeclampsia → infant BP tracking, \
+Stage 2 HTN → NICU history review).
+4. If no linked newborn is found, include a "Pediatric Transition -- Action \
+Required" section instructing the clinician to switch patient context to the \
+child and provide the child's Patient ID so the pediatric agent can be invoked.
+5. When the child's Patient ID is known, route to **pediatric_transition_agent** \
+with maternal context (risk level, conditions, medications) so the pediatric \
+assessment accounts for maternal history.
 
 **Rules:**
 - Never fabricate clinical data -- only report what the FHIR tools return
@@ -148,6 +159,7 @@ root_agent = Agent(
         AgentTool(agent=maternal_risk_agent),
         AgentTool(agent=pediatric_transition_agent),
         AgentTool(agent=sdoh_outreach_agent),
+        find_linked_newborn,
     ],
     before_model_callback=extract_fhir_context,
 )

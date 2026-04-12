@@ -1,5 +1,5 @@
 """
-Shared tools catalogue -- re-exports all 14 tool functions.
+Shared tools catalogue -- re-exports all 15 tool functions.
 
 When ``MAMAGUARD_AUDIT_EVENTS=true``, every tool invocation emits a FHIR
 AuditEvent recording which agent accessed what data (HIPAA compliance trail).
@@ -7,6 +7,7 @@ AuditEvent recording which agent accessed what data (HIPAA compliance trail).
 Base FHIR tools (fhir_base.py)
     get_patient_summary       Patient demographics + conditions + meds + recent vitals
     get_active_medications    Active MedicationRequest resources
+    find_linked_newborn       Find child Patient linked via RelatedPerson
 
 Maternal tools (maternal.py)
     get_bp_trend              Blood pressure readings with trend and alerts
@@ -32,6 +33,7 @@ Write-back tools (writeback.py)
 from ..audit_event import audited
 
 from .fhir_base import (
+    find_linked_newborn as _find_linked_newborn,
     get_active_medications as _get_active_medications,
     get_patient_summary as _get_patient_summary,
 )
@@ -64,6 +66,7 @@ from .writeback import (
 # is off (default), the wrapper is a no-op passthrough.
 get_patient_summary = audited(_get_patient_summary)
 get_active_medications = audited(_get_active_medications)
+find_linked_newborn = audited(_find_linked_newborn)
 get_bp_trend = audited(_get_bp_trend)
 get_glucose_trend = audited(_get_glucose_trend)
 get_maternal_risk_profile = audited(_get_maternal_risk_profile)
@@ -80,6 +83,7 @@ write_care_plan = audited(_write_care_plan)
 __all__ = [
     "get_patient_summary",
     "get_active_medications",
+    "find_linked_newborn",
     "get_bp_trend",
     "get_glucose_trend",
     "get_maternal_risk_profile",
