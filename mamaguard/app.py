@@ -25,7 +25,7 @@ a2a_app = create_a2a_app(
     agent=root_agent,
     name="MamaGuard Care Coordinator",
     description=(
-        "Maternal-pediatric care coordination agent with 14 FHIR tools. "
+        "Maternal-pediatric care coordination agent with 15 FHIR tools. "
         "Monitors high-risk pregnancies, manages mother-to-child care transitions, "
         "screens for SDOH with actionable community resource referrals, and writes "
         "back RiskAssessment, CommunicationRequest, Goal, and CarePlan resources. "

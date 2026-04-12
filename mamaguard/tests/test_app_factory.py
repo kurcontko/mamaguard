@@ -91,7 +91,7 @@ class TestAgentCardEndpoint(_AppTestCase):
 
     def test_card_description_mentions_fhir_tools(self):
         card = self.client.get("/.well-known/agent-card.json").json()
-        self.assertIn("14 FHIR tools", card["description"])
+        self.assertIn("15 FHIR tools", card["description"])
 
     def test_card_description_mentions_liaison_pattern(self):
         card = self.client.get("/.well-known/agent-card.json").json()

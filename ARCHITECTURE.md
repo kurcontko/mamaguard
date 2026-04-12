@@ -539,7 +539,7 @@ Configuration files: `marketplace/mcp_config.json` (server metadata), `marketpla
 
 #### Test Coverage
 
-40 tests in `mamaguard/tests/test_mcp_server.py`: tool registration (all 14 registered, no extras), tool invocation with mocked FHIR, FhirContext construction + SHARP deserialization, error propagation, and MCP protocol-level integration tests (handshake, tool listing, invocation, FHIR context propagation via in-memory client-server streams).
+40 tests in `mamaguard/tests/test_mcp_server.py`: tool registration (all 15 registered, no extras), tool invocation with mocked FHIR, FhirContext construction + SHARP deserialization, error propagation, and MCP protocol-level integration tests (handshake, tool listing, invocation, FHIR context propagation via in-memory client-server streams).
 
 ---
 
