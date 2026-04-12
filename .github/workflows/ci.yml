@@ -26,7 +26,10 @@ jobs:
           cache-dependency-path: mamaguard/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r mamaguard/requirements.txt pytest pytest-asyncio
+        run: pip install -r mamaguard/requirements.txt pytest pytest-asyncio mypy
+
+      - name: Run mypy type check
+        run: python -m mypy mamaguard/ benchmarks/
 
       - name: Run unit tests
         run: python -m pytest mamaguard/tests/ -q --tb=short

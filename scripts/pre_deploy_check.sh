@@ -13,6 +13,7 @@
 #   HAPI_FHIR_URL      — override HAPI endpoint (default: http://localhost:8090/fhir)
 #   NO_FHIR_SETUP      — set to "1" to skip HAPI container lifecycle (assume already running)
 #   SKIP_UNIT_TESTS    — set to "1" to skip pytest unit test suite
+#   SKIP_MYPY          — set to "1" to skip mypy type check
 #   MIN_OVERALL_SCORE  — minimum acceptable overall benchmark score 0–1 (default: 0.95)
 #   PYTHON             — Python interpreter to use (default: python3)
 
@@ -59,7 +60,7 @@ echo
 # ── Step 1: Unit tests ─────────────────────────────────────────────────────────
 
 if [ "${SKIP_UNIT_TESTS:-0}" != "1" ]; then
-    echo "Step 1/3 — Unit tests (pytest mamaguard/tests/)"
+    echo "Step 1/4 — Unit tests (pytest mamaguard/tests/)"
     hr
 
     UNIT_LOG=$(mktemp)
@@ -74,13 +75,35 @@ if [ "${SKIP_UNIT_TESTS:-0}" != "1" ]; then
     fi
     echo
 else
-    warn "Step 1/3 — Unit tests SKIPPED (SKIP_UNIT_TESTS=1)"
+    warn "Step 1/4 — Unit tests SKIPPED (SKIP_UNIT_TESTS=1)"
     echo
 fi
 
-# ── Step 2: Tier-1 deterministic benchmarks ───────────────────────────────────
+# ── Step 2: mypy type check ──────────────────────────────────────────────────
 
-echo "Step 2/3 — Tier-1 deterministic benchmarks"
+if [ "${SKIP_MYPY:-0}" != "1" ]; then
+    echo "Step 2/4 — mypy type check (mamaguard/ benchmarks/)"
+    hr
+
+    MYPY_LOG=$(mktemp)
+    ${PYTHON} -m mypy mamaguard/ benchmarks/ 2>&1 | tee "${MYPY_LOG}"
+    MYPY_EXIT=${PIPESTATUS[0]}
+
+    if [ "${MYPY_EXIT}" -eq 0 ]; then
+        pass "mypy"
+    else
+        fail "mypy (exit ${MYPY_EXIT}) — full output above"
+        FAILURES=$((FAILURES + 1))
+    fi
+    echo
+else
+    warn "Step 2/4 — mypy type check SKIPPED (SKIP_MYPY=1)"
+    echo
+fi
+
+# ── Step 3: Tier-1 deterministic benchmarks ───────────────────────────────────
+
+echo "Step 3/4 — Tier-1 deterministic benchmarks"
 hr
 
 BENCH_JSON=$(mktemp)
@@ -129,10 +152,10 @@ EOF
 fi
 echo
 
-# ── Step 3: Tier-2 HAPI smoke (optional) ──────────────────────────────────────
+# ── Step 4: Tier-2 HAPI smoke (optional) ──────────────────────────────────────
 
 if [ "${RUN_HAPI}" -eq 1 ]; then
-    echo "Step 3/3 — Tier-2 HAPI smoke (end-to-end)"
+    echo "Step 4/4 — Tier-2 HAPI smoke (end-to-end)"
     hr
 
     # Default: let the runner manage HAPI lifecycle; override with NO_FHIR_SETUP=1
@@ -161,7 +184,7 @@ print(f'{cats.get(\"e2e\", 0):.3f}')
         FAILURES=$((FAILURES + 1))
     fi
 else
-    echo "Step 3/3 — Tier-2 HAPI smoke  (skipped — pass --hapi to enable)"
+    echo "Step 4/4 — Tier-2 HAPI smoke  (skipped — pass --hapi to enable)"
 fi
 echo
 
