@@ -1,4 +1,4 @@
-.PHONY: setup test mypy lint tier1 tier2a tier2b tier3 bench-all hapi hapi-load serve serve-mcp clean
+.PHONY: setup test mypy lint tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp clean
 
 # --- Setup ---
 setup:
@@ -22,6 +22,9 @@ tier1:
 
 tier2a:
 	uv run python -m benchmarks.runner --llm --backend vllm
+
+tier2a-compare:
+	@uv run python -m benchmarks.runner --llm --backend vllm --json | uv run python scripts/tier2a_compare.py -
 
 tier2b:
 	uv run python -m benchmarks.runner --e2e --backend vllm --no-fhir-setup --verbose
