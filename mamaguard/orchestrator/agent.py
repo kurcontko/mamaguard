@@ -12,6 +12,7 @@ from mamaguard.maternal_agent.agent import maternal_risk_agent
 from mamaguard.pediatric_agent.agent import pediatric_transition_agent
 from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import find_linked_newborn
 
 ORCHESTRATOR_INSTRUCTION = """\
@@ -173,4 +174,5 @@ root_agent = Agent(
         find_linked_newborn,
     ],
     before_model_callback=extract_fhir_context,
+    after_model_callback=safety_after_model_callback,
 )

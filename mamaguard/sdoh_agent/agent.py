@@ -10,6 +10,7 @@ decisions are flagged for clinician review.
 from google.adk.agents import Agent
 
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import (
     create_communication_request,
     find_sdoh_resources,
@@ -170,4 +171,5 @@ sdoh_outreach_agent = Agent(
         create_communication_request,
     ],
     before_model_callback=extract_fhir_context,
+    after_model_callback=safety_after_model_callback,
 )

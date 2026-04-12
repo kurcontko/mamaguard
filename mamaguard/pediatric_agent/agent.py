@@ -8,6 +8,7 @@ Phase 3: will add pediatric-specific tools (get_immunization_gaps, etc.)
 from google.adk.agents import Agent
 
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import (
     create_communication_request,
     get_care_gaps,
@@ -154,4 +155,5 @@ pediatric_transition_agent = Agent(
         create_communication_request,
     ],
     before_model_callback=extract_fhir_context,
+    after_model_callback=safety_after_model_callback,
 )

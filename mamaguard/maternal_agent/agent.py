@@ -8,6 +8,7 @@ Phase 2: will add maternal-specific tools (get_bp_trend, get_pregnancy_history, 
 from google.adk.agents import Agent
 
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import (
     get_active_medications,
     get_bp_trend,
@@ -141,4 +142,5 @@ maternal_risk_agent = Agent(
         write_risk_assessment,
     ],
     before_model_callback=extract_fhir_context,
+    after_model_callback=safety_after_model_callback,
 )
