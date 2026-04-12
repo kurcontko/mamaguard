@@ -153,7 +153,7 @@ docker run -p 8080:8080 \
 ## Tests
 
 ```bash
-# MCP server tests only (37 tests)
+# MCP server tests only (40 tests)
 python -m pytest mamaguard/tests/test_mcp_server.py -v
 
 # Full suite

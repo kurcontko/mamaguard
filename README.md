@@ -143,7 +143,7 @@ docker run -p 8001:8001 \
 ## Testing
 
 ```bash
-# Unit tests (747 tests)
+# Unit tests (750 tests)
 python3 -m pytest mamaguard/tests/ -v
 
 # Tier-1 deterministic benchmarks (54 cases)
@@ -157,7 +157,7 @@ python3 -m benchmarks.runner
 ```
 
 **Test coverage:**
-- 747 unit tests across 18 test modules
+- 750 unit tests across 18 test modules
 - 54/54 Tier-1 benchmark cases at 100.0%
 - Agent routing, tool invocation, error paths, FHIR base utilities, FHIR writeback, SMART tickets, middleware, golden-file contract tests, LLM-as-judge care plan checkers, FHIR hook, logging utilities, mother-child handoff, MCP protocol integration, SDOH resource classification, A2A app factory and agent card endpoint, benchmark harness infrastructure
 
@@ -200,7 +200,7 @@ mamaguard/
 |   +-- smart_tickets.py         # SMART Permission Tickets (Mandel spec)
 |   +-- sdoh_resources.py        # Offline SDOH resource map
 +-- marketplace/                 # Marketplace submission configs (both tracks)
-+-- tests/                       # 747 unit tests
++-- tests/                       # 750 unit tests
 +-- app.py                       # A2A entry point
 +-- Dockerfile                   # Cloud Run deployment
 +-- requirements.txt

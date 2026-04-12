@@ -113,7 +113,7 @@ Every feature falls into one of three tiers. Only "Adopt Now" items block submis
 
 | Feature | Rationale |
 |---------|-----------|
-| ~~Standalone MCP Server (Superpower track)~~ | **Implemented.** See [Section 2.8](#28-standalone-mcp-server-phase-2a) below. FastMCP server exposing all 14 FHIR tools, SHARP context, stdio + SSE transports, 37 tests. Marketplace config in `marketplace/mcp_config.json`. | Done |
+| ~~Standalone MCP Server (Superpower track)~~ | **Implemented.** See [Section 2.8](#28-standalone-mcp-server-phase-2a) below. FastMCP server exposing all 14 FHIR tools, SHARP context, stdio + SSE transports, 40 tests. Marketplace config in `marketplace/mcp_config.json`. | Done |
 | ~~External SDOH APIs (211.org, findhelp.org)~~ | **Implemented.** `find_sdoh_resources` hits external directory with 5s timeout; curated offline fallback (211, WIC, SNAP, HUD, etc.) so agent is always actionable. | Done |
 | Multi-model consensus (ClinicalMem-style) | Cost, complexity, not needed for judging criteria |
 | Wearable data integration | No FHIR source available in sandbox |
@@ -848,7 +848,7 @@ Returns patient + ALL linked resources in one call.
 | Task | Details | Status |
 |------|---------|--------|
 | End-to-end testing in PO | Full flow with Maria in Prompt Opinion UI | [ ] |
-| Write integration tests | 747 unit tests, 54/54 Tier-1 benchmarks at 100.0%, mypy clean | [x] |
+| Write integration tests | 750 unit tests, 54/54 Tier-1 benchmarks at 100.0%, mypy clean | [x] |
 | Handle edge cases | Missing data, FHIR errors, timeout handling — error-path tests for all tools | [x] |
 | Optimize agent instructions | Liaison pattern enforced on all 3 sub-agents, 5T alignment | [x] |
 | Deploy final to Cloud Run | Dockerfile + Procfile + `scripts/deploy.sh` ready; awaiting deploy | [~] |
@@ -941,7 +941,7 @@ Returns patient + ALL linked resources in one call.
 - [ ] Agent deployed to public HTTPS URL (Cloud Run)
 - [x] Agent card served correctly (verified via `test_app_factory.py` — 41 tests)
 - [x] A2A FHIR context handling working (SHARP header patterns via ADK tools — 66 fhir_hook tests)
-- [x] 14 FHIR tools functional (ADK in-process + MCP server — 747 unit tests)
+- [x] 14 FHIR tools functional (ADK in-process + MCP server — 750 unit tests)
 - [x] 4 A2A skills working (orchestrator + 3 sub-agents — 28 in-process agent tests)
 - [x] Liaison Agent pattern demonstrated (INPUT_REQUIRED — all 3 sub-agents enforce)
 - [x] FHIR write-back (RiskAssessment + CommunicationRequest + Goal/CarePlan — error-path tests)

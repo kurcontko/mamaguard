@@ -97,7 +97,7 @@ Prompt Opinion ──┬── BYO Agent → A2A JSON-RPC ─┐
 The demo shows Maria (Patient/881f534f), a 50-year-old Black, French-speaking woman with:
 - 6 pregnancies (5 losses), emergency delivery
 - Uncontrolled HTN (BP consistently >140/90, spike to 170/98 postpartum)
-- DM2 with HbA1c trending 5.69 → 6.13 → 5.44
+- DM2 with HbA1c trending 6.8 → 7.4 → 7.9 (diabetes range, worsening)
 - Only ONE postnatal visit, no insurance on record
 
 MamaGuard identifies: URGENT risk (Stage 2 HTN + recurrent pregnancy loss + no coverage), generates a prioritized care plan, flags clinician review, and creates outreach resources.
