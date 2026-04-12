@@ -85,7 +85,7 @@ def _score_medagent_case(
 
     # 4. Task completion for action tasks: did a write-back tool run?
     if case.task_type == "action":
-        write_tools = {"write_risk_assessment", "create_communication_request"}
+        write_tools = {"write_risk_assessment", "create_communication_request", "write_care_plan"}
         attempted = bool(write_tools & tools_called)
         checks["write_attempted"] = attempted
         scores.append(1.0 if attempted else 0.0)
@@ -143,7 +143,7 @@ def build_suite(
     """Build MedAgentBench-style eval suite."""
     suite = BenchmarkSuite(
         name="medagent",
-        description=f"MedAgentBench-style ({backend}) — 25 query+action tasks",
+        description=f"MedAgentBench-style ({backend}) — 29 query+action tasks",
     )
 
     _holder: dict = {}

@@ -17,7 +17,8 @@ Cases cover the clinical domains MamaGuard targets:
   - Pediatric developmental screening
   - SDOH (coverage, language, Z-codes)
   - Compound risk reasoning
-  - Write-back actions (RiskAssessment, CommunicationRequest)
+  - Write-back actions (RiskAssessment, CommunicationRequest, CarePlan)
+  - Actionable SDOH (find_sdoh_resources, write_care_plan)
 """
 
 from __future__ import annotations
@@ -231,6 +232,30 @@ CASES: list[MedAgentCase] = [
         gold_not=["uninsured", "interpreter"],
         domain="sdoh",
     ),
+    MedAgentCase(
+        id="ma_q23",
+        instruction=(
+            "This patient has a documented housing problem. "
+            "Find local community resources that can help with housing assistance."
+        ),
+        patient_id="bench-maria-001",
+        task_type="query",
+        gold_tools={"find_sdoh_resources"},
+        gold_answer=["housing", "211"],
+        domain="sdoh",
+    ),
+    MedAgentCase(
+        id="ma_q24",
+        instruction=(
+            "This patient is experiencing food insecurity. "
+            "What community food assistance programs are available?"
+        ),
+        patient_id="bench-fatima-005",
+        task_type="query",
+        gold_tools={"find_sdoh_resources"},
+        gold_answer=["food", "SNAP"],
+        domain="sdoh",
+    ),
 
     # -------------------------------------------------------------------
     # Compound reasoning — require multiple tools
@@ -314,5 +339,31 @@ CASES: list[MedAgentCase] = [
         gold_tools={"create_communication_request"},
         gold_answer=["CommunicationRequest", "immuniz"],
         domain="pediatric",
+    ),
+    MedAgentCase(
+        id="ma_a04",
+        instruction=(
+            "This patient has food insecurity. Find relevant community resources "
+            "and create a FHIR CarePlan linking to a food assistance program."
+        ),
+        patient_id="bench-fatima-005",
+        task_type="action",
+        gold_tools={"find_sdoh_resources", "write_care_plan"},
+        gold_answer=["CarePlan", "Goal", "food"],
+        gold_not=["I prescribe"],
+        domain="sdoh",
+    ),
+    MedAgentCase(
+        id="ma_a05",
+        instruction=(
+            "Screen this patient for SDOH issues, find resources for any "
+            "identified needs, and document a care plan for her housing problem."
+        ),
+        patient_id="bench-maria-001",
+        task_type="action",
+        gold_tools={"get_sdoh_screening", "find_sdoh_resources", "write_care_plan"},
+        gold_answer=["CarePlan", "housing"],
+        gold_not=["I prescribe"],
+        domain="compound",
     ),
 ]

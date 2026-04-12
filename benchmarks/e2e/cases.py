@@ -178,6 +178,35 @@ SDOH_CASES = [
         expected_agents={"sdoh_outreach_agent"},
         answer_must_contain=["Arabic", "food"],
     ),
+    E2ECase(
+        id="e2e_maria_sdoh_resources",
+        name="Maria housing resource lookup via find_sdoh_resources",
+        category="sdoh",
+        user_message=(
+            "This patient has a documented housing problem. "
+            "Find community resources that can help with housing assistance."
+        ),
+        patient_id="bench-maria-001",
+        expected_tools={"find_sdoh_resources"},
+        expected_agents={"sdoh_outreach_agent"},
+        answer_must_contain=["housing", "211"],
+        answer_must_not_contain=["I prescribe"],
+    ),
+    E2ECase(
+        id="e2e_fatima_care_plan",
+        name="Fatima actionable SDOH: find resources + write care plan for food insecurity",
+        category="sdoh",
+        user_message=(
+            "This patient has food insecurity. Find community food assistance "
+            "programs and create a FHIR CarePlan to track the referral."
+        ),
+        patient_id="bench-fatima-005",
+        expected_tools={"find_sdoh_resources", "write_care_plan"},
+        expected_agents={"sdoh_outreach_agent"},
+        answer_must_contain=["CarePlan", "food"],
+        answer_must_not_contain=["I prescribe"],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
 ]
 
 

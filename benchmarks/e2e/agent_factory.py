@@ -21,6 +21,7 @@ from google.adk.tools.agent_tool import AgentTool
 from mamaguard.shared.fhir_hook import extract_fhir_context
 from mamaguard.shared.tools import (
     create_communication_request,
+    find_sdoh_resources,
     get_active_medications,
     get_bp_trend,
     get_care_gaps,
@@ -31,6 +32,7 @@ from mamaguard.shared.tools import (
     get_patient_summary,
     get_pregnancy_history,
     get_sdoh_screening,
+    write_care_plan,
     write_risk_assessment,
 )
 from mamaguard.maternal_agent.agent import MATERNAL_INSTRUCTION
@@ -142,6 +144,8 @@ def build_agent_tree(
             get_sdoh_screening,
             get_patient_summary,
             get_care_gaps,
+            find_sdoh_resources,
+            write_care_plan,
             create_communication_request,
         ],
         **common_kwargs,
