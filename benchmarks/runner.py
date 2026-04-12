@@ -51,6 +51,7 @@ from benchmarks.fhir_tools.bench_pediatric import suite as fhir_pediatric_suite
 from benchmarks.fhir_tools.bench_sdoh import suite as fhir_sdoh_suite
 from benchmarks.clinical_reasoning.bench_risk_assessment import suite as clinical_suite
 from benchmarks.clinical_reasoning.bench_reasoning_trace import suite as reasoning_trace_suite
+from benchmarks.clinical_reasoning.bench_baseline_comparison import suite as baseline_comparison_suite
 from benchmarks.orchestration.bench_routing import suite as orchestration_suite
 
 DETERMINISTIC_SUITES: dict[str, BenchmarkSuite] = {
@@ -59,6 +60,7 @@ DETERMINISTIC_SUITES: dict[str, BenchmarkSuite] = {
     "fhir_sdoh": fhir_sdoh_suite,
     "clinical_reasoning": clinical_suite,
     "reasoning_trace": reasoning_trace_suite,
+    "baseline_comparison": baseline_comparison_suite,
     "orchestration": orchestration_suite,
 }
 
@@ -173,7 +175,12 @@ def compute_scores(all_results: dict[str, list[BenchmarkResult]]) -> dict:
             cat = "medagent"
         elif "fhir" in suite_name:
             cat = "fhir_tools"
-        elif suite_name.startswith("llm_clinical") or "clinical" in suite_name or "reasoning" in suite_name:
+        elif (
+            suite_name.startswith("llm_clinical")
+            or "clinical" in suite_name
+            or "reasoning" in suite_name
+            or suite_name == "baseline_comparison"
+        ):
             cat = "clinical_reasoning"
         elif "safety" in suite_name:
             cat = "safety"
