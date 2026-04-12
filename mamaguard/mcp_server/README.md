@@ -9,7 +9,7 @@ Standalone MCP server exposing 14 FHIR tools for maternal-pediatric care coordin
 pip install -r mamaguard/requirements.txt
 
 # Run with stdio transport (default -- for Claude Desktop, Cursor, etc.)
-cd mamaguard && python -m mamaguard.mcp_server.server
+python -m mamaguard.mcp_server.server
 
 # Run with SSE transport (for remote/web clients)
 MCP_TRANSPORT=sse MCP_PORT=8080 python -m mamaguard.mcp_server.server

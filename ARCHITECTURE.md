@@ -519,7 +519,7 @@ Configuration files: `marketplace/mcp_config.json` (server metadata), `marketpla
     "mamaguard": {
       "command": "python",
       "args": ["-m", "mamaguard.mcp_server.server"],
-      "cwd": "/path/to/repo/mamaguard"
+      "cwd": "/path/to/repo"
     }
   }
 }
@@ -531,14 +531,14 @@ Configuration files: `marketplace/mcp_config.json` (server metadata), `marketpla
   "mamaguard": {
     "command": "python",
     "args": ["-m", "mamaguard.mcp_server.server"],
-    "cwd": "/path/to/repo/mamaguard"
+    "cwd": "/path/to/repo"
   }
 }
 ```
 
 #### Test Coverage
 
-16 test classes in `mamaguard/tests/test_mcp_server.py`: tool registration (all 14 registered, no extras), tool invocation with mocked FHIR, FhirContext construction + SHARP deserialization, and error propagation.
+40 tests in `mamaguard/tests/test_mcp_server.py`: tool registration (all 14 registered, no extras), tool invocation with mocked FHIR, FhirContext construction + SHARP deserialization, error propagation, and MCP protocol-level integration tests (handshake, tool listing, invocation, FHIR context propagation via in-memory client-server streams).
 
 ---
 

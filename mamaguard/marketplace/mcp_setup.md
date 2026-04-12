@@ -17,7 +17,7 @@ Prompt Opinion BYO Agents can attach MCP servers directly. This is the simplest 
 ### 1. Run the MCP Server Locally (for testing)
 
 ```bash
-cd mamaguard
+# From repo root:
 python -m mamaguard.mcp_server.server          # stdio transport
 # or
 MCP_TRANSPORT=sse MCP_PORT=8080 python -m mamaguard.mcp_server.server  # SSE
@@ -96,7 +96,7 @@ Add to `claude_desktop_config.json`:
     "mamaguard": {
       "command": "python",
       "args": ["-m", "mamaguard.mcp_server.server"],
-      "cwd": "/path/to/repo/mamaguard",
+      "cwd": "/path/to/repo",
       "env": {}
     }
   }
@@ -112,7 +112,7 @@ Add to MCP server settings:
   "mamaguard": {
     "command": "python",
     "args": ["-m", "mamaguard.mcp_server.server"],
-    "cwd": "/path/to/repo/mamaguard"
+    "cwd": "/path/to/repo"
   }
 }
 ```
