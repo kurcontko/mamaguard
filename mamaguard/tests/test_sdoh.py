@@ -1,5 +1,6 @@
-"""Unit tests for SDOH screening tool."""
+"""Unit tests for SDOH screening + actionable resource lookup tools."""
 
+import os
 import unittest
 from unittest.mock import patch
 
@@ -92,6 +93,158 @@ class TestGetSdohScreening(unittest.TestCase):
         result = get_sdoh_screening(tool_context=MockToolContext())
         self.assertEqual(len(result["data"]["sdoh_conditions"]), 1)
         self.assertTrue(result["clinician_review"]["required"])
+
+
+class TestFindSdohResources(unittest.TestCase):
+    """Actionable SDOH resource lookup (Phase 2c)."""
+
+    def setUp(self):
+        # Ensure no stale env var leaks the external path into tests
+        # that expect the offline fallback.
+        self._saved_url = os.environ.pop("MAMAGUARD_SDOH_API_URL", None)
+        self._saved_key = os.environ.pop("MAMAGUARD_SDOH_API_KEY", None)
+
+    def tearDown(self):
+        if self._saved_url is not None:
+            os.environ["MAMAGUARD_SDOH_API_URL"] = self._saved_url
+        if self._saved_key is not None:
+            os.environ["MAMAGUARD_SDOH_API_KEY"] = self._saved_key
+
+    def test_z590_housing_zip_returns_nonempty_curated(self):
+        """Z59.0 + ZIP with no external API → curated housing list."""
+        from mamaguard.shared.tools.sdoh import find_sdoh_resources
+
+        result = find_sdoh_resources(
+            category_or_code="Z59.0",
+            zip_code="02139",
+            tool_context=MockToolContext(),
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["category"], "housing")
+        self.assertEqual(result["zip"], "02139")
+        self.assertEqual(result["source"], "curated")
+        self.assertGreaterEqual(result["resource_count"], 1)
+        # Every resource must carry a contact the clinician can act on
+        for r in result["resources"]:
+            self.assertTrue(r["name"])
+            self.assertTrue(r["contact"])
+            self.assertEqual(r["zip"], "02139")
+        # 211 is a baseline housing resource in our curated list
+        names = [r["name"] for r in result["resources"]]
+        self.assertTrue(any("211" in n for n in names))
+        # Liaison contract: clinician review required
+        self.assertTrue(result["clinician_review"]["required"])
+        self.assertIn("evidence_basis", result["clinician_review"])
+
+    def test_z5901_specific_code_still_resolves_to_housing(self):
+        """Sub-coded Z-codes (Z59.01 = sheltered homelessness) roll up."""
+        from mamaguard.shared.tools.sdoh import find_sdoh_resources
+
+        result = find_sdoh_resources(
+            category_or_code="Z59.01",
+            zip_code="02139",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["category"], "housing")
+        self.assertGreater(result["resource_count"], 0)
+
+    def test_free_text_food_insecurity_classified(self):
+        from mamaguard.shared.tools.sdoh import find_sdoh_resources
+
+        result = find_sdoh_resources(
+            category_or_code="food insecurity",
+            zip_code="10001",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["category"], "food")
+        self.assertGreater(result["resource_count"], 0)
+        # WIC must show up for food cases (maternal-health relevant)
+        names = [r["name"].lower() for r in result["resources"]]
+        self.assertTrue(any("wic" in n for n in names))
+
+    def test_unknown_category_falls_back_to_generic_211(self):
+        from mamaguard.shared.tools.sdoh import find_sdoh_resources
+
+        result = find_sdoh_resources(
+            category_or_code="martian colony relocation",
+            zip_code="99999",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["source"], "generic_211")
+        self.assertEqual(result["resource_count"], 1)
+        self.assertIn("211", result["resources"][0]["name"])
+
+    @patch("mamaguard.shared.tools.sdoh._fetch_external_resources")
+    def test_external_api_success_preferred_over_curated(self, mock_fetch):
+        from mamaguard.shared.tools.sdoh import find_sdoh_resources
+
+        os.environ["MAMAGUARD_SDOH_API_URL"] = "https://findhelp.example/api/v1/resources"
+        mock_fetch.return_value = [
+            {
+                "name": "ACME Housing Navigator",
+                "contact": "555-1212",
+                "url": "https://acme.example/housing",
+                "description": "Local housing navigator in ZIP 02139",
+                "category": "housing",
+                "distance_miles": 1.2,
+            }
+        ]
+        result = find_sdoh_resources(
+            category_or_code="Z59.0",
+            zip_code="02139",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["source"], "external")
+        self.assertEqual(result["resource_count"], 1)
+        self.assertEqual(result["resources"][0]["name"], "ACME Housing Navigator")
+        mock_fetch.assert_called_once()
+
+    @patch("mamaguard.shared.tools.sdoh._fetch_external_resources")
+    def test_external_api_failure_falls_back_to_curated(self, mock_fetch):
+        """Graceful degradation when findhelp/211 is down."""
+        from mamaguard.shared.tools.sdoh import find_sdoh_resources
+
+        os.environ["MAMAGUARD_SDOH_API_URL"] = "https://findhelp.example/api/v1/resources"
+        mock_fetch.side_effect = RuntimeError("connection refused")
+
+        result = find_sdoh_resources(
+            category_or_code="Z59.0",
+            zip_code="02139",
+            tool_context=MockToolContext(),
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source"], "curated_fallback")
+        self.assertGreaterEqual(result["resource_count"], 1)
+        # Error surface should land in clinician_review.evidence_basis
+        ev = " ".join(result["clinician_review"]["evidence_basis"])
+        self.assertIn("connection refused", ev)
+
+    @patch("mamaguard.shared.tools.sdoh._fetch_external_resources")
+    def test_external_api_empty_response_falls_back(self, mock_fetch):
+        from mamaguard.shared.tools.sdoh import find_sdoh_resources
+
+        os.environ["MAMAGUARD_SDOH_API_URL"] = "https://findhelp.example/api/v1/resources"
+        mock_fetch.return_value = []  # directory knows nothing about this ZIP
+
+        result = find_sdoh_resources(
+            category_or_code="Z59.0",
+            zip_code="02139",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["source"], "curated_fallback")
+        self.assertGreaterEqual(result["resource_count"], 1)
+
+    def test_missing_input_returns_error(self):
+        from mamaguard.shared.tools.sdoh import find_sdoh_resources
+
+        result = find_sdoh_resources(
+            category_or_code="",
+            zip_code="02139",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
 
 
 if __name__ == "__main__":

@@ -206,6 +206,8 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_sdoh_screening",
                 "get_patient_summary",
                 "get_care_gaps",
+                "find_sdoh_resources",
+                "write_care_plan",
                 "create_communication_request",
             ]),
         )
@@ -616,6 +618,7 @@ class TestInputRequiredTransitions(unittest.TestCase):
     def test_write_tools_signal_missing_fhir_context(self):
         from mamaguard.shared.tools import (
             create_communication_request,
+            write_care_plan,
             write_risk_assessment,
         )
 
@@ -638,6 +641,16 @@ class TestInputRequiredTransitions(unittest.TestCase):
         )
         self.assertEqual(cr.get("status"), "error")
         self.assertIn("FHIR context", cr.get("error_message", ""))
+
+        cp = write_care_plan(
+            category="housing",
+            goal_description="test",
+            resource_name="211",
+            resource_contact="Dial 211",
+            tool_context=empty_ctx,
+        )
+        self.assertEqual(cp.get("status"), "error")
+        self.assertIn("FHIR context", cp.get("error_message", ""))
 
     def test_partial_context_still_signals_missing(self):
         """URL without token/patient must also be treated as incomplete —

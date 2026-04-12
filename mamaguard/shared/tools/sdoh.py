@@ -1,15 +1,23 @@
 """
-SDOH FHIR tools -- social determinants of health screening.
+SDOH FHIR tools -- social determinants of health screening + actionable
+resource lookup.
 
 Tools:
     get_sdoh_screening    SDOH conditions (Z-codes), coverage, language barriers
+    find_sdoh_resources   Z-code/category + ZIP → concrete, callable resources
 """
 
 import logging
+import os
 
 import httpx
 from google.adk.tools import ToolContext
 
+from ..sdoh_resources import (
+    GENERIC_211,
+    classify_category,
+    curated_resources,
+)
 from .fhir_base import (
     _coding_display,
     _connection_error_result,
@@ -19,6 +27,14 @@ from .fhir_base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# External SDOH resource directory -- optional. When set, find_sdoh_resources
+# tries this endpoint first (e.g. findhelp.org, 211 API gateway, a state-run
+# resource directory). On any failure we fall back to the curated offline
+# list in mamaguard/shared/sdoh_resources.py so the agent stays actionable.
+_SDOH_API_URL_ENV = "MAMAGUARD_SDOH_API_URL"
+_SDOH_API_KEY_ENV = "MAMAGUARD_SDOH_API_KEY"
+_SDOH_API_TIMEOUT = 5  # seconds -- short, we have a good fallback
 
 # SNOMED codes mapping to ICD Z55-Z65 SDOH domains
 _SDOH_SNOMED_CODES = {
@@ -172,3 +188,177 @@ def get_sdoh_screening(tool_context: ToolContext = None) -> dict:
     }
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# find_sdoh_resources -- actionable lookup
+# ---------------------------------------------------------------------------
+
+
+def _fetch_external_resources(
+    api_url: str,
+    api_key: str,
+    category: str,
+    zip_code: str,
+) -> list[dict]:
+    """
+    Call an external resource directory (findhelp.org / 211 gateway).
+
+    Expected contract: GET {api_url}?category={category}&zip={zip_code}
+    returning `{ "resources": [ {name, contact, url, description, ...} ] }`.
+
+    Kept intentionally minimal: real integrations will customize the
+    query shape, but every integration we've looked at publishes
+    category + ZIP as the primary lookup. Errors propagate -- caller
+    decides whether to fall back.
+    """
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    response = httpx.get(
+        api_url,
+        params={"category": category, "zip": zip_code},
+        headers=headers,
+        timeout=_SDOH_API_TIMEOUT,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    resources = payload.get("resources") or payload.get("results") or []
+    # Normalize to our internal shape. Accept either findhelp-ish or
+    # 211-ish field names so either directory works without a new tool.
+    normalized: list[dict] = []
+    for r in resources:
+        if not isinstance(r, dict):
+            continue
+        normalized.append({
+            "name": r.get("name") or r.get("program_name") or "Unnamed resource",
+            "contact": (
+                r.get("contact")
+                or r.get("phone")
+                or r.get("phone_number")
+                or ""
+            ),
+            "url": r.get("url") or r.get("website") or "",
+            "description": r.get("description") or r.get("summary") or "",
+            "category": category,
+            "distance_miles": r.get("distance_miles") or r.get("distance"),
+            "address": r.get("address") or r.get("street_address"),
+        })
+    return normalized
+
+
+def find_sdoh_resources(
+    category_or_code: str,
+    zip_code: str,
+    tool_context: ToolContext = None,
+) -> dict:
+    """
+    Look up concrete SDOH resources for a Z-code / category + ZIP.
+
+    Primary path: external directory set via `MAMAGUARD_SDOH_API_URL`
+    (e.g. findhelp.org or a 211 API gateway). Falls back to a curated
+    offline list of national hotlines and federal programs whenever the
+    API is unconfigured, down, times out, or returns zero resources --
+    so the SDOH agent is *always* actionable.
+
+    Args:
+        category_or_code: ICD-10 Z-code (e.g. "Z59.0"), SNOMED code, or a
+            plain-English category ("housing", "food", "transportation").
+        zip_code: Patient ZIP -- used verbatim by the external directory;
+            ignored by the offline fallback beyond being echoed back.
+
+    Returns:
+        {
+            "status": "success",
+            "category": "housing",
+            "zip": "02139",
+            "source": "external"|"curated"|"curated_fallback"|"generic_211",
+            "resources": [ {name, contact, url, description, category}, ... ],
+            "clinician_review": { required, reason, evidence_basis, ... },
+        }
+    """
+    if not category_or_code:
+        return {
+            "status": "error",
+            "error_message": "category_or_code is required",
+        }
+
+    category = classify_category(category_or_code)
+    normalized_zip = (zip_code or "").strip()
+
+    logger.info(
+        "tool_find_sdoh_resources input=%s category=%s zip=%s",
+        category_or_code, category, normalized_zip,
+    )
+
+    api_url = os.environ.get(_SDOH_API_URL_ENV, "").strip()
+    api_key = os.environ.get(_SDOH_API_KEY_ENV, "").strip()
+
+    resources: list[dict] = []
+    source = ""
+    external_error: str | None = None
+
+    # 1. Try external directory if configured.
+    if api_url and category:
+        try:
+            resources = _fetch_external_resources(
+                api_url, api_key, category, normalized_zip,
+            )
+            if resources:
+                source = "external"
+            else:
+                external_error = "external directory returned zero resources"
+        except Exception as e:
+            external_error = f"{type(e).__name__}: {e}"
+            logger.warning(
+                "sdoh_external_lookup_failed category=%s zip=%s err=%s",
+                category, normalized_zip, external_error,
+            )
+
+    # 2. Curated offline fallback.
+    if not resources and category:
+        resources = curated_resources(category)
+        source = "curated_fallback" if external_error else "curated"
+
+    # 3. Generic 211 if still empty (unknown category).
+    if not resources:
+        resources = [dict(GENERIC_211)]
+        source = "generic_211"
+        if not category:
+            category = "general"
+
+    # Stamp every resource with the ZIP so the agent can echo it back to
+    # the clinician without re-assembling the context later.
+    for r in resources:
+        r.setdefault("zip", normalized_zip)
+
+    evidence = [f"Input: {category_or_code}"]
+    if normalized_zip:
+        evidence.append(f"ZIP: {normalized_zip}")
+    evidence.append(f"Resolved category: {category}")
+    evidence.append(f"Resource source: {source}")
+    if external_error:
+        evidence.append(f"External lookup error: {external_error}")
+
+    return {
+        "status": "success",
+        "category": category,
+        "zip": normalized_zip,
+        "source": source,
+        "resource_count": len(resources),
+        "resources": resources,
+        "clinician_review": {
+            "required": True,
+            "reason": (
+                "SDOH resource referral recommended -- clinician should "
+                "review match and initiate outreach."
+            ),
+            "recommendation": (
+                "Record the selected resource on a FHIR CarePlan + Goal "
+                "via write_care_plan so the care team has a trackable "
+                "intervention tied to the patient record."
+            ),
+            "evidence_basis": evidence,
+            "confidence": 0.75 if source in ("external", "curated") else 0.6,
+        },
+    }
