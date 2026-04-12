@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * *"   # 04:00 UTC nightly — triggers Tier-2 HAPI smoke on main
+  workflow_dispatch: {}
+
+jobs:
+  # ── Tier-1: deterministic benchmarks + unit tests (every push) ─────────────
+  tier1:
+    name: Tier-1 (unit tests + benchmarks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: mamaguard/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r mamaguard/requirements.txt pytest pytest-asyncio
+
+      - name: Run unit tests
+        run: python -m pytest mamaguard/tests/ -q --tb=short
+
+      - name: Run Tier-1 benchmarks
+        run: python -m benchmarks.runner --json | tee /tmp/bench-tier1.json
+
+      - name: Assert benchmark score >= 95%
+        run: |
+          python - <<'EOF'
+          import json, sys
+          data = json.load(open("/tmp/bench-tier1.json"))
+          score = data["scores"]["overall_score"]
+          print(f"Overall score: {score:.1%}")
+          if score < 0.95:
+              print(f"FAIL: score {score:.1%} is below minimum 95%")
+              sys.exit(1)
+          EOF
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-tier1-${{ github.run_id }}
+          path: /tmp/bench-tier1.json
+          retention-days: 30
+
+  # ── Tier-2: HAPI smoke (nightly on main, or manual trigger) ───────────────
+  tier2-hapi-smoke:
+    name: Tier-2 HAPI smoke
+    runs-on: ubuntu-latest
+    # Only run on nightly schedule, manual dispatch, or push to main
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    services:
+      hapi-fhir:
+        image: hapiproject/hapi:latest
+        ports:
+          - 8090:8080
+        env:
+          hapi.fhir.fhir_version: R4
+          hapi.fhir.allow_multiple_delete: "true"
+          hapi.fhir.reuse_cached_search_results_millis: "0"
+        options: >-
+          --health-cmd "curl -sf http://localhost:8080/fhir/metadata || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: mamaguard/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r mamaguard/requirements.txt pytest pytest-asyncio httpx
+
+      - name: Wait for HAPI FHIR to be ready
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8090/fhir/metadata > /dev/null 2>&1; then
+              echo "HAPI ready after $((i * 5))s"
+              exit 0
+            fi
+            echo "Waiting for HAPI... ($i/20)"
+            sleep 5
+          done
+          echo "HAPI did not become ready in time"
+          exit 1
+
+      - name: Load FHIR bundles into HAPI
+        env:
+          HAPI_FHIR_URL: http://localhost:8090/fhir
+        run: |
+          python - <<'EOF'
+          import os, json, glob, httpx
+
+          fhir_url = os.environ["HAPI_FHIR_URL"]
+          bundle_files = sorted(glob.glob("benchmarks/e2e/fhir_bundles/*.json"))
+          if not bundle_files:
+              print("No FHIR bundles found — skipping load step")
+          else:
+              print(f"Loading {len(bundle_files)} bundle(s) into {fhir_url}")
+              for path in bundle_files:
+                  with open(path) as f:
+                      bundle = json.load(f)
+                  resp = httpx.post(
+                      fhir_url,
+                      json=bundle,
+                      headers={"Content-Type": "application/fhir+json"},
+                      timeout=30,
+                  )
+                  resp.raise_for_status()
+                  print(f"  loaded {os.path.basename(path)}: {resp.status_code}")
+          EOF
+
+      - name: Run Tier-1 + Tier-2 smoke
+        env:
+          HAPI_FHIR_URL: http://localhost:8090/fhir
+        run: |
+          python -m benchmarks.runner \
+            --e2e --no-fhir-setup \
+            --json | tee /tmp/bench-tier2.json
+
+      - name: Report Tier-2 scores
+        if: always()
+        run: |
+          python - <<'EOF'
+          import json, sys
+          data = json.load(open("/tmp/bench-tier2.json"))
+          cats = data["scores"]["categories"]
+          print("Category scores:")
+          for cat, score in cats.items():
+              print(f"  {cat:30s} {score:.1%}")
+          overall = data["scores"]["overall_score"]
+          print(f"\nOverall: {overall:.1%}")
+          EOF
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-tier2-${{ github.run_id }}
+          path: /tmp/bench-tier2.json
+          retention-days: 30
