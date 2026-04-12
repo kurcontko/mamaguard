@@ -4,6 +4,7 @@ FHIR write-back tools -- create resources on the FHIR server.
 Tools:
     write_risk_assessment        POST RiskAssessment to FHIR
     create_communication_request POST CommunicationRequest to FHIR
+    write_care_plan              POST CarePlan + Goal pair tied to an SDOH resource
 """
 
 import logging
@@ -221,3 +222,228 @@ def create_communication_request(
             "resource_type": "CommunicationRequest",
             "error_message": f"Could not reach FHIR server: {e}",
         }
+
+
+# ---------------------------------------------------------------------------
+# write_care_plan -- tie an SDOH resource match to a FHIR CarePlan + Goal
+# ---------------------------------------------------------------------------
+
+
+def write_care_plan(
+    category: str,
+    goal_description: str,
+    resource_name: str,
+    resource_contact: str,
+    resource_url: str = "",
+    z_code: str = "",
+    tool_context: ToolContext = None,
+) -> dict:
+    """
+    Create a linked FHIR Goal + CarePlan documenting an SDOH referral.
+
+    The Goal encodes *what* we want to achieve for the patient (e.g.
+    "secure emergency shelter placement within 7 days"). The CarePlan
+    references the Goal and carries the concrete resource details in
+    an activity detail, so a care navigator can pick it up and call the
+    referenced organization.
+
+    Both resources are POSTed to the FHIR server. On a read-only server
+    (SMART R4 sandbox) the write returns a structured error so the agent
+    can degrade gracefully. On HAPI R4 both resources are created.
+
+    Args:
+        category: Resolved SDOH category -- "housing", "food",
+            "transportation", "interpreter", etc. Becomes the Goal
+            category / CarePlan category.
+        goal_description: Human-readable goal, e.g. "Secure emergency
+            shelter placement within 7 days".
+        resource_name: Name of the matched resource (e.g. "211 Helpline").
+        resource_contact: Contact string ("Dial 211", "1-800-...").
+        resource_url: Optional resource URL.
+        z_code: Optional ICD-10 Z-code -- when present, attached to the
+            Goal.addresses for terminology binding.
+    """
+    ctx = _get_fhir_context(tool_context)
+    if isinstance(ctx, dict):
+        return ctx
+
+    fhir_url, fhir_token, patient_id = ctx
+    logger.info(
+        "tool_write_care_plan patient_id=%s category=%s resource=%s",
+        patient_id, category, resource_name,
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    subject = {"reference": f"Patient/{patient_id}"}
+
+    # -- 1. Goal --------------------------------------------------------
+    goal_body: dict = {
+        "resourceType": "Goal",
+        "lifecycleStatus": "proposed",
+        "description": {"text": goal_description},
+        "subject": subject,
+        "category": [
+            {
+                "text": category,
+                "coding": [
+                    {
+                        "system": (
+                            "http://terminology.hl7.org/CodeSystem/"
+                            "goal-category"
+                        ),
+                        "code": category,
+                    }
+                ],
+            }
+        ],
+        "note": [
+            {
+                "text": (
+                    f"AI-identified SDOH goal by MamaGuard. "
+                    f"Category: {category}. "
+                    f"Matched resource: {resource_name} ({resource_contact}). "
+                    f"Requires care team confirmation before action."
+                ),
+            }
+        ],
+    }
+    if z_code:
+        goal_body["addresses"] = [
+            {
+                "display": f"ICD-10 {z_code}",
+                "identifier": {
+                    "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                    "value": z_code,
+                },
+            }
+        ]
+
+    try:
+        created_goal = _fhir_post(fhir_url, fhir_token, "Goal", goal_body)
+    except httpx.HTTPStatusError as e:
+        logger.warning(
+            "goal_write_failed patient_id=%s http_status=%d",
+            patient_id, e.response.status_code,
+        )
+        return {
+            "status": "error",
+            "action": "write_failed",
+            "resource_type": "Goal",
+            "http_status": e.response.status_code,
+            "error_message": (
+                f"FHIR server rejected Goal write (HTTP {e.response.status_code}). "
+                "Expected on read-only FHIR servers (SMART R4 sandbox). "
+                "Write-back works on HAPI R4 or other CRUD-enabled servers."
+            ),
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "action": "write_failed",
+            "resource_type": "Goal",
+            "error_message": f"Could not reach FHIR server: {e}",
+        }
+
+    goal_id = created_goal.get("id", "unknown")
+    logger.info("goal_created id=%s patient_id=%s", goal_id, patient_id)
+
+    # -- 2. CarePlan referencing the Goal -------------------------------
+    activity_detail_text_parts = [
+        f"Contact {resource_name} at {resource_contact}",
+    ]
+    if resource_url:
+        activity_detail_text_parts.append(f"Web: {resource_url}")
+    activity_detail_text = ". ".join(activity_detail_text_parts) + "."
+
+    care_plan_body: dict = {
+        "resourceType": "CarePlan",
+        "status": "active",
+        "intent": "plan",
+        "title": f"SDOH {category} referral",
+        "description": goal_description,
+        "subject": subject,
+        "period": {"start": now},
+        "created": now,
+        "category": [
+            {
+                "text": f"SDOH-{category}",
+                "coding": [
+                    {
+                        "system": (
+                            "http://hl7.org/fhir/us/core/CodeSystem/"
+                            "us-core-tags"
+                        ),
+                        "code": "sdoh",
+                    }
+                ],
+            }
+        ],
+        "goal": [{"reference": f"Goal/{goal_id}"}],
+        "activity": [
+            {
+                "detail": {
+                    "status": "not-started",
+                    "description": activity_detail_text,
+                    "performer": [{"display": resource_name}],
+                }
+            }
+        ],
+        "note": [
+            {
+                "text": (
+                    f"AI-generated SDOH CarePlan by MamaGuard. "
+                    f"Linked Goal: {goal_id}. "
+                    f"Resource: {resource_name}. "
+                    f"Requires care team review and action."
+                ),
+            }
+        ],
+    }
+
+    try:
+        created_plan = _fhir_post(fhir_url, fhir_token, "CarePlan", care_plan_body)
+    except httpx.HTTPStatusError as e:
+        logger.warning(
+            "care_plan_write_failed patient_id=%s http_status=%d goal_id=%s",
+            patient_id, e.response.status_code, goal_id,
+        )
+        return {
+            "status": "partial",
+            "action": "care_plan_write_failed",
+            "resource_type": "CarePlan",
+            "http_status": e.response.status_code,
+            "goal_id": goal_id,
+            "goal_created": True,
+            "error_message": (
+                f"Goal created (id={goal_id}) but CarePlan POST failed "
+                f"with HTTP {e.response.status_code}. "
+                "Expected on read-only FHIR servers."
+            ),
+        }
+    except Exception as e:
+        return {
+            "status": "partial",
+            "action": "care_plan_write_failed",
+            "resource_type": "CarePlan",
+            "goal_id": goal_id,
+            "goal_created": True,
+            "error_message": f"Could not reach FHIR server for CarePlan POST: {e}",
+        }
+
+    plan_id = created_plan.get("id", "unknown")
+    logger.info(
+        "care_plan_created id=%s goal_id=%s patient_id=%s",
+        plan_id, goal_id, patient_id,
+    )
+
+    return {
+        "status": "success",
+        "action": "created",
+        "resource_type": "CarePlan",
+        "care_plan_id": plan_id,
+        "goal_id": goal_id,
+        "patient_id": patient_id,
+        "category": category,
+        "resource_name": resource_name,
+        "resource_contact": resource_contact,
+    }

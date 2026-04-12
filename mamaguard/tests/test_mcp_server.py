@@ -3,7 +3,7 @@ Tests for the MamaGuard MCP server.
 
 Covers:
 1. FhirContext adapter (context.py)
-2. MCP tool registration (all 12 tools visible)
+2. MCP tool registration (all 14 tools visible)
 3. Tool invocation — happy path with mocked FHIR responses
 4. Error propagation — missing credentials surfaced cleanly
 5. SHARP context constructor (from_sharp)
@@ -75,8 +75,10 @@ EXPECTED_TOOLS = {
     "get_developmental_screening_status",
     "get_care_gaps",
     "get_sdoh_screening",
+    "find_sdoh_resources",
     "write_risk_assessment",
     "create_communication_request",
+    "write_care_plan",
 }
 
 
@@ -87,7 +89,7 @@ class TestMcpToolRegistration(unittest.TestCase):
         tool_manager = mcp._tool_manager
         return {name for name in tool_manager._tools}
 
-    def test_all_12_tools_registered(self):
+    def test_all_14_tools_registered(self):
         registered = self._registered_names()
         missing = EXPECTED_TOOLS - registered
         self.assertEqual(missing, set(), f"Missing tools: {missing}")
@@ -318,6 +320,51 @@ class TestCareGapsTool(unittest.TestCase):
         )
         data = json.loads(result)
         self.assertIn("status", data)
+
+
+class TestFindSdohResourcesTool(unittest.TestCase):
+    def test_z590_housing_offline(self):
+        from mamaguard.mcp_server.server import find_sdoh_resources
+        import os as _os
+        _os.environ.pop("MAMAGUARD_SDOH_API_URL", None)
+        result = find_sdoh_resources(
+            fhir_url="https://fhir.example.org",
+            fhir_token="tok",
+            patient_id="p1",
+            category_or_code="Z59.0",
+            zip_code="02139",
+        )
+        data = json.loads(result)
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["category"], "housing")
+        self.assertGreaterEqual(data["resource_count"], 1)
+
+
+class TestWriteCarePlanTool(unittest.TestCase):
+    @patch("mamaguard.shared.tools.writeback._fhir_post")
+    def test_creates_goal_and_care_plan(self, mock_post):
+        def side_effect(fhir_url, token, resource_type, body):
+            if resource_type == "Goal":
+                return {"resourceType": "Goal", "id": "goal-42"}
+            return {"resourceType": "CarePlan", "id": "cp-42"}
+        mock_post.side_effect = side_effect
+
+        from mamaguard.mcp_server.server import write_care_plan
+        result = write_care_plan(
+            fhir_url="https://hapi.fhir.org/baseR4",
+            fhir_token="tok",
+            patient_id="p1",
+            category="housing",
+            goal_description="Secure emergency shelter within 7 days",
+            resource_name="211 Helpline",
+            resource_contact="Dial 211",
+            resource_url="https://www.211.org",
+            z_code="Z59.0",
+        )
+        data = json.loads(result)
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["care_plan_id"], "cp-42")
+        self.assertEqual(data["goal_id"], "goal-42")
 
 
 if __name__ == "__main__":

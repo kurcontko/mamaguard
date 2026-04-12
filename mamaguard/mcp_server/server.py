@@ -44,10 +44,14 @@ from mamaguard.shared.tools.pediatric import (
     get_developmental_screening_status as _get_developmental_screening_status,
     get_care_gaps as _get_care_gaps,
 )
-from mamaguard.shared.tools.sdoh import get_sdoh_screening as _get_sdoh_screening
+from mamaguard.shared.tools.sdoh import (
+    get_sdoh_screening as _get_sdoh_screening,
+    find_sdoh_resources as _find_sdoh_resources,
+)
 from mamaguard.shared.tools.writeback import (
     write_risk_assessment as _write_risk_assessment,
     create_communication_request as _create_communication_request,
+    write_care_plan as _write_care_plan,
 )
 
 # ---------------------------------------------------------------------------
@@ -395,6 +399,91 @@ def create_communication_request(
         medium=medium,
         content=content,
         priority=priority,
+        tool_context=_ctx(fhir_url, fhir_token, patient_id),
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Tool 13: find_sdoh_resources (Phase 2c actionable SDOH)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def find_sdoh_resources(
+    fhir_url: str,
+    fhir_token: str,
+    patient_id: str,
+    category_or_code: str,
+    zip_code: str,
+) -> str:
+    """
+    Look up concrete, callable SDOH resources for a Z-code + ZIP.
+
+    Tries an external directory (findhelp.org / 211 gateway) when
+    MAMAGUARD_SDOH_API_URL is set on the server, and falls back to a
+    curated offline list of national hotlines + federal programs so the
+    SDOH agent is always actionable — even when the external directory
+    is unreachable.
+
+    Args:
+        fhir_url: Base URL of the FHIR R4 server (not used by this tool
+            today, but kept on the signature for SHARP consistency).
+        fhir_token: Bearer token (unused, SHARP consistency).
+        patient_id: FHIR Patient resource ID (unused, SHARP consistency).
+        category_or_code: ICD-10 Z-code ("Z59.0"), SNOMED code, or a
+            plain-English category ("housing", "food").
+        zip_code: Patient ZIP.
+    """
+    return _json(_find_sdoh_resources(
+        category_or_code=category_or_code,
+        zip_code=zip_code,
+        tool_context=_ctx(fhir_url, fhir_token, patient_id),
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Tool 14: write_care_plan (Phase 2c actionable SDOH)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def write_care_plan(
+    fhir_url: str,
+    fhir_token: str,
+    patient_id: str,
+    category: str,
+    goal_description: str,
+    resource_name: str,
+    resource_contact: str,
+    resource_url: str = "",
+    z_code: str = "",
+) -> str:
+    """
+    Create a linked FHIR Goal + CarePlan documenting an SDOH referral.
+
+    The Goal encodes what we want to achieve for the patient; the
+    CarePlan references the Goal and carries the concrete resource
+    details in an activity detail so a navigator can pick it up and
+    call the referenced organization. Returns a `partial` status if the
+    Goal writes but the CarePlan write is rejected — the Goal is still
+    trackable in the patient record.
+
+    Args:
+        fhir_url: Base URL of the FHIR R4 server.
+        fhir_token: Bearer token with write permissions.
+        patient_id: FHIR Patient resource ID.
+        category: Resolved SDOH category ("housing", "food", ...).
+        goal_description: Human-readable goal.
+        resource_name: Name of the matched resource.
+        resource_contact: Contact string ("Dial 211", "1-800-...").
+        resource_url: Optional resource URL.
+        z_code: Optional ICD-10 Z-code for Goal.addresses.
+    """
+    return _json(_write_care_plan(
+        category=category,
+        goal_description=goal_description,
+        resource_name=resource_name,
+        resource_contact=resource_contact,
+        resource_url=resource_url,
+        z_code=z_code,
         tool_context=_ctx(fhir_url, fhir_token, patient_id),
     ))
 

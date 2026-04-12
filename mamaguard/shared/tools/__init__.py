@@ -1,5 +1,5 @@
 """
-Shared tools catalogue -- re-exports all 12 tool functions.
+Shared tools catalogue -- re-exports all 14 tool functions.
 
 Base FHIR tools (fhir_base.py)
     get_patient_summary       Patient demographics + conditions + meds + recent vitals
@@ -18,10 +18,12 @@ Pediatric tools (pediatric.py)
 
 SDOH tools (sdoh.py)
     get_sdoh_screening        SDOH conditions, coverage, language barriers
+    find_sdoh_resources       Z-code/category + ZIP → concrete callable resources
 
 Write-back tools (writeback.py)
     write_risk_assessment        POST RiskAssessment to FHIR
     create_communication_request POST CommunicationRequest to FHIR
+    write_care_plan              POST Goal + CarePlan tied to an SDOH resource
 """
 
 from .fhir_base import (
@@ -43,11 +45,13 @@ from .pediatric import (
 )
 
 from .sdoh import (
+    find_sdoh_resources,
     get_sdoh_screening,
 )
 
 from .writeback import (
     create_communication_request,
+    write_care_plan,
     write_risk_assessment,
 )
 
@@ -62,6 +66,8 @@ __all__ = [
     "get_developmental_screening_status",
     "get_care_gaps",
     "get_sdoh_screening",
+    "find_sdoh_resources",
     "write_risk_assessment",
     "create_communication_request",
+    "write_care_plan",
 ]
