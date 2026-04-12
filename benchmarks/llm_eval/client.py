@@ -5,13 +5,15 @@ Configure via env vars or pass directly:
     BENCH_API_BASE    — vLLM endpoint (default: http://localhost:8000/v1)
     BENCH_MODEL       — model name served by vLLM
     BENCH_API_KEY     — API key (default: "EMPTY" for local vLLM)
-    BENCH_MAX_TOKENS  — max tokens for completion (default: 2048)
+    BENCH_MAX_TOKENS  — max tokens for completion (default: 4096)
     BENCH_TEMPERATURE — temperature (default: 0.0 for deterministic eval)
+    BENCH_TOP_P       — top-p nucleus sampling (default: not set)
     BENCH_TIMEOUT     — request timeout in seconds (default: 120)
 
     JUDGE_API_BASE    — judge model endpoint (falls back to BENCH_API_BASE)
     JUDGE_MODEL       — judge model name (falls back to BENCH_MODEL)
     JUDGE_API_KEY     — judge API key (falls back to BENCH_API_KEY)
+    JUDGE_TOP_P       — judge top-p (default: not set)
 """
 
 from __future__ import annotations
@@ -29,30 +31,35 @@ class LLMConfig:
     api_base: str
     model: str
     api_key: str = "EMPTY"
-    max_tokens: int = 2048
+    max_tokens: int = 4096
     temperature: float = 0.0
+    top_p: float | None = None
     timeout: int = 120
 
     @classmethod
     def from_env(cls, prefix: str = "BENCH") -> LLMConfig:
+        top_p_raw = os.environ.get(f"{prefix}_TOP_P")
         return cls(
             api_base=os.environ.get(f"{prefix}_API_BASE", "http://localhost:8000/v1"),
             model=os.environ.get(f"{prefix}_MODEL", ""),
             api_key=os.environ.get(f"{prefix}_API_KEY", "EMPTY"),
-            max_tokens=int(os.environ.get(f"{prefix}_MAX_TOKENS", "2048")),
+            max_tokens=int(os.environ.get(f"{prefix}_MAX_TOKENS", "4096")),
             temperature=float(os.environ.get(f"{prefix}_TEMPERATURE", "0.0")),
+            top_p=float(top_p_raw) if top_p_raw is not None else None,
             timeout=int(os.environ.get(f"{prefix}_TIMEOUT", "120")),
         )
 
     @classmethod
     def judge_from_env(cls) -> LLMConfig:
         """Load judge config, falling back to BENCH_ vars."""
+        top_p_raw = os.environ.get("JUDGE_TOP_P")
         return cls(
             api_base=os.environ.get("JUDGE_API_BASE", os.environ.get("BENCH_API_BASE", "http://localhost:8000/v1")),
             model=os.environ.get("JUDGE_MODEL", os.environ.get("BENCH_MODEL", "")),
             api_key=os.environ.get("JUDGE_API_KEY", os.environ.get("BENCH_API_KEY", "EMPTY")),
             max_tokens=int(os.environ.get("JUDGE_MAX_TOKENS", "1024")),
             temperature=float(os.environ.get("JUDGE_TEMPERATURE", "0.0")),
+            top_p=float(top_p_raw) if top_p_raw is not None else None,
             timeout=int(os.environ.get("JUDGE_TIMEOUT", "120")),
         )
 
@@ -102,6 +109,8 @@ def chat_completion(
         "max_tokens": config.max_tokens,
         "temperature": config.temperature,
     }
+    if config.top_p is not None:
+        body["top_p"] = config.top_p
     if tools:
         body["tools"] = tools
     if tool_choice is not None:
