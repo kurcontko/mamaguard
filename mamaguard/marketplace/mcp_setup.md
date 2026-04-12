@@ -25,21 +25,23 @@ MCP_TRANSPORT=sse MCP_PORT=8080 python -m mamaguard.mcp_server.server  # SSE
 
 ### 2. Deploy MCP Server for Remote Access
 
-For PO to reach the MCP server, deploy with SSE transport:
+For PO to reach the MCP server, deploy with SSE transport. The MCP server
+module exports an `sse_app` (Starlette ASGI app) so the same Dockerfile
+works for both the A2A agent and the MCP server — just override
+`AGENT_MODULE` and `PORT`:
 
 ```bash
-# Using the existing Dockerfile with agent module override:
+# Using the existing Dockerfile with AGENT_MODULE pointing to the SSE app:
 docker build -t mamaguard-mcp -f mamaguard/Dockerfile mamaguard/
 docker run -p 8080:8080 \
-  -e AGENT_MODULE=mamaguard.mcp_server.server \
-  -e MCP_TRANSPORT=sse \
-  -e MCP_PORT=8080 \
+  -e AGENT_MODULE=mamaguard.mcp_server.server:sse_app \
+  -e PORT=8080 \
   mamaguard-mcp
 
 # Or deploy to Cloud Run:
 gcloud run deploy mamaguard-mcp \
   --source mamaguard/ \
-  --set-env-vars="MCP_TRANSPORT=sse,MCP_PORT=8080" \
+  --set-env-vars="AGENT_MODULE=mamaguard.mcp_server.server:sse_app" \
   --port=8080 \
   --allow-unauthenticated
 ```

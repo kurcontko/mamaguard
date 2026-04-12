@@ -957,5 +957,26 @@ class TestMcpFhirContextPropagation(unittest.TestCase):
         _run_async(_test())
 
 
+# ---------------------------------------------------------------------------
+# sse_app export (Docker/uvicorn deployment path)
+# ---------------------------------------------------------------------------
+
+class TestSseAppExport(unittest.TestCase):
+    """Verify that the module-level sse_app is a valid Starlette ASGI app."""
+
+    def test_sse_app_is_starlette_instance(self):
+        from mamaguard.mcp_server.server import sse_app
+        from starlette.applications import Starlette
+        self.assertIsInstance(sse_app, Starlette)
+
+    def test_sse_app_is_callable(self):
+        from mamaguard.mcp_server.server import sse_app
+        self.assertTrue(callable(sse_app))
+
+    def test_sse_app_has_routes(self):
+        from mamaguard.mcp_server.server import sse_app
+        self.assertGreater(len(sse_app.routes), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

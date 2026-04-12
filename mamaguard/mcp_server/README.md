@@ -135,22 +135,25 @@ ctx = FhirContext.from_sharp({
 
 ## Docker
 
+The MCP server module exports an `sse_app` (Starlette ASGI app) so the
+same Dockerfile used for the A2A agent also serves the MCP server via
+uvicorn — just override `AGENT_MODULE` and `PORT`:
+
 ```bash
 # Build
 docker build -t mamaguard-mcp -f mamaguard/Dockerfile mamaguard/
 
-# Run with SSE transport
+# Run with SSE transport (uvicorn serves the ASGI app)
 docker run -p 8080:8080 \
-  -e AGENT_MODULE=mamaguard.mcp_server.server \
-  -e MCP_TRANSPORT=sse \
-  -e MCP_PORT=8080 \
+  -e AGENT_MODULE=mamaguard.mcp_server.server:sse_app \
+  -e PORT=8080 \
   mamaguard-mcp
 ```
 
 ## Tests
 
 ```bash
-# MCP server tests only (16 tests)
+# MCP server tests only (37 tests)
 python -m pytest mamaguard/tests/test_mcp_server.py -v
 
 # Full suite

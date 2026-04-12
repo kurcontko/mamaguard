@@ -492,6 +492,15 @@ def write_care_plan(
 
 
 # ---------------------------------------------------------------------------
+# ASGI app for SSE transport (usable with uvicorn / Cloud Run)
+# ---------------------------------------------------------------------------
+# mcp.sse_app() returns a Starlette application that serves the MCP protocol
+# over Server-Sent Events.  Exposing it here lets the existing Dockerfile
+# serve the MCP server via:
+#   AGENT_MODULE=mamaguard.mcp_server.server:sse_app
+sse_app = mcp.sse_app()
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
