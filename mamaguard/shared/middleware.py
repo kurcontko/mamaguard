@@ -1,8 +1,14 @@
 """
-Security middleware -- API key authentication.
+Security middleware -- API key authentication and A2A extension activation.
 
 Every request is blocked unless it carries a valid X-API-Key header.
 The only public endpoint is /.well-known/agent-card.json.
+
+When the client sends ``X-A2A-Extensions`` requesting FHIR context activation,
+the middleware echoes the extension URI in the response header so Prompt Opinion
+knows the agent supports it.  The ADK's ``A2aAgentExecutor`` only auto-activates
+its own internal extension; custom extensions declared in the agent card must be
+activated explicitly.
 """
 
 import json
@@ -22,6 +28,15 @@ logger = logging.getLogger(__name__)
 
 LOG_FULL_PAYLOAD = os.getenv("LOG_FULL_PAYLOAD", "true").lower() == "true"
 
+# A2A extension negotiation header (per A2A protocol spec).
+A2A_EXTENSIONS_HEADER = "X-A2A-Extensions"
+
+# FHIR extension URI — must match the agent card declaration in app.py.
+FHIR_EXTENSION_URI = (
+    f"{os.getenv('PO_PLATFORM_BASE_URL', 'https://app.promptopinion.ai')}"
+    "/schemas/a2a/v1/fhir-context"
+)
+
 # Load API keys from environment. Fallback to defaults for local dev only.
 _env_keys = os.getenv("MAMAGUARD_API_KEYS", os.getenv("MAMAGUARD_API_KEY", ""))
 VALID_API_KEYS: set = {k.strip() for k in _env_keys.split(",") if k.strip()} or {"dev-key-local"}
@@ -31,6 +46,21 @@ if VALID_API_KEYS == {"dev-key-local"}:
         "SECURITY_DEV_KEY_ACTIVE No MAMAGUARD_API_KEY(S) configured — "
         "using default dev-key-local. Set MAMAGUARD_API_KEY before deploying."
     )
+
+
+def _activate_extension(response, uri: str) -> None:  # type: ignore[type-arg]
+    """Add *uri* to the ``X-A2A-Extensions`` response header.
+
+    Merges with any extensions the A2A SDK already activated (e.g. the ADK's
+    own ``a2a-extension``), avoiding duplicates.
+    """
+    existing = {
+        e.strip()
+        for e in response.headers.get(A2A_EXTENSIONS_HEADER, "").split(",")
+        if e.strip()
+    }
+    existing.add(uri)
+    response.headers[A2A_EXTENSIONS_HEADER] = ", ".join(sorted(existing))
 
 
 def _is_valid_key(candidate: str) -> bool:
@@ -96,6 +126,13 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         else:
             logger.info("FHIR_NOT_FOUND_IN_PAYLOAD keys_checked=params.metadata,message.metadata")
 
+        # Parse requested A2A extensions from the incoming header.
+        _requested_exts = {
+            e.strip()
+            for e in request.headers.get(A2A_EXTENSIONS_HEADER, "").split(",")
+            if e.strip()
+        }
+
         # Agent-card endpoint is intentionally public.
         if request.url.path == "/.well-known/agent-card.json":
             return await call_next(request)
@@ -125,4 +162,14 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             "security_authorized path=%s method=%s key_prefix=%s",
             request.url.path, request.method, api_key[:6],
         )
-        return await call_next(request)
+
+        response = await call_next(request)
+
+        # Activate FHIR extension in the response if the client requested it.
+        # The ADK only auto-activates its own internal extension; our FHIR
+        # extension declared in the agent card must be activated explicitly
+        # so Prompt Opinion (or any A2A client) sees it echoed back.
+        if FHIR_EXTENSION_URI in _requested_exts:
+            _activate_extension(response, FHIR_EXTENSION_URI)
+
+        return response

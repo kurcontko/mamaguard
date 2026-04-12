@@ -26,7 +26,13 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from mamaguard.shared import middleware as mw
-from mamaguard.shared.middleware import ApiKeyMiddleware, _is_valid_key
+from mamaguard.shared.middleware import (
+    A2A_EXTENSIONS_HEADER,
+    ApiKeyMiddleware,
+    FHIR_EXTENSION_URI,
+    _activate_extension,
+    _is_valid_key,
+)
 
 
 FHIR_KEY = "https://app.promptopinion.ai/schemas/a2a/v1/fhir-context"
@@ -332,6 +338,139 @@ class TestBodyEdgeCases(unittest.TestCase):
             )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["received"], {})
+
+
+class TestA2AExtensionActivation(unittest.TestCase):
+    """When PO sends ``X-A2A-Extensions`` requesting the FHIR extension, the
+    middleware must echo it back in the response header so the client knows
+    the extension is active (per A2A protocol spec)."""
+
+    def _post(self, headers: dict[str, str] | None = None):  # type: ignore[override]
+        all_headers = {"X-API-Key": "good-key"}
+        if headers:
+            all_headers.update(headers)
+        with patch.object(mw, "VALID_API_KEYS", {"good-key"}):
+            client = _client()
+            return client.post("/echo", json={"ping": 1}, headers=all_headers)
+
+    def test_fhir_extension_echoed_when_requested(self):
+        """Client sends FHIR extension URI → response echoes it back."""
+        resp = self._post({A2A_EXTENSIONS_HEADER: FHIR_EXTENSION_URI})
+        self.assertEqual(resp.status_code, 200)
+        activated = resp.headers.get(A2A_EXTENSIONS_HEADER, "")
+        self.assertIn(FHIR_EXTENSION_URI, activated)
+
+    def test_no_extension_header_when_not_requested(self):
+        """No X-A2A-Extensions in request → no extension header in response."""
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        # The header should not appear at all (or be empty).
+        activated = resp.headers.get(A2A_EXTENSIONS_HEADER, "")
+        self.assertNotIn(FHIR_EXTENSION_URI, activated)
+
+    def test_unrelated_extension_not_activated(self):
+        """An unknown extension URI should not be echoed."""
+        resp = self._post({A2A_EXTENSIONS_HEADER: "https://example.com/ext/unknown"})
+        self.assertEqual(resp.status_code, 200)
+        activated = resp.headers.get(A2A_EXTENSIONS_HEADER, "")
+        self.assertNotIn("https://example.com/ext/unknown", activated)
+
+    def test_fhir_among_multiple_requested(self):
+        """FHIR URI mixed with other extensions → only FHIR is activated."""
+        header_val = f"https://example.com/ext/other, {FHIR_EXTENSION_URI}"
+        resp = self._post({A2A_EXTENSIONS_HEADER: header_val})
+        self.assertEqual(resp.status_code, 200)
+        activated = resp.headers.get(A2A_EXTENSIONS_HEADER, "")
+        self.assertIn(FHIR_EXTENSION_URI, activated)
+        # The unknown extension should NOT be echoed.
+        self.assertNotIn("https://example.com/ext/other", activated)
+
+    def test_extension_not_set_on_401(self):
+        """Auth failure → no extension activation (request never reached agent)."""
+        with patch.object(mw, "VALID_API_KEYS", {"good-key"}):
+            client = _client()
+            resp = client.post(
+                "/echo",
+                json={"ping": 1},
+                headers={A2A_EXTENSIONS_HEADER: FHIR_EXTENSION_URI},
+                # No X-API-Key → 401
+            )
+        self.assertEqual(resp.status_code, 401)
+        self.assertNotIn(A2A_EXTENSIONS_HEADER, resp.headers)
+
+    def test_extension_not_set_on_403(self):
+        """Invalid key → no extension activation."""
+        with patch.object(mw, "VALID_API_KEYS", {"good-key"}):
+            client = _client()
+            resp = client.post(
+                "/echo",
+                json={"ping": 1},
+                headers={
+                    "X-API-Key": "bad-key",
+                    A2A_EXTENSIONS_HEADER: FHIR_EXTENSION_URI,
+                },
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.assertNotIn(A2A_EXTENSIONS_HEADER, resp.headers)
+
+    def test_extension_not_set_on_agent_card(self):
+        """Agent-card bypass path does not activate extensions."""
+        with patch.object(mw, "VALID_API_KEYS", {"good-key"}):
+            client = _client()
+            resp = client.get(
+                "/.well-known/agent-card.json",
+                headers={A2A_EXTENSIONS_HEADER: FHIR_EXTENSION_URI},
+            )
+        self.assertEqual(resp.status_code, 200)
+        activated = resp.headers.get(A2A_EXTENSIONS_HEADER, "")
+        self.assertNotIn(FHIR_EXTENSION_URI, activated)
+
+
+class TestActivateExtensionHelper(unittest.TestCase):
+    """Unit tests for the ``_activate_extension`` helper function."""
+
+    def _make_response(self, existing_header: str | None = None) -> JSONResponse:
+        resp = JSONResponse({"ok": True})
+        if existing_header is not None:
+            resp.headers[A2A_EXTENSIONS_HEADER] = existing_header
+        return resp
+
+    def test_adds_uri_when_no_existing_header(self):
+        resp = self._make_response()
+        _activate_extension(resp, "https://example.com/ext/a")
+        self.assertEqual(
+            resp.headers[A2A_EXTENSIONS_HEADER],
+            "https://example.com/ext/a",
+        )
+
+    def test_merges_with_existing_header(self):
+        resp = self._make_response("https://example.com/ext/a")
+        _activate_extension(resp, "https://example.com/ext/b")
+        parts = {
+            e.strip()
+            for e in resp.headers[A2A_EXTENSIONS_HEADER].split(",")
+        }
+        self.assertEqual(
+            parts,
+            {"https://example.com/ext/a", "https://example.com/ext/b"},
+        )
+
+    def test_no_duplicate_when_already_present(self):
+        resp = self._make_response("https://example.com/ext/a")
+        _activate_extension(resp, "https://example.com/ext/a")
+        # Should appear exactly once.
+        self.assertEqual(
+            resp.headers[A2A_EXTENSIONS_HEADER],
+            "https://example.com/ext/a",
+        )
+
+    def test_sorted_output(self):
+        resp = self._make_response("https://z.example.com/ext")
+        _activate_extension(resp, "https://a.example.com/ext")
+        self.assertEqual(
+            resp.headers[A2A_EXTENSIONS_HEADER],
+            "https://a.example.com/ext, https://z.example.com/ext",
+        )
 
 
 if __name__ == "__main__":
