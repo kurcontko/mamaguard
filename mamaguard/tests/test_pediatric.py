@@ -1,7 +1,9 @@
 """Unit tests for pediatric FHIR tools."""
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import httpx
 
 
 class MockToolContext:
@@ -13,6 +15,43 @@ class MockToolContext:
 PATIENT_6MO = {"resourceType": "Patient", "id": "child-1", "birthDate": "2025-10-09"}
 # A 2-year-old born 2024-04-09
 PATIENT_2YR = {"resourceType": "Patient", "id": "child-2", "birthDate": "2024-04-09"}
+# A newborn (0 months) — only HepB dose 1 is due
+PATIENT_NEWBORN = {"resourceType": "Patient", "id": "child-3", "birthDate": "2026-04-12"}
+# A 5-year-old (60 months) — past the 36-month review threshold
+PATIENT_5YR = {"resourceType": "Patient", "id": "child-4", "birthDate": "2021-04-09"}
+
+
+def _http_status_error(status_code: int, text: str = "") -> httpx.HTTPStatusError:
+    response = MagicMock()
+    response.status_code = status_code
+    response.text = text
+    return httpx.HTTPStatusError("", request=MagicMock(), response=response)
+
+
+class TestComputeAgeMonths(unittest.TestCase):
+    """Direct coverage for the age helper -- invalid inputs must return None."""
+
+    def test_none_birthdate(self):
+        from mamaguard.shared.tools.pediatric import _compute_age_months
+
+        self.assertIsNone(_compute_age_months(None))
+
+    def test_empty_birthdate(self):
+        from mamaguard.shared.tools.pediatric import _compute_age_months
+
+        self.assertIsNone(_compute_age_months(""))
+
+    def test_malformed_birthdate(self):
+        from mamaguard.shared.tools.pediatric import _compute_age_months
+
+        self.assertIsNone(_compute_age_months("not-a-date"))
+
+    def test_valid_birthdate_with_time_suffix(self):
+        """FHIR birthDate may include a time component; only the date portion matters."""
+        from mamaguard.shared.tools.pediatric import _compute_age_months
+
+        # Only the first 10 chars are parsed -- a full ISO datetime must not raise
+        self.assertIsNotNone(_compute_age_months("2024-01-01T00:00:00Z"))
 
 
 class TestGetImmunizationGaps(unittest.TestCase):
@@ -54,6 +93,98 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertTrue(result["data"]["has_gaps"])
         self.assertGreater(len(result["data"]["overdue"]), 0)
 
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_newborn_up_to_date_hepb(self, mock_fhir):
+        """A newborn (0 months) who received HepB dose 1 has no gaps."""
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        def side_effect(fhir_url, token, path, params=None):
+            if path.startswith("Patient/"):
+                return PATIENT_NEWBORN
+            if path == "Immunization":
+                return {
+                    "resourceType": "Bundle",
+                    "entry": [
+                        {"resource": {"vaccineCode": {"text": "HepB"}, "occurrenceDateTime": "2026-04-12", "status": "completed", "id": "imm-hepb1"}},
+                    ],
+                }
+            return {"resourceType": "Bundle", "entry": []}
+
+        mock_fhir.side_effect = side_effect
+        result = get_immunization_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "success")
+        self.assertFalse(result["data"]["has_gaps"])
+        self.assertEqual(len(result["data"]["overdue"]), 0)
+        self.assertGreaterEqual(len(result["data"]["up_to_date"]), 1)
+        # No overdue -> liaison does NOT demand clinician review
+        self.assertFalse(result["clinician_review"]["required"])
+        self.assertEqual(result["clinician_review"]["reason"], "")
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_missing_birthdate_returns_error(self, mock_fhir):
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        mock_fhir.return_value = {"resourceType": "Patient", "id": "child-1"}
+        result = get_immunization_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+        self.assertIn("birthDate", result["error_message"])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_invalid_birthdate_returns_error(self, mock_fhir):
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        mock_fhir.return_value = {"resourceType": "Patient", "id": "child-1", "birthDate": "not-a-date"}
+        result = get_immunization_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+        self.assertIn("birthDate", result["error_message"])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_patient_fetch_http_error(self, mock_fhir):
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        mock_fhir.side_effect = _http_status_error(403, "Forbidden")
+        result = get_immunization_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["http_status"], 403)
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_immunization_fetch_connection_error(self, mock_fhir):
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        def side_effect(fhir_url, token, path, params=None):
+            if path.startswith("Patient/"):
+                return PATIENT_6MO
+            raise httpx.ConnectError("cannot reach server")
+
+        mock_fhir.side_effect = side_effect
+        result = get_immunization_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+        # ConnectError surfaces as connection error, not http_status
+        self.assertNotIn("http_status", result)
+        self.assertIn("Could not reach", result["error_message"])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_immunization_fetch_http_error(self, mock_fhir):
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        def side_effect(fhir_url, token, path, params=None):
+            if path.startswith("Patient/"):
+                return PATIENT_6MO
+            raise _http_status_error(500, "boom")
+
+        mock_fhir.side_effect = side_effect
+        result = get_immunization_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["http_status"], 500)
+
+    def test_missing_context_returns_error(self):
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        ctx = MockToolContext(fhir_url="", fhir_token="", patient_id="")
+        result = get_immunization_gaps(tool_context=ctx)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("FHIR context", result["error_message"])
+
 
 class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
     @patch("mamaguard.shared.tools.pediatric._fhir_get")
@@ -69,6 +200,77 @@ class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
         result = get_developmental_screening_status(tool_context=MockToolContext())
         self.assertEqual(result["status"], "success")
         self.assertTrue(result["data"]["has_gaps"])
+        # 6-month-old is under 36 months -> clinician review required
+        self.assertTrue(result["clinician_review"]["required"])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_older_than_three_years_no_review_required(self, mock_fhir):
+        """Review gating: gaps at >36 months should not trigger clinician_review."""
+        from mamaguard.shared.tools.pediatric import get_developmental_screening_status
+
+        def side_effect(fhir_url, token, path, params=None):
+            if path.startswith("Patient/"):
+                return PATIENT_5YR
+            return {"resourceType": "Bundle", "entry": []}
+
+        mock_fhir.side_effect = side_effect
+        result = get_developmental_screening_status(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["data"]["has_gaps"])
+        # age_months > 36 short-circuits clinician_review.required even if gaps exist
+        self.assertFalse(result["clinician_review"]["required"])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_observation_fetch_exception_falls_back_to_empty(self, mock_fhir):
+        """Observation fetch failure is swallowed -- function still returns success."""
+        from mamaguard.shared.tools.pediatric import get_developmental_screening_status
+
+        def side_effect(fhir_url, token, path, params=None):
+            if path.startswith("Patient/"):
+                return PATIENT_6MO
+            raise httpx.ConnectError("observation query failed")
+
+        mock_fhir.side_effect = side_effect
+        result = get_developmental_screening_status(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["data"]["completed_observations"], [])
+        # All milestones up to age show as due since none matched
+        self.assertTrue(result["data"]["has_gaps"])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_missing_birthdate_returns_error(self, mock_fhir):
+        from mamaguard.shared.tools.pediatric import get_developmental_screening_status
+
+        mock_fhir.return_value = {"resourceType": "Patient", "id": "child-1"}
+        result = get_developmental_screening_status(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+        self.assertIn("birthDate", result["error_message"])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_patient_fetch_http_error(self, mock_fhir):
+        from mamaguard.shared.tools.pediatric import get_developmental_screening_status
+
+        mock_fhir.side_effect = _http_status_error(404, "Not Found")
+        result = get_developmental_screening_status(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["http_status"], 404)
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_patient_fetch_connection_error(self, mock_fhir):
+        from mamaguard.shared.tools.pediatric import get_developmental_screening_status
+
+        mock_fhir.side_effect = httpx.ConnectError("dns failure")
+        result = get_developmental_screening_status(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "error")
+        self.assertNotIn("http_status", result)
+        self.assertIn("Could not reach", result["error_message"])
+
+    def test_missing_context_returns_error(self):
+        from mamaguard.shared.tools.pediatric import get_developmental_screening_status
+
+        ctx = MockToolContext(fhir_url="", fhir_token="", patient_id="")
+        result = get_developmental_screening_status(tool_context=ctx)
+        self.assertEqual(result["status"], "error")
 
 
 class TestGetCareGaps(unittest.TestCase):
@@ -92,6 +294,82 @@ class TestGetCareGaps(unittest.TestCase):
         result = get_care_gaps(tool_context=MockToolContext())
         self.assertEqual(result["status"], "success")
         self.assertEqual(len(result["data"]["active_care_plans"]), 1)
+        # Empty gaps list -> no clinician review required
+        self.assertFalse(result["clinician_review"]["required"])
+        self.assertEqual(result["data"]["identified_gaps"], [])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_goal_without_description_is_a_gap(self, mock_fhir):
+        """An active goal with no description text should be flagged as a gap."""
+        from mamaguard.shared.tools.pediatric import get_care_gaps
+
+        def side_effect(fhir_url, token, path, params=None):
+            if path == "CarePlan":
+                return {"resourceType": "Bundle", "entry": []}
+            if path == "Goal":
+                return {
+                    "resourceType": "Bundle",
+                    "entry": [
+                        {"resource": {"id": "g1", "lifecycleStatus": "active", "description": {}}},
+                        {
+                            "resource": {
+                                "id": "g2",
+                                "lifecycleStatus": "active",
+                                "description": {"text": "Lose 10 lbs"},
+                            }
+                        },
+                    ],
+                }
+            if path == "Encounter":
+                return {"resourceType": "Bundle", "entry": []}
+            return {"resourceType": "Bundle", "entry": []}
+
+        mock_fhir.side_effect = side_effect
+        result = get_care_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "success")
+        gaps = result["data"]["identified_gaps"]
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("Goal/g1", gaps[0])
+        self.assertIn("active", gaps[0])
+        self.assertTrue(result["clinician_review"]["required"])
+        # Gap message is surfaced as evidence_basis for the liaison
+        self.assertEqual(result["clinician_review"]["evidence_basis"], gaps)
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_careplan_fetch_exception_swallowed(self, mock_fhir):
+        """CarePlan query failure falls back to empty list without raising."""
+        from mamaguard.shared.tools.pediatric import get_care_gaps
+
+        def side_effect(fhir_url, token, path, params=None):
+            if path == "CarePlan":
+                raise httpx.ConnectError("careplan down")
+            return {"resourceType": "Bundle", "entry": []}
+
+        mock_fhir.side_effect = side_effect
+        result = get_care_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["data"]["active_care_plans"], [])
+
+    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    def test_all_queries_exception_still_success(self, mock_fhir):
+        """All three sub-queries failing still returns a usable success envelope."""
+        from mamaguard.shared.tools.pediatric import get_care_gaps
+
+        mock_fhir.side_effect = httpx.ConnectError("everything is down")
+        result = get_care_gaps(tool_context=MockToolContext())
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["data"]["active_care_plans"], [])
+        self.assertEqual(result["data"]["goals"], [])
+        self.assertEqual(result["data"]["recent_encounters"], [])
+        self.assertFalse(result["clinician_review"]["required"])
+
+    def test_missing_context_returns_error(self):
+        from mamaguard.shared.tools.pediatric import get_care_gaps
+
+        ctx = MockToolContext(fhir_url="", fhir_token="", patient_id="")
+        result = get_care_gaps(tool_context=ctx)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("FHIR context", result["error_message"])
 
 
 if __name__ == "__main__":
