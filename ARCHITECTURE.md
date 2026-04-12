@@ -842,14 +842,14 @@ Returns patient + ALL linked resources in one call.
 | Write pediatric_transition_agent | Instruction, tool wiring | [x] |
 | Write sdoh_outreach_agent | Instruction, tool wiring, + `find_sdoh_resources` + `write_care_plan` | [x] |
 | Implement orchestrator routing | AgentTool wiring, sequential delegation, synthesis | [x] |
-| Test full 3-agent flow | 28 in-process agent tests + 8 orchestration benchmarks + 54/54 Tier-1 | [x] |
+| Test full 3-agent flow | 28 in-process agent tests + 8 orchestration benchmarks + 57/57 Tier-1 | [x] |
 
 ### Phase 4: Integration + Polish (Days 13-17)
 
 | Task | Details | Status |
 |------|---------|--------|
 | End-to-end testing in PO | Full flow with Maria in Prompt Opinion UI | [ ] |
-| Write integration tests | 770 unit tests, 54/54 Tier-1 benchmarks at 100.0%, mypy clean | [x] |
+| Write integration tests | 826 unit tests, 57/57 Tier-1 benchmarks at 100.0%, mypy clean | [x] |
 | Handle edge cases | Missing data, FHIR errors, timeout handling — error-path tests for all tools | [x] |
 | Optimize agent instructions | Liaison pattern enforced on all 3 sub-agents, 5T alignment | [x] |
 | Deploy final to Cloud Run | Dockerfile + Procfile + `scripts/deploy.sh` ready; awaiting deploy | [~] |
