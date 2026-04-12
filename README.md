@@ -128,6 +128,29 @@ docker run -p 8001:8001 \
   mamaguard
 ```
 
+### Local Dev Stack (MamaGuard + HAPI FHIR)
+
+Full local stack with a HAPI FHIR R4 server for end-to-end testing:
+
+```bash
+# Configure
+cp mamaguard/.env.example mamaguard/.env
+# Edit .env: set GOOGLE_API_KEY at minimum
+
+# Start MamaGuard + HAPI FHIR
+cd mamaguard && docker compose up -d
+
+# Load 11 benchmark patients (127 FHIR resources) into HAPI
+cd .. && python3 scripts/load_bundles.py --verify
+
+# Verify
+curl http://localhost:8001/.well-known/agent-card.json   # Agent card
+curl http://localhost:8090/fhir/Patient?_count=5          # FHIR patients
+
+# Run e2e benchmarks against local stack
+HAPI_FHIR_URL=http://localhost:8090/fhir python3 -m benchmarks.runner --e2e
+```
+
 ### Deploy to Cloud Run
 
 ```bash
@@ -203,6 +226,7 @@ mamaguard/
 +-- tests/                       # 770 unit tests
 +-- app.py                       # A2A entry point
 +-- Dockerfile                   # Cloud Run deployment
++-- docker-compose.yml           # Local dev stack (MamaGuard + HAPI FHIR)
 +-- requirements.txt
 benchmarks/
 +-- runner.py                    # Tier-1/2/3 benchmark harness
@@ -213,6 +237,7 @@ benchmarks/
 scripts/
 +-- deploy.sh                    # Cloud Run deploy pipeline
 +-- pre_deploy_check.sh          # Pre-deploy verification
++-- load_bundles.py              # Load FHIR bundles into HAPI (11 patients)
 ```
 
 ---
