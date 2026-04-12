@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# Prevent .pyc files and enable unbuffered stdout/stderr for Cloud Run logs
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 COPY requirements.txt .
@@ -10,8 +14,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/mamaguard/
 
 ENV AGENT_MODULE=mamaguard.app:a2a_app
+# Default port; Cloud Run overrides PORT at runtime.
 ENV PORT=8001
 
 EXPOSE ${PORT}
 
-CMD uvicorn ${AGENT_MODULE} --host 0.0.0.0 --port ${PORT}
+# Use exec so uvicorn receives SIGTERM directly from Cloud Run for graceful shutdown.
+CMD exec uvicorn ${AGENT_MODULE} --host 0.0.0.0 --port ${PORT}

@@ -1,0 +1,24 @@
+# Tests — not needed in production image
+tests/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+.pytest_cache/
+
+# Git and CI
+.git/
+.github/
+.gitignore
+
+# Dev files
+.env
+.env.*
+docker-compose.yml
+Procfile
+
+# Docs and non-runtime files
+*.md
+marketplace/
