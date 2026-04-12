@@ -8,6 +8,7 @@ The only public endpoint is /.well-known/agent-card.json.
 import json
 import logging
 import os
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -36,7 +37,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         body_bytes = await request.body()
         body_text = body_bytes.decode("utf-8", errors="replace")
 
-        parsed = {}
+        parsed: dict[str, Any] = {}
         try:
             parsed = json.loads(body_text) if body_text else {}
             pretty_body = safe_pretty_json(parsed)

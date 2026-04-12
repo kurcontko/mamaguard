@@ -236,6 +236,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
         self.assertIsInstance(
             cr, dict, f"{tool_label}: clinician_review must be a dict",
         )
+        assert isinstance(cr, dict)
         missing = self.REQUIRED_KEYS - set(cr.keys())
         self.assertFalse(
             missing, f"{tool_label}: clinician_review missing keys {missing}",

@@ -5,6 +5,8 @@ Each agent's app.py calls create_a2a_app() with its own name, description,
 URL, and optional FHIR extension URI.
 """
 
+from typing import Any
+
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -54,7 +56,7 @@ def create_a2a_app(
                 )
             )
         }
-        security = [{"apiKey": []}]
+        security: list[dict[str, Any]] | None = [{"apiKey": []}]
     else:
         security_schemes = None
         security = None

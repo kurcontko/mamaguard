@@ -9,6 +9,7 @@ Tools:
 
 import logging
 from datetime import datetime
+from typing import TypedDict
 
 import httpx
 from google.adk.tools import ToolContext
@@ -23,8 +24,21 @@ from .fhir_base import (
 
 logger = logging.getLogger(__name__)
 
+
+class _CdcScheduleItem(TypedDict):
+    vaccine: str
+    dose: int
+    due_months: int
+    series: str
+
+
+class _MilestoneItem(TypedDict):
+    screening: str
+    due_months: int
+
+
 # CDC Recommended Immunization Schedule (simplified, by age in months)
-_CDC_SCHEDULE = [
+_CDC_SCHEDULE: list[_CdcScheduleItem] = [
     {"vaccine": "HepB", "dose": 1, "due_months": 0, "series": "Hepatitis B"},
     {"vaccine": "HepB", "dose": 2, "due_months": 1, "series": "Hepatitis B"},
     {"vaccine": "DTaP", "dose": 1, "due_months": 2, "series": "Diphtheria, Tetanus, Pertussis"},
@@ -53,7 +67,7 @@ _CDC_SCHEDULE = [
 ]
 
 # AAP Bright Futures developmental screening schedule (age in months)
-_DEVELOPMENTAL_MILESTONES = [
+_DEVELOPMENTAL_MILESTONES: list[_MilestoneItem] = [
     {"screening": "Newborn metabolic screen", "due_months": 0},
     {"screening": "Hearing screen", "due_months": 0},
     {"screening": "Developmental surveillance", "due_months": 1},

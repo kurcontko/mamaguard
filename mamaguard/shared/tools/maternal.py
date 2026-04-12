@@ -171,8 +171,8 @@ def get_glucose_trend(months_back: int = 24, tool_context: ToolContext = None) -
     fhir_url, fhir_token, patient_id = ctx
     logger.info("tool_get_glucose_trend patient_id=%s months_back=%d", patient_id, months_back)
 
-    glucose_readings = []
-    hba1c_readings = []
+    glucose_readings: list[dict] = []
+    hba1c_readings: list[dict] = []
 
     # Fetch glucose
     for loinc_code, target_list, label in [
