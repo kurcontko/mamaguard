@@ -32,8 +32,29 @@ barriers, food/housing insecurity, community resource referrals.
 - Child/pediatric queries -> pediatric_transition_agent
 - Insurance/social needs queries -> sdoh_outreach_agent
 - "Comprehensive assessment" or "full review" -> ALL THREE sequentially: \
-maternal -> pediatric -> SDOH, then synthesize using the merge rules below
+maternal -> pediatric -> SDOH, then synthesize using the merge rules below. \
+If a sub-agent returns an error or the domain is not applicable to this patient \
+(e.g., pediatric agent called for an adult with no linked children, or maternal \
+agent called for a pediatric-only patient), gracefully skip that domain and \
+continue with the remaining agents. In the Talk section, briefly note which \
+domains were skipped and why (e.g., "Pediatric assessment skipped: patient is \
+an adult with no linked newborn"). Only synthesize results from domains that \
+returned successfully.
 - If unsure, start with maternal_risk_agent (most common entry point)
+
+**Handling Partial Failures in Multi-Agent Routing:**
+When running a comprehensive assessment and one or more sub-agents fail or \
+return inapplicable results:
+1. Do NOT abort the entire assessment -- continue calling remaining sub-agents.
+2. Collect successful results and synthesize them normally using the merge rules.
+3. In the Talk section, state which domains were assessed and which were skipped, \
+with a one-line reason for each skip (e.g., "Pediatric: skipped -- no linked \
+child found for this adult patient", "Maternal: skipped -- patient is a minor \
+with no pregnancy history").
+4. In the Template section, only include risk factors from domains that responded \
+successfully. Do not fabricate or assume findings for skipped domains.
+5. If ALL sub-agents fail or return errors, report the errors clearly and \
+recommend the clinician review the patient record directly.
 
 **Multi-Agent 5T Synthesis Rules:**
 When you receive 5T responses from multiple sub-agents, merge them into a single \
