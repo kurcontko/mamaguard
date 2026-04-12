@@ -366,8 +366,10 @@ def _run_case(
     mg_result = _call_llm(MAMAGUARD_SYSTEM, mamaguard_prompt, agent_config)
 
     # 3. Judge both
-    naive_scores, naive_reasoning = {}, {}
-    mg_scores, mg_reasoning = {}, {}
+    naive_scores: dict[str, float] = {}
+    naive_reasoning: dict[str, str] = {}
+    mg_scores: dict[str, float] = {}
+    mg_reasoning: dict[str, str] = {}
 
     if naive_result.content and not naive_result.error:
         naive_scores, naive_reasoning = _judge_response(
