@@ -1,6 +1,9 @@
 """
 Shared tools catalogue -- re-exports all 14 tool functions.
 
+When ``MAMAGUARD_AUDIT_EVENTS=true``, every tool invocation emits a FHIR
+AuditEvent recording which agent accessed what data (HIPAA compliance trail).
+
 Base FHIR tools (fhir_base.py)
     get_patient_summary       Patient demographics + conditions + meds + recent vitals
     get_active_medications    Active MedicationRequest resources
@@ -26,34 +29,53 @@ Write-back tools (writeback.py)
     write_care_plan              POST Goal + CarePlan tied to an SDOH resource
 """
 
+from ..audit_event import audited
+
 from .fhir_base import (
-    get_active_medications,
-    get_patient_summary,
+    get_active_medications as _get_active_medications,
+    get_patient_summary as _get_patient_summary,
 )
 
 from .maternal import (
-    get_bp_trend,
-    get_glucose_trend,
-    get_maternal_risk_profile,
-    get_pregnancy_history,
+    get_bp_trend as _get_bp_trend,
+    get_glucose_trend as _get_glucose_trend,
+    get_maternal_risk_profile as _get_maternal_risk_profile,
+    get_pregnancy_history as _get_pregnancy_history,
 )
 
 from .pediatric import (
-    get_care_gaps,
-    get_developmental_screening_status,
-    get_immunization_gaps,
+    get_care_gaps as _get_care_gaps,
+    get_developmental_screening_status as _get_developmental_screening_status,
+    get_immunization_gaps as _get_immunization_gaps,
 )
 
 from .sdoh import (
-    find_sdoh_resources,
-    get_sdoh_screening,
+    find_sdoh_resources as _find_sdoh_resources,
+    get_sdoh_screening as _get_sdoh_screening,
 )
 
 from .writeback import (
-    create_communication_request,
-    write_care_plan,
-    write_risk_assessment,
+    create_communication_request as _create_communication_request,
+    write_care_plan as _write_care_plan,
+    write_risk_assessment as _write_risk_assessment,
 )
+
+# Wrap every tool with the AuditEvent decorator.  When the feature flag
+# is off (default), the wrapper is a no-op passthrough.
+get_patient_summary = audited(_get_patient_summary)
+get_active_medications = audited(_get_active_medications)
+get_bp_trend = audited(_get_bp_trend)
+get_glucose_trend = audited(_get_glucose_trend)
+get_maternal_risk_profile = audited(_get_maternal_risk_profile)
+get_pregnancy_history = audited(_get_pregnancy_history)
+get_immunization_gaps = audited(_get_immunization_gaps)
+get_developmental_screening_status = audited(_get_developmental_screening_status)
+get_care_gaps = audited(_get_care_gaps)
+get_sdoh_screening = audited(_get_sdoh_screening)
+find_sdoh_resources = audited(_find_sdoh_resources)
+write_risk_assessment = audited(_write_risk_assessment)
+create_communication_request = audited(_create_communication_request)
+write_care_plan = audited(_write_care_plan)
 
 __all__ = [
     "get_patient_summary",
