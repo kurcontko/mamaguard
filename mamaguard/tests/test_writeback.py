@@ -11,6 +11,199 @@ class MockToolContext:
         self.state = {"fhir_url": fhir_url, "fhir_token": fhir_token, "patient_id": patient_id}
 
 
+class TestRiskAssessmentValidation(unittest.TestCase):
+    """Validation checks for write_risk_assessment (pre-POST)."""
+
+    def test_empty_risk_type_rejected(self):
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        result = write_risk_assessment(
+            risk_type="", probability=0.5, basis="evidence", mitigation="action",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("risk_type is required", result["error_message"])
+
+    def test_probability_below_zero_rejected(self):
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        result = write_risk_assessment(
+            risk_type="test-risk", probability=-0.1, basis="evidence", mitigation="action",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("probability must be between", result["error_message"])
+
+    def test_probability_above_one_rejected(self):
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        result = write_risk_assessment(
+            risk_type="test-risk", probability=1.5, basis="evidence", mitigation="action",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("probability must be between", result["error_message"])
+
+    def test_empty_basis_rejected(self):
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        result = write_risk_assessment(
+            risk_type="test-risk", probability=0.5, basis="", mitigation="action",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("basis is required", result["error_message"])
+
+    def test_empty_mitigation_rejected(self):
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        result = write_risk_assessment(
+            risk_type="test-risk", probability=0.5, basis="evidence", mitigation="",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("mitigation is required", result["error_message"])
+
+    def test_multiple_errors_reported(self):
+        from mamaguard.shared.tools.writeback import write_risk_assessment
+
+        result = write_risk_assessment(
+            risk_type="", probability=2.0, basis="", mitigation="",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("risk_type is required", result["error_message"])
+        self.assertIn("probability must be between", result["error_message"])
+        self.assertIn("basis is required", result["error_message"])
+        self.assertIn("mitigation is required", result["error_message"])
+
+    def test_boundary_probability_zero_accepted(self):
+        """probability=0.0 is valid (no risk)."""
+        from mamaguard.shared.tools.writeback import _validate_risk_assessment
+
+        self.assertIsNone(_validate_risk_assessment("risk", 0.0, "basis", "mitigation"))
+
+    def test_boundary_probability_one_accepted(self):
+        """probability=1.0 is valid (certain risk)."""
+        from mamaguard.shared.tools.writeback import _validate_risk_assessment
+
+        self.assertIsNone(_validate_risk_assessment("risk", 1.0, "basis", "mitigation"))
+
+
+class TestCommunicationRequestValidation(unittest.TestCase):
+    """Validation checks for create_communication_request (pre-POST)."""
+
+    def test_empty_medium_rejected(self):
+        from mamaguard.shared.tools.writeback import create_communication_request
+
+        result = create_communication_request(
+            medium="", content="Follow-up needed", priority="routine",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("medium is required", result["error_message"])
+
+    def test_empty_content_rejected(self):
+        from mamaguard.shared.tools.writeback import create_communication_request
+
+        result = create_communication_request(
+            medium="phone", content="", priority="routine",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("content is required", result["error_message"])
+
+    def test_invalid_priority_rejected(self):
+        from mamaguard.shared.tools.writeback import create_communication_request
+
+        result = create_communication_request(
+            medium="phone", content="test", priority="high",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("priority must be one of", result["error_message"])
+
+    def test_valid_priorities_accepted(self):
+        from mamaguard.shared.tools.writeback import _validate_communication_request
+
+        for p in ("routine", "urgent", "asap", "stat"):
+            self.assertIsNone(
+                _validate_communication_request("phone", "content", p),
+                f"priority={p!r} should be accepted",
+            )
+
+
+class TestCarePlanValidation(unittest.TestCase):
+    """Validation checks for write_care_plan (pre-POST)."""
+
+    def test_empty_category_rejected(self):
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        result = write_care_plan(
+            category="", goal_description="goal", resource_name="R", resource_contact="C",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("category is required", result["error_message"])
+
+    def test_empty_goal_description_rejected(self):
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        result = write_care_plan(
+            category="housing", goal_description="", resource_name="R", resource_contact="C",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("goal_description is required", result["error_message"])
+
+    def test_empty_resource_name_rejected(self):
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        result = write_care_plan(
+            category="housing", goal_description="goal", resource_name="", resource_contact="C",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("resource_name is required", result["error_message"])
+
+    def test_empty_resource_contact_rejected(self):
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        result = write_care_plan(
+            category="housing", goal_description="goal", resource_name="R", resource_contact="",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("resource_contact is required", result["error_message"])
+
+    def test_multiple_missing_fields_reported(self):
+        from mamaguard.shared.tools.writeback import write_care_plan
+
+        result = write_care_plan(
+            category="", goal_description="", resource_name="", resource_contact="",
+            tool_context=MockToolContext(),
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["action"], "validation_failed")
+        self.assertIn("category is required", result["error_message"])
+        self.assertIn("goal_description is required", result["error_message"])
+        self.assertIn("resource_name is required", result["error_message"])
+        self.assertIn("resource_contact is required", result["error_message"])
+
+
 class TestWriteRiskAssessment(unittest.TestCase):
     @patch("mamaguard.shared.tools.writeback._fhir_post")
     def test_successful_write(self, mock_post):

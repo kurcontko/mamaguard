@@ -19,6 +19,70 @@ logger = logging.getLogger(__name__)
 
 _FHIR_TIMEOUT = 15
 
+# -- Input validation ----------------------------------------------------------
+
+_VALID_PRIORITIES = {"routine", "urgent", "asap", "stat"}
+
+
+def _validation_error(resource_type: str, errors: list[str]) -> dict:
+    """Return a structured validation-failure dict (no FHIR POST attempted)."""
+    return {
+        "status": "error",
+        "action": "validation_failed",
+        "resource_type": resource_type,
+        "error_message": f"Validation failed: {'; '.join(errors)}",
+    }
+
+
+def _validate_risk_assessment(
+    risk_type: str, probability: float, basis: str, mitigation: str,
+) -> dict | None:
+    """Return error dict if inputs are invalid, else None."""
+    errors: list[str] = []
+    if not risk_type or not isinstance(risk_type, str) or not risk_type.strip():
+        errors.append("risk_type is required")
+    if not isinstance(probability, (int, float)):
+        errors.append("probability must be a number")
+    elif not (0.0 <= probability <= 1.0):
+        errors.append("probability must be between 0.0 and 1.0")
+    if not basis or not isinstance(basis, str) or not basis.strip():
+        errors.append("basis is required")
+    if not mitigation or not isinstance(mitigation, str) or not mitigation.strip():
+        errors.append("mitigation is required")
+    return _validation_error("RiskAssessment", errors) if errors else None
+
+
+def _validate_communication_request(
+    medium: str, content: str, priority: str,
+) -> dict | None:
+    """Return error dict if inputs are invalid, else None."""
+    errors: list[str] = []
+    if not medium or not isinstance(medium, str) or not medium.strip():
+        errors.append("medium is required")
+    if not content or not isinstance(content, str) or not content.strip():
+        errors.append("content is required")
+    if priority not in _VALID_PRIORITIES:
+        errors.append(
+            f"priority must be one of {', '.join(sorted(_VALID_PRIORITIES))}"
+        )
+    return _validation_error("CommunicationRequest", errors) if errors else None
+
+
+def _validate_care_plan(
+    category: str, goal_description: str, resource_name: str, resource_contact: str,
+) -> dict | None:
+    """Return error dict if inputs are invalid, else None."""
+    errors: list[str] = []
+    if not category or not isinstance(category, str) or not category.strip():
+        errors.append("category is required")
+    if not goal_description or not isinstance(goal_description, str) or not goal_description.strip():
+        errors.append("goal_description is required")
+    if not resource_name or not isinstance(resource_name, str) or not resource_name.strip():
+        errors.append("resource_name is required")
+    if not resource_contact or not isinstance(resource_contact, str) or not resource_contact.strip():
+        errors.append("resource_contact is required")
+    return _validation_error("CarePlan", errors) if errors else None
+
 
 def _fhir_post(fhir_url: str, token: str, resource_type: str, body: dict) -> dict:
     """POST a FHIR resource and return the created resource or error."""
@@ -57,6 +121,10 @@ def write_risk_assessment(
         basis: Evidence basis for the assessment (free text)
         mitigation: Recommended mitigation (free text)
     """
+    validation_err = _validate_risk_assessment(risk_type, probability, basis, mitigation)
+    if validation_err is not None:
+        return validation_err
+
     ctx = _get_fhir_context(tool_context, "write_risk_assessment")
     if isinstance(ctx, dict):
         return ctx
@@ -150,6 +218,10 @@ def create_communication_request(
         content: Message content or purpose (free text)
         priority: Priority level ("routine", "urgent", "asap", "stat")
     """
+    validation_err = _validate_communication_request(medium, content, priority)
+    if validation_err is not None:
+        return validation_err
+
     ctx = _get_fhir_context(tool_context, "create_communication_request")
     if isinstance(ctx, dict):
         return ctx
@@ -263,6 +335,10 @@ def write_care_plan(
         z_code: Optional ICD-10 Z-code -- when present, attached to the
             Goal.addresses for terminology binding.
     """
+    validation_err = _validate_care_plan(category, goal_description, resource_name, resource_contact)
+    if validation_err is not None:
+        return validation_err
+
     ctx = _get_fhir_context(tool_context, "write_care_plan")
     if isinstance(ctx, dict):
         return ctx
