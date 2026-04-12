@@ -79,6 +79,10 @@ TOOL_SCOPES: dict[str, list[str]] = {
     "get_active_medications": [
         "patient/MedicationRequest.rs",
     ],
+    "find_linked_newborn": [
+        "patient/RelatedPerson.rs",
+        "patient/Patient.rs",
+    ],
     "get_bp_trend": [
         "patient/Observation.rs",
     ],

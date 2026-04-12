@@ -113,7 +113,7 @@ Every feature falls into one of three tiers. Only "Adopt Now" items block submis
 
 | Feature | Rationale |
 |---------|-----------|
-| ~~Standalone MCP Server (Superpower track)~~ | **Implemented.** See [Section 2.8](#28-standalone-mcp-server-phase-2a) below. FastMCP server exposing all 14 FHIR tools, SHARP context, stdio + SSE transports, 40 tests. Marketplace config in `marketplace/mcp_config.json`. | Done |
+| ~~Standalone MCP Server (Superpower track)~~ | **Implemented.** See [Section 2.8](#28-standalone-mcp-server-phase-2a) below. FastMCP server exposing all 15 FHIR tools, SHARP context, stdio + SSE transports, 40 tests. Marketplace config in `marketplace/mcp_config.json`. | Done |
 | ~~External SDOH APIs (211.org, findhelp.org)~~ | **Implemented.** `find_sdoh_resources` hits external directory with 5s timeout; curated offline fallback (211, WIC, SNAP, HUD, etc.) so agent is always actionable. | Done |
 | Multi-model consensus (ClinicalMem-style) | Cost, complexity, not needed for judging criteria |
 | Wearable data integration | No FHIR source available in sandbox |
@@ -146,7 +146,7 @@ Every feature falls into one of three tiers. Only "Adopt Now" items block submis
 ┌────────────────────────────────┐  ┌──────────────────────────┐
 │  MamaGuard A2A Agent           │  │  MamaGuard MCP Server    │
 │  (Cloud Run — Agent track)     │  │  (Superpower track)      │
-│  ┌──────────────────────────┐  │  │  FastMCP, 14 tools       │
+│  ┌──────────────────────────┐  │  │  FastMCP, 15 tools       │
 │  │  Orchestrator            │  │  │  stdio + SSE transport   │
 │  │  ├── Maternal Agent      │  │  │                          │
 │  │  ├── Pediatric Agent     │  │  └────────────┬─────────────┘
@@ -155,7 +155,7 @@ Every feature falls into one of three tiers. Only "Adopt Now" items block submis
 │             │                  │               │
 │  Shared FHIR Tool Layer        │               │
 │  ┌──────────────────────────┐  │               │
-│  │  14 tools: base, maternal,│  │  (same tools, │
+│  │  15 tools: base, maternal,│  │  (same tools, │
 │  │  peds, SDOH, writeback   │◄─┼───shared code)│
 │  └──────────┬───────────────┘  │               │
 │             │                  │               │
@@ -184,7 +184,7 @@ mamaguard_orchestrator (exposed via A2A)
 - `AgentTool` routing is a proven pattern from `po-adk-python`
 
 **Marketplace artifacts: Dual submission (Agent + Superpower tracks).**
-The **BYO Agent** (Agent track) is the primary submission — it consults the external A2A agent on Cloud Run for all clinical queries. The **MCP server** (Superpower track) is the second artifact — it exposes the same 14 FHIR tools via MCP, attachable to any BYO Agent or usable from Claude Desktop/Cursor. Both are published to the Prompt Opinion Marketplace. From the judge's perspective, they open the Marketplace, find "MamaGuard", launch it, select a patient, and interact — all within PO. The external agent and MCP server are infrastructure; the BYO Agents are the submission surface.
+The **BYO Agent** (Agent track) is the primary submission — it consults the external A2A agent on Cloud Run for all clinical queries. The **MCP server** (Superpower track) is the second artifact — it exposes the same 15 FHIR tools via MCP, attachable to any BYO Agent or usable from Claude Desktop/Cursor. Both are published to the Prompt Opinion Marketplace. From the judge's perspective, they open the Marketplace, find "MamaGuard", launch it, select a patient, and interact — all within PO. The external agent and MCP server are infrastructure; the BYO Agents are the submission surface.
 
 ### 2.3 Data Flow
 
@@ -212,14 +212,15 @@ The **BYO Agent** (Agent track) is the primary submission — it consults the ex
 
 The tools below are **Google ADK tool functions** called in-process by sub-agents. The same tool implementations are also exposed via the standalone MCP server (see [Section 2.8](#28-standalone-mcp-server-phase-2a)) — single source of truth, no duplication.
 
-14 tools organized by domain:
+15 tools organized by domain:
 
-#### Base Tools (reused from po-adk-python)
+#### Base Tools
 
 | Tool | Parameters | Returns | FHIR Queries |
 |------|-----------|---------|-------------|
 | `get_patient_summary` | `patient_id` | Demographics, active conditions, meds, recent vitals | Patient, Condition, MedicationRequest, Observation (latest) |
 | `get_active_medications` | `patient_id` | Active meds with dosages, interaction flags | MedicationRequest (status=active) |
+| `find_linked_newborn` | `mother_patient_id` | Linked child patient IDs, names, birth dates | RelatedPerson (relationship=CHILD/SON/DAU) |
 
 #### Maternal Tools (NEW)
 
@@ -397,7 +398,7 @@ Reference implementation of Josh Mandel's "SMART Permission Tickets" CI build dr
 | `scope` = SMART v2 scopes | Done | Space-delimited string parsed to set; `patient/<Resource>.<perms>` format |
 | `exp` = expiration | Done | Checked at decode (JWT library) AND at enforcement (belt-and-suspenders for stale sessions) |
 | `aud` = audience | Done | Optional; validated when `MAMAGUARD_SMART_TICKETS_AUDIENCE` is set |
-| Scope enforcement per tool | Done | `TOOL_SCOPES` maps each of the 14 tools to required SMART scopes |
+| Scope enforcement per tool | Done | `TOOL_SCOPES` maps each of the 15 tools to required SMART scopes |
 | Wildcard resource (`patient/*.rs`) | Done | `_scope_satisfies()` handles `*` resource and permission superset matching |
 | Permission superset (`cruds` satisfies `rs`) | Done | Set-based permission letter matching |
 
@@ -478,7 +479,7 @@ Reference implementation of Josh Mandel's "SMART Permission Tickets" CI build dr
 
 ### 2.8 Standalone MCP Server (Phase 2a)
 
-The MCP server is MamaGuard's **second submission artifact** — covering the Superpower track alongside the A2A Agent track. It exposes all 14 FHIR tools via the Model Context Protocol using [FastMCP](https://github.com/jlowin/fastmcp).
+The MCP server is MamaGuard's **second submission artifact** — covering the Superpower track alongside the A2A Agent track. It exposes all 15 FHIR tools via the Model Context Protocol using [FastMCP](https://github.com/jlowin/fastmcp).
 
 #### Key Design
 
@@ -499,7 +500,7 @@ MCP_TRANSPORT=sse MCP_PORT=8080 python -m mamaguard.mcp_server.server
 
 #### Tool Coverage
 
-All 14 tools from the ADK agents are registered: 2 base + 4 maternal + 3 pediatric + 2 SDOH + 3 write-back. Each tool returns JSON-serialized results including the `clinician_review` Liaison Agent object.
+All 15 tools from the ADK agents are registered: 3 base + 4 maternal + 3 pediatric + 2 SDOH + 3 write-back. Each tool returns JSON-serialized results including the `clinician_review` Liaison Agent object.
 
 #### Marketplace Publishing
 
@@ -556,7 +557,7 @@ mamaguard/
 │   └── agent.py                 # SDOH + Outreach Agent definition
 ├── mcp_server/                    # Standalone MCP server (Superpower track — Phase 2a)
 │   ├── __init__.py               # Package stub
-│   ├── server.py                 # FastMCP server: 14 tools, stdio + SSE transports
+│   ├── server.py                 # FastMCP server: 15 tools, stdio + SSE transports
 │   ├── context.py                # FhirContext adapter (SHARP params → .state dict)
 │   └── README.md                  # MCP server docs: quick start, tool reference, Docker
 ├── shared/
@@ -941,7 +942,7 @@ Returns patient + ALL linked resources in one call.
 - [ ] Agent deployed to public HTTPS URL (Cloud Run)
 - [x] Agent card served correctly (verified via `test_app_factory.py` — 41 tests)
 - [x] A2A FHIR context handling working (SHARP header patterns via ADK tools — 66 fhir_hook tests)
-- [x] 14 FHIR tools functional (ADK in-process + MCP server — 770 unit tests)
+- [x] 15 FHIR tools functional (ADK in-process + MCP server — 826 unit tests)
 - [x] 4 A2A skills working (orchestrator + 3 sub-agents — 28 in-process agent tests)
 - [x] Liaison Agent pattern demonstrated (INPUT_REQUIRED — all 3 sub-agents enforce)
 - [x] FHIR write-back (RiskAssessment + CommunicationRequest + Goal/CarePlan — error-path tests)

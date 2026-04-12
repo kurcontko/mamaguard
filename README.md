@@ -1,7 +1,7 @@
 # MamaGuard: AI-Powered Maternal-Pediatric Care Coordination
 
 > **80% of pregnancy-related deaths are preventable. 40% of new mothers never return for postpartum care.**
-> MamaGuard closes the coordination gap with three specialist AI agents, 14 FHIR tools, and the clinician always in control.
+> MamaGuard closes the coordination gap with three specialist AI agents, 15 FHIR tools, and the clinician always in control.
 
 Built for the [Agents Assemble](https://agents-assemble.devpost.com/) hackathon. Dual-track submission: **A2A Agent** + **MCP Server** (Superpower), published on the [Prompt Opinion Marketplace](https://promptopinion.ai).
 
@@ -36,7 +36,7 @@ Every tool response includes a **Liaison Agent pattern** `clinician_review` obje
 +--------------------------------+  +--------------------------+
 |  MamaGuard A2A Agent           |  |  MamaGuard MCP Server    |
 |  (Cloud Run -- Agent track)    |  |  (Superpower track)      |
-|  +---------------------------+ |  |  FastMCP, 14 tools       |
+|  +---------------------------+ |  |  FastMCP, 15 tools       |
 |  |  Orchestrator (Gemini)    | |  |  stdio + SSE transport   |
 |  |  +-- Maternal Agent       | |  +-----------+--------------+
 |  |  +-- Pediatric Agent      | |              |
@@ -44,7 +44,7 @@ Every tool response includes a **Liaison Agent pattern** `clinician_review` obje
 |  +------------+--------------+ |              |
 |               |                |              |
 |  Shared FHIR Tool Layer        |              |
-|  (14 tools, single source     <--- shared code |
+|  (15 tools, single source     <--- shared code |
 |   of truth -- no duplication)  |              |
 |  +----------------------------+|              |
 |               |                |              |
@@ -208,11 +208,11 @@ mamaguard/
 +-- pediatric_agent/agent.py     # Pediatric Transition Agent
 +-- sdoh_agent/agent.py          # SDOH & Outreach Agent
 +-- mcp_server/                  # Standalone MCP server (Superpower track)
-|   +-- server.py                # FastMCP, 14 tools, stdio + SSE
+|   +-- server.py                # FastMCP, 15 tools, stdio + SSE
 |   +-- context.py               # FhirContext adapter (SHARP -> state)
 +-- shared/
-|   +-- tools/                   # 14 FHIR tools (single source of truth)
-|   |   +-- fhir_base.py         # Patient summary, active medications
+|   +-- tools/                   # 15 FHIR tools (single source of truth)
+|   |   +-- fhir_base.py         # Patient summary, active medications, linked newborn
 |   |   +-- maternal.py          # BP trend, glucose, pregnancy history
 |   |   +-- pediatric.py         # Immunizations, developmental screening
 |   |   +-- sdoh.py              # SDOH screening, resource lookup
@@ -262,7 +262,8 @@ scripts/
 - **Liaison Agent pattern** -- AI recommends, clinician decides. No autonomous clinical action.
 - **Credentials never in prompt** -- FHIR tokens extracted via `before_model_callback`, stored in session state, never visible to the LLM.
 - **API key authentication** -- X-API-Key header enforcement on all endpoints except agent card discovery.
-- **SMART Permission Tickets** -- Scope-limited tool authorization (feature-flagged). Each of 14 tools mapped to required SMART v2 scopes.
+- **SMART Permission Tickets** -- Scope-limited tool authorization (feature-flagged). Each of 15 tools mapped to required SMART v2 scopes.
+- **FHIR AuditEvent** -- When enabled (`MAMAGUARD_AUDIT_EVENTS=true`), every tool invocation emits a FHIR R4 AuditEvent (HIPAA compliance trail).
 - **Minimum Necessary** -- Each tool queries only the FHIR resources it needs.
 - **Synthetic data only** -- SMART R4 Synthea records. No real PHI.
 

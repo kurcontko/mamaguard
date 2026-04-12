@@ -2,7 +2,7 @@
 
 ## Overview
 
-The MCP server is MamaGuard's **second submission artifact** (Superpower track). It exposes all 14 FHIR tools via the Model Context Protocol, allowing any MCP client to invoke them. The BYO Agent is the primary artifact (Agent track); the MCP server provides the dual submission path.
+The MCP server is MamaGuard's **second submission artifact** (Superpower track). It exposes all 15 FHIR tools via the Model Context Protocol, allowing any MCP client to invoke them. The BYO Agent is the primary artifact (Agent track); the MCP server provides the dual submission path.
 
 ## Prerequisites
 
@@ -51,7 +51,7 @@ gcloud run deploy mamaguard-mcp \
 1. In PO, go to **Agents > Create Agent** (or edit existing BYO Agent)
 2. Under **MCP Servers**, click **Add MCP Server**
 3. Enter the SSE endpoint URL: `https://YOUR-MCP-URL:8080/sse`
-4. PO discovers all 14 tools automatically from the MCP protocol
+4. PO discovers all 15 tools automatically from the MCP protocol
 5. The BYO Agent can now invoke MamaGuard FHIR tools directly
 
 ### 4. Configure SHARP Context
@@ -137,4 +137,4 @@ python -m pytest mamaguard/tests/ -v
 
 ## Tool Reference
 
-All 14 tools require `fhir_url`, `fhir_token`, `patient_id` as the first 3 parameters (SHARP context). See `mamaguard/mcp_server/README.md` for full tool documentation.
+All 15 tools require `fhir_url`, `fhir_token`, `patient_id` as the first 3 parameters (SHARP context). See `mamaguard/mcp_server/README.md` for full tool documentation.

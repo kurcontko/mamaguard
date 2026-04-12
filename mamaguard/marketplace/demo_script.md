@@ -10,9 +10,9 @@
 
 ## Scene 1: Introduction (0:00 - 0:15)
 
-**Voiceover:** "MamaGuard is an AI care coordination agent for maternal and pediatric health. It analyzes FHIR patient records using three specialist agents and fourteen tools — maternal risk, pediatric transitions, and social determinants — pausing for clinician review on critical findings. It ships as both an A2A agent and an MCP server."
+**Voiceover:** "MamaGuard is an AI care coordination agent for maternal and pediatric health. It analyzes FHIR patient records using three specialist agents and fifteen tools — maternal risk, pediatric transitions, and social determinants — with seamless mother-to-child handoff and the clinician always in control. It ships as both an A2A agent and an MCP server."
 
-**Visual:** Architecture diagram (dual A2A + MCP paths, 3 agents, 14 FHIR tools, Liaison pattern)
+**Visual:** Architecture diagram (dual A2A + MCP paths, 3 agents, 15 FHIR tools, Liaison pattern)
 
 ## Scene 2: Launch from Marketplace (0:15 - 0:30)
 
@@ -50,18 +50,17 @@
 
 **Voiceover:** "The SDOH agent screens FHIR data, detects Maria has no insurance and speaks French, then looks up concrete resources — Medicaid enrollment, WIC, interpreter services — and writes a trackable FHIR CarePlan linked to a Goal so the care team can follow through. This is the actionable SDOH loop: screen, find resources, persist the intervention."
 
-## Scene 5: Pediatric Handoff (1:50 - 2:15)
+## Scene 5: Mother-to-Child Handoff (1:50 - 2:15)
 
-**Voiceover:** "For the pediatric transition, the clinician switches to the child's record — respecting the patient-scoped security model."
-
-**Action:** Switch patient context to a pediatric patient (newborn)
-
-**Input:** "Check immunization status and developmental milestones"
+**Input:** "Find linked children and check their immunization status"
 
 **Wait for response.** Expected output shows:
-- Immunization gap analysis against CDC schedule
+- Orchestrator calls `find_linked_newborn` → discovers Lucas (linked via RelatedPerson)
+- Maternal risk factors carried into pediatric context (DM2 → neonatal hypoglycemia screening)
+- Immunization gap analysis against CDC schedule (birth through adolescent vaccines)
 - Developmental screening status per AAP Bright Futures
-- Maternal risk factors noted (DM2 → screen for neonatal hypoglycemia)
+
+**Voiceover:** "The orchestrator automatically discovers Maria's linked newborn, Lucas, via FHIR RelatedPerson resources — no manual patient switch needed. It carries maternal risk factors into the pediatric context and routes to the pediatric agent for immunization and developmental assessment."
 
 ## Scene 6: Technical Depth (2:15 - 2:45)
 
@@ -69,14 +68,14 @@
 1. Agent card JSON at `/.well-known/agent-card.json` (4 skills, FHIR extension, SMART tickets)
 2. `clinician_review` object in tool response (Liaison pattern — every tool)
 3. FHIR resources written: RiskAssessment, CommunicationRequest, Goal + CarePlan
-4. MCP server exposing same 14 tools (dual submission: A2A + MCP)
+4. MCP server exposing same 15 tools (dual submission: A2A + MCP)
 5. API key security + FHIR token never in LLM prompt
 
 **Voiceover:** "Under the hood: A2A protocol with FHIR context and SMART Permission Tickets, Liaison Agent pattern for human-in-the-loop, bidirectional FHIR write-back with four resource types, and a standalone MCP server exposing the same tools for any MCP-compatible client."
 
 ## Scene 7: Closing (2:45 - 3:00)
 
-**Voiceover:** "MamaGuard targets the coordination gap responsible for 80% of preventable maternal deaths. Three specialist agents, fourteen FHIR tools, dual A2A and MCP submission — with the clinician always in control."
+**Voiceover:** "MamaGuard targets the coordination gap responsible for 80% of preventable maternal deaths. Three specialist agents, fifteen FHIR tools, seamless mother-to-child handoff, dual A2A and MCP submission — with the clinician always in control."
 
 **Visual:** Impact metrics table from Devpost description
 
@@ -86,5 +85,5 @@
 ```
 Assess maternal risk for this patient
 Screen for social determinants, find resources, and create a care plan
-Check immunization status and developmental milestones
+Find linked children and check their immunization status
 ```

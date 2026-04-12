@@ -3,7 +3,7 @@ Tests for the MamaGuard MCP server.
 
 Covers:
 1. FhirContext adapter (context.py)
-2. MCP tool registration (all 14 tools visible)
+2. MCP tool registration (all 15 tools visible)
 3. Tool invocation — happy path with mocked FHIR responses
 4. Error propagation — missing credentials surfaced cleanly
 5. SHARP context constructor (from_sharp)
@@ -78,6 +78,7 @@ class TestFhirContext(unittest.TestCase):
 EXPECTED_TOOLS = {
     "get_patient_summary",
     "get_active_medications",
+    "find_linked_newborn",
     "get_bp_trend",
     "get_glucose_trend",
     "get_pregnancy_history",
@@ -100,7 +101,7 @@ class TestMcpToolRegistration(unittest.TestCase):
         tool_manager = mcp._tool_manager
         return {name for name in tool_manager._tools}
 
-    def test_all_14_tools_registered(self):
+    def test_all_15_tools_registered(self):
         registered = self._registered_names()
         missing = EXPECTED_TOOLS - registered
         self.assertEqual(missing, set(), f"Missing tools: {missing}")
@@ -473,7 +474,7 @@ class TestMcpProtocolHandshake(unittest.TestCase):
 class TestMcpProtocolListTools(unittest.TestCase):
     """MCP protocol tool listing via the protocol layer."""
 
-    def test_list_tools_returns_all_14(self):
+    def test_list_tools_returns_all_15(self):
         async def _test():
             low_server, init_opts, c2s_recv, s2c_send, client = (
                 await _create_mcp_client_session()

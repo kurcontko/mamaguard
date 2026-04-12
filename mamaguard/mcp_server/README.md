@@ -1,6 +1,6 @@
 # MamaGuard MCP Server
 
-Standalone MCP server exposing 14 FHIR tools for maternal-pediatric care coordination. Shares tool implementations with the ADK agents (single source of truth -- no duplication).
+Standalone MCP server exposing 15 FHIR tools for maternal-pediatric care coordination. Shares tool implementations with the ADK agents (single source of truth -- no duplication).
 
 ## Quick Start
 
@@ -22,7 +22,7 @@ MCP Client (Claude Desktop / Cursor / PO BYO Agent / custom)
     │
     │  MCP protocol (stdio or SSE)
     ▼
-mamaguard/mcp_server/server.py     ← FastMCP server, 14 tool registrations
+mamaguard/mcp_server/server.py     ← FastMCP server, 15 tool registrations
     │
     │  Direct Python imports (no HTTP, no duplication)
     ▼
@@ -64,6 +64,7 @@ Every tool requires three SHARP context parameters:
 |------|------------------|-------------|
 | `get_patient_summary` | -- | Demographics, conditions, medications, recent vitals |
 | `get_active_medications` | -- | Active medications with dosage instructions |
+| `find_linked_newborn` | `mother_patient_id: str` | Find child Patients linked via RelatedPerson |
 
 ### Maternal Tools
 
@@ -160,4 +161,4 @@ python -m pytest mamaguard/tests/test_mcp_server.py -v
 python -m pytest mamaguard/tests/ -v
 ```
 
-Tests cover: tool registration (all 14), tool invocation with mocked FHIR, FHIR context propagation, SHARP deserialization, and error handling.
+Tests cover: tool registration (all 15), tool invocation with mocked FHIR, FHIR context propagation, SHARP deserialization, and error handling.

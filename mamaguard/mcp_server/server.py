@@ -1,7 +1,7 @@
 """
 MamaGuard MCP Server
 
-Exposes all 14 FHIR tools from mamaguard/shared/tools/ via the MCP protocol.
+Exposes all 15 FHIR tools from mamaguard/shared/tools/ via the MCP protocol.
 Shares tool implementations with the ADK agents — no duplication.
 
 SHARP context: each tool accepts fhir_url, fhir_token, and patient_id as
@@ -33,6 +33,7 @@ from .context import FhirContext
 
 # -- Shared tool imports (single source of truth) ----------------------------
 from mamaguard.shared.tools.fhir_base import (
+    find_linked_newborn as _find_linked_newborn,
     get_patient_summary as _get_patient_summary,
     get_active_medications as _get_active_medications,
 )
@@ -128,7 +129,37 @@ def get_active_medications(
 
 
 # ---------------------------------------------------------------------------
-# Tool 3: get_bp_trend
+# Tool 3: find_linked_newborn
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def find_linked_newborn(
+    fhir_url: str,
+    fhir_token: str,
+    patient_id: str,
+    mother_patient_id: str,
+) -> str:
+    """
+    Find child Patient resources linked to a maternal patient.
+
+    Queries FHIR RelatedPerson resources to discover children linked via
+    CHILD/SON/DAU relationship codes. Returns child patient IDs, names,
+    and birth dates for seamless maternal-to-pediatric handoff.
+
+    Args:
+        fhir_url: Base URL of the FHIR R4 server
+        fhir_token: Bearer token for FHIR server authentication
+        patient_id: FHIR Patient resource ID (SHARP context — the mother)
+        mother_patient_id: The FHIR Patient ID of the mother to search links for
+    """
+    return _json(_find_linked_newborn(
+        mother_patient_id=mother_patient_id,
+        tool_context=_ctx(fhir_url, fhir_token, patient_id),  # type: ignore[arg-type]
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Tool 4: get_bp_trend
 # ---------------------------------------------------------------------------
 
 @mcp.tool()

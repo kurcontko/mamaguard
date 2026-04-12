@@ -338,6 +338,7 @@ class TestToolScopeMapping(unittest.TestCase):
     def test_all_tools_mapped(self):
         expected_tools = {
             "get_patient_summary", "get_active_medications",
+            "find_linked_newborn",
             "get_bp_trend", "get_glucose_trend",
             "get_pregnancy_history", "get_maternal_risk_profile",
             "get_immunization_gaps", "get_developmental_screening_status",
@@ -350,6 +351,7 @@ class TestToolScopeMapping(unittest.TestCase):
     def test_read_tools_use_rs_scopes(self):
         read_tools = [
             "get_patient_summary", "get_active_medications",
+            "find_linked_newborn",
             "get_bp_trend", "get_glucose_trend",
             "get_pregnancy_history", "get_maternal_risk_profile",
             "get_immunization_gaps", "get_developmental_screening_status",
