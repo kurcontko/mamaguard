@@ -176,11 +176,7 @@ def bench_safety_liaison():
     ]:
         lower = instruction.lower()
         checks[f"{name}_clinician_review"] = "clinician review" in lower
-        checks[f"{name}_no_autonomy"] = (
-            "never recommend treatment" in lower
-            or "never" in lower
-            or "do not" in lower
-        )
+        checks[f"{name}_no_autonomy"] = "never recommend treatment" in lower
 
     score = sum(checks.values()) / len(checks)
     return BenchmarkResult(

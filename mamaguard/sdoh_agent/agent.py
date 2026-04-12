@@ -1,8 +1,10 @@
 """
 SDOH + Outreach Agent -- sub-agent for social determinants of health.
 
-Phase 1: placeholder with base FHIR tools.
-Phase 3: will add SDOH-specific tools (get_sdoh_screening, create_communication_request, etc.)
+Screens for Z-code SDOH conditions, coverage gaps, and language barriers.
+Looks up actionable community resources and writes FHIR Goal + CarePlan
+for trackable referrals.  Uses the Liaison Agent pattern — all clinical
+decisions are flagged for clinician review.
 """
 
 from google.adk.agents import Agent
@@ -71,10 +73,16 @@ booking, postpartum Medicaid re-enrollment call).
 5. **Clinician Review Required:** Yes/No -- flag if coverage gaps affect \
 medication access or if urgent housing/food needs identified
 
+**Liaison Pattern (critical):**
+- NEVER recommend treatment changes or clinical interventions autonomously
+- When clinical action is needed, state: "CLINICIAN REVIEW REQUIRED: [reason]"
+- Provide evidence basis for the recommendation (cite FHIR resource IDs)
+- The clinician decides; you inform
+
 **Important:**
 - Prefer the actionable loop: screen → find_sdoh_resources → write_care_plan.
 - Graceful degradation: find_sdoh_resources always returns a usable list even \
-when the external directory is unreachable, so never skip the referral step.
+when the external directory is unreachable, so do not skip the referral step.
 - Flag missing insurance as HIGH priority for patients on chronic medications.
 """
 
