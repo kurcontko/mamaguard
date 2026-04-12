@@ -1,5 +1,5 @@
 """
-25 MedAgentBench-style cases over MamaGuard's FHIR tools.
+42 MedAgentBench-style cases over MamaGuard's FHIR tools.
 
 Format follows the public MedAgentBench task definition:
   - instruction:   natural-language user query
@@ -365,5 +365,168 @@ CASES: list[MedAgentCase] = [
         gold_answer=["CarePlan", "housing"],
         gold_not=["I prescribe"],
         domain="compound",
+    ),
+
+    # -------------------------------------------------------------------
+    # Query tasks — Priya Sharma (GDM + Stage 1 HTN)
+    # -------------------------------------------------------------------
+    MedAgentCase(
+        id="ma_q25",
+        instruction="What is this patient's latest HbA1c and is gestational diabetes controlled?",
+        patient_id="bench-priya-006",
+        task_type="query",
+        gold_tools={"get_glucose_trend"},
+        gold_answer=["6.8", "diabet"],
+        domain="maternal",
+    ),
+    MedAgentCase(
+        id="ma_q26",
+        instruction="Review this patient's blood pressure trend. Any hypertension concerns?",
+        patient_id="bench-priya-006",
+        task_type="query",
+        gold_tools={"get_bp_trend"},
+        gold_answer=["142", "elevated"],
+        gold_not=["Stage 2"],
+        domain="maternal",
+    ),
+    MedAgentCase(
+        id="ma_q27",
+        instruction="List all active medications for this patient with gestational diabetes.",
+        patient_id="bench-priya-006",
+        task_type="query",
+        gold_tools={"get_active_medications", "get_patient_summary"},
+        gold_answer=["Glyburide", "Prenatal"],
+        domain="maternal",
+    ),
+    MedAgentCase(
+        id="ma_q28",
+        instruction=(
+            "Perform a comprehensive maternal risk assessment for this patient. "
+            "She has gestational diabetes and borderline hypertension."
+        ),
+        patient_id="bench-priya-006",
+        task_type="query",
+        gold_tools={"get_maternal_risk_profile"},
+        gold_answer=["HIGH", "Elevated BP"],
+        gold_not=["URGENT", "I prescribe"],
+        domain="compound",
+    ),
+
+    # -------------------------------------------------------------------
+    # Query tasks — Destiny Williams (19yo, SDOH)
+    # -------------------------------------------------------------------
+    MedAgentCase(
+        id="ma_q29",
+        instruction="Screen this 19-year-old pregnant patient for social determinants of health.",
+        patient_id="bench-destiny-007",
+        task_type="query",
+        gold_tools={"get_sdoh_screening"},
+        gold_answer=["Stress", "Medicaid"],
+        domain="sdoh",
+    ),
+    MedAgentCase(
+        id="ma_q30",
+        instruction="Does this patient have any prior pregnancies or pregnancy losses on record?",
+        patient_id="bench-destiny-007",
+        task_type="query",
+        gold_tools={"get_pregnancy_history"},
+        gold_answer=["1"],
+        gold_not=["recurrent", "loss"],
+        domain="maternal",
+    ),
+    MedAgentCase(
+        id="ma_q31",
+        instruction=(
+            "This patient is experiencing stress and social isolation. "
+            "What community support resources are available?"
+        ),
+        patient_id="bench-destiny-007",
+        task_type="query",
+        gold_tools={"find_sdoh_resources"},
+        gold_answer=["211"],
+        domain="sdoh",
+    ),
+    MedAgentCase(
+        id="ma_q32",
+        instruction=(
+            "Assess this 19-year-old's maternal risk profile. "
+            "Is her pregnancy medically high risk?"
+        ),
+        patient_id="bench-destiny-007",
+        task_type="query",
+        gold_tools={"get_maternal_risk_profile"},
+        gold_answer=["ROUTINE"],
+        gold_not=["URGENT", "HIGH", "Stage 2"],
+        domain="compound",
+    ),
+
+    # -------------------------------------------------------------------
+    # Query tasks — Baby Williams (7mo, missed 4-month visit)
+    # -------------------------------------------------------------------
+    MedAgentCase(
+        id="ma_q33",
+        instruction=(
+            "This 7-month-old missed her 4-month well-child visit. "
+            "What immunizations is she overdue for?"
+        ),
+        patient_id="bench-baby-williams-004",
+        task_type="query",
+        gold_tools={"get_immunization_gaps"},
+        gold_answer=["DTaP", "overdue"],
+        domain="pediatric",
+    ),
+    MedAgentCase(
+        id="ma_q34",
+        instruction="Check developmental screening status for this 7-month-old infant.",
+        patient_id="bench-baby-williams-004",
+        task_type="query",
+        gold_tools={"get_developmental_screening_status"},
+        gold_answer=["surveillance"],
+        domain="pediatric",
+    ),
+
+    # -------------------------------------------------------------------
+    # Action tasks — new patients
+    # -------------------------------------------------------------------
+    MedAgentCase(
+        id="ma_a06",
+        instruction=(
+            "Create a FHIR RiskAssessment for this patient documenting "
+            "the gestational diabetes and elevated blood pressure risk. "
+            "Include evidence basis."
+        ),
+        patient_id="bench-priya-006",
+        task_type="action",
+        gold_tools={"write_risk_assessment"},
+        gold_answer=["RiskAssessment", "diabet"],
+        gold_not=["I prescribe"],
+        domain="maternal",
+    ),
+    MedAgentCase(
+        id="ma_a07",
+        instruction=(
+            "This young patient has stress and social isolation. "
+            "Find support resources and create a FHIR CarePlan to "
+            "connect her with community services."
+        ),
+        patient_id="bench-destiny-007",
+        task_type="action",
+        gold_tools={"find_sdoh_resources", "write_care_plan"},
+        gold_answer=["CarePlan", "Goal"],
+        gold_not=["I prescribe"],
+        domain="sdoh",
+    ),
+    MedAgentCase(
+        id="ma_a08",
+        instruction=(
+            "Create a CommunicationRequest to schedule a catch-up "
+            "immunization visit for this 7-month-old who missed her "
+            "4-month vaccines."
+        ),
+        patient_id="bench-baby-williams-004",
+        task_type="action",
+        gold_tools={"create_communication_request"},
+        gold_answer=["CommunicationRequest", "immuniz"],
+        domain="pediatric",
     ),
 ]

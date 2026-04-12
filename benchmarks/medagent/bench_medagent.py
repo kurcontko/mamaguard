@@ -1,7 +1,7 @@
 """
 MedAgentBench-style evaluator.
 
-Runs 25 cases through the real MamaGuard agent (via MamaGuardHarness) and
+Runs 41 cases through the real MamaGuard agent (via MamaGuardHarness) and
 scores each on:
 
   - Tool correctness: did the response use (at least one of) the gold tools?
@@ -143,7 +143,7 @@ def build_suite(
     """Build MedAgentBench-style eval suite."""
     suite = BenchmarkSuite(
         name="medagent",
-        description=f"MedAgentBench-style ({backend}) — 29 query+action tasks",
+        description=f"MedAgentBench-style ({backend}) — 42 query+action tasks",
     )
 
     _holder: dict = {}

@@ -14,11 +14,14 @@ Usage:
 
 from benchmarks.e2e.fhir_bundles import (
     baby_santos,
+    baby_williams,
     child_smith,
+    destiny_young_maternal,
     elena_preeclampsia,
     fatima_complex,
     james_insured,
     maria_high_risk,
+    priya_gdm,
     sarah_low_risk,
     toddler_jones,
 )
@@ -64,5 +67,20 @@ ALL_PATIENTS: dict[str, dict] = {
         "bundle": fatima_complex.BUNDLE,
         "label": "Fatima Al-Hassan",
         "scenario": "Arabic-speaking, unemployed, food insecurity, Medicaid",
+    },
+    priya_gdm.PATIENT_ID: {
+        "bundle": priya_gdm.BUNDLE,
+        "label": "Priya Sharma",
+        "scenario": "gestational diabetes + Stage 1 HTN, Hindi-speaking, insured",
+    },
+    destiny_young_maternal.PATIENT_ID: {
+        "bundle": destiny_young_maternal.BUNDLE,
+        "label": "Destiny Williams",
+        "scenario": "19yo first pregnancy, SDOH (stress + social isolation), Medicaid",
+    },
+    baby_williams.PATIENT_ID: {
+        "bundle": baby_williams.BUNDLE,
+        "label": "Mia Williams (7 months)",
+        "scenario": "7-month-old who missed 4-month visit, overdue immunizations",
     },
 }

@@ -91,6 +91,35 @@ MATERNAL_CASES = [
         answer_must_not_contain=["ROUTINE", "I prescribe"],
         rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
     ),
+    E2ECase(
+        id="e2e_priya_gdm_risk",
+        name="Priya GDM + elevated BP — HIGH risk assessment",
+        category="maternal",
+        user_message=(
+            "This patient has gestational diabetes. Perform a comprehensive "
+            "maternal risk assessment including BP and glucose trends."
+        ),
+        patient_id="bench-priya-006",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["HIGH", "142", "6.8"],
+        answer_must_not_contain=["URGENT", "I prescribe"],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    E2ECase(
+        id="e2e_destiny_routine",
+        name="Destiny 19yo routine maternal risk — ROUTINE",
+        category="maternal",
+        user_message=(
+            "This 19-year-old is in her first pregnancy. "
+            "Check her maternal risk profile."
+        ),
+        patient_id="bench-destiny-007",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["ROUTINE"],
+        answer_must_not_contain=["URGENT", "HIGH", "Stage 2", "I prescribe"],
+    ),
 ]
 
 
@@ -135,6 +164,20 @@ PEDIATRIC_CASES = [
         expected_tools={"get_immunization_gaps"},
         expected_agents={"pediatric_transition_agent"},
         answer_must_contain=["MMR", "Varicella", "overdue"],
+    ),
+    E2ECase(
+        id="e2e_baby_williams_catchup",
+        name="7-month-old missed 4-month visit — catch-up immunizations",
+        category="pediatric",
+        user_message=(
+            "This 7-month-old missed her 4-month well-child visit. "
+            "What immunizations is she overdue for and what is due now?"
+        ),
+        patient_id="bench-baby-williams-004",
+        expected_tools={"get_immunization_gaps"},
+        expected_agents={"pediatric_transition_agent"},
+        answer_must_contain=["DTaP", "overdue"],
+        answer_must_not_contain=["I prescribe"],
     ),
 ]
 
@@ -207,6 +250,20 @@ SDOH_CASES = [
         answer_must_not_contain=["I prescribe"],
         rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
     ),
+    E2ECase(
+        id="e2e_destiny_sdoh",
+        name="Destiny SDOH screening: stress + social isolation + Medicaid",
+        category="sdoh",
+        user_message=(
+            "Screen this 19-year-old pregnant patient for social determinants "
+            "of health. Check coverage status and any documented social concerns."
+        ),
+        patient_id="bench-destiny-007",
+        expected_tools={"get_sdoh_screening"},
+        expected_agents={"sdoh_outreach_agent"},
+        answer_must_contain=["Stress", "Medicaid"],
+        answer_must_not_contain=["uninsured"],
+    ),
 ]
 
 
@@ -252,6 +309,18 @@ ROUTING_CASES = [
         ),
         patient_id="bench-maria-001",
         expected_agents={"maternal_risk_agent", "sdoh_outreach_agent"},
+    ),
+    E2ECase(
+        id="e2e_route_glucose",
+        name="GDM glucose query should route to maternal agent",
+        category="routing",
+        user_message=(
+            "What is this patient's current HbA1c level? "
+            "Is her gestational diabetes controlled?"
+        ),
+        patient_id="bench-priya-006",
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["6.8"],
     ),
 ]
 
