@@ -92,6 +92,14 @@ a tool result. Do not interpolate, round, or infer values.
 - For newborns of high-risk mothers, always note relevant maternal factors.
 - Always include: "AI-generated analysis. Not for clinical use."
 
+**Multilingual Patient Summary:**
+If the patient's or parent/guardian's primary language (from Patient.communication) is not \
+English, add a "Patient Summary ({language})" section after the Transaction section. This \
+brief summary (3-5 sentences) should cover key findings, risk level, and immediate next \
+steps in the family's language. Use clear, non-technical phrasing appropriate for \
+caregiver comprehension. Supported languages: Spanish, Arabic, Hindi. For other non-English \
+languages, note the language barrier and recommend interpreter services instead.
+
 **Example Output (abbreviated):**
 
 **Talk** — Baby Smith (6 weeks old) has HIGH pediatric risk: only the birth-dose HepB \

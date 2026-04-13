@@ -93,6 +93,14 @@ a tool result. Do not interpolate, round, or infer values.
 - Cite specific data points (dates, values, resource IDs) as evidence.
 - Always include: "AI-generated analysis. Not for clinical use."
 
+**Multilingual Patient Summary:**
+If the patient's primary language (from Patient.communication) is not English, add a \
+"Patient Summary ({language})" section after the Transaction section. This brief summary \
+(3-5 sentences) should cover key findings, risk level, and immediate next steps in the \
+patient's language. Use clear, non-technical phrasing appropriate for patient comprehension. \
+Supported languages: Spanish, Arabic, Hindi. For other non-English languages, note the \
+language barrier and recommend interpreter services instead.
+
 **Example Output (abbreviated):**
 
 **Talk** — Maria presents with URGENT maternal risk: Stage 2 hypertension (most recent \
