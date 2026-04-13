@@ -48,6 +48,8 @@ def build_audit_event(
         outcome: FHIR AuditEvent outcome code -- ``0`` (Success), ``4`` (Minor
                  failure), ``8`` (Serious failure), ``12`` (Major failure).
     """
+    from mamaguard import MAMAGUARD_VERSION
+
     return {
         "resourceType": "AuditEvent",
         "type": {
@@ -88,7 +90,7 @@ def build_audit_event(
                     ]
                 },
                 "who": {
-                    "display": f"MamaGuard AI -- {tool_name}",
+                    "display": f"MamaGuard v{MAMAGUARD_VERSION} -- {tool_name}",
                 },
                 "name": "MamaGuard",
                 "requestor": False,
@@ -96,7 +98,7 @@ def build_audit_event(
         ],
         "source": {
             "observer": {
-                "display": "MamaGuard Healthcare AI Agent",
+                "display": f"MamaGuard v{MAMAGUARD_VERSION} Healthcare AI Agent",
             },
             "type": [
                 {

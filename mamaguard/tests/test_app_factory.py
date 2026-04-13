@@ -86,8 +86,9 @@ class TestAgentCardEndpoint(_AppTestCase):
         self.assertEqual(card["name"], "MamaGuard Care Coordinator")
 
     def test_card_version(self):
+        from mamaguard import MAMAGUARD_VERSION
         card = self.client.get("/.well-known/agent-card.json").json()
-        self.assertEqual(card["version"], "1.0.0")
+        self.assertEqual(card["version"], MAMAGUARD_VERSION)
 
     def test_card_description_mentions_fhir_tools(self):
         card = self.client.get("/.well-known/agent-card.json").json()

@@ -299,7 +299,10 @@ def main() -> None:
     parser.add_argument("--verbose", "-v", action="store_true", help="Print response previews")
     args = parser.parse_args()
 
+    from mamaguard import MAMAGUARD_VERSION
+
     print(f"{BOLD}=== MamaGuard Smoke Test ==={RESET}")
+    print(f"  Version: {MAMAGUARD_VERSION}")
     print(f"  Agent:   {args.url}")
     print(f"  FHIR:    {args.fhir_url}")
     print(f"  Patient: {args.patient_id}")

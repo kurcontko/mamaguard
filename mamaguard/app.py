@@ -18,12 +18,14 @@ load_dotenv()
 
 from a2a.types import AgentSkill
 
+from mamaguard import MAMAGUARD_VERSION
 from mamaguard.shared.app_factory import create_a2a_app
 from mamaguard.orchestrator.agent import root_agent
 
 a2a_app = create_a2a_app(
     agent=root_agent,
     name="MamaGuard Care Coordinator",
+    version=MAMAGUARD_VERSION,
     description=(
         "Maternal-pediatric care coordination agent with 15 FHIR tools. "
         "Three specialist agents (Maternal Risk, Pediatric Transition, SDOH Outreach) "
