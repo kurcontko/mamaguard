@@ -7,6 +7,23 @@ Built for the [Agents Assemble](https://agents-assemble.devpost.com/) hackathon.
 
 ---
 
+## Getting Started for Judges
+
+```bash
+git clone <repo-url> && cd mamaguard
+make setup                  # install deps (~15s)
+make test                   # 1122 unit tests (<3s)
+make tier1                  # 59 deterministic benchmark cases, 100% pass rate
+# To run the agent locally (needs GOOGLE_API_KEY in mamaguard/.env):
+cp mamaguard/.env.example mamaguard/.env   # then add your key
+make serve                  # A2A agent on http://localhost:8001
+make smoke                  # hit the running agent with 3 clinical queries
+```
+
+What you'll see: three specialist agents (maternal, pediatric, SDOH) coordinating through an orchestrator, producing structured 5T assessments with FHIR evidence citations, clinician review blocks, and confidence scoring -- all from real FHIR patient data.
+
+---
+
 ## What It Does
 
 MamaGuard is a multi-agent AI care coordination system that analyzes FHIR patient records to support maternal and pediatric health. Three specialist agents coordinate through a single A2A interface:
