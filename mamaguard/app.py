@@ -40,12 +40,16 @@ a2a_app = create_a2a_app(
             id="maternal-risk-assessment",
             name="Maternal Risk Assessment",
             description=(
-                "Analyzes maternal risk factors using 7 FHIR tools: BP trends, "
-                "glucose/HbA1c control, pregnancy history, medication review, and "
-                "compound risk profile. Flags Stage 2 HTN, uncontrolled diabetes, "
-                "and recurrent pregnancy loss. Writes RiskAssessment to FHIR. "
-                "Example: 'Assess maternal risk for this patient' or "
-                "'What are this patient's BP trends?'"
+                "Specialist agent with 7 FHIR tools that evaluates maternal risk "
+                "across BP trends, glucose/HbA1c, pregnancy history, active "
+                "medications, and a compound risk profile. Detects Stage 2 HTN, "
+                "uncontrolled diabetes, recurrent pregnancy loss, and postpartum "
+                "complications. Returns structured 5T output (Talk, Template, "
+                "Table, Task, Transaction) with FHIR-cited evidence and writes "
+                "RiskAssessment back to the patient record. Operates as a Liaison "
+                "Agent — flags critical findings for clinician review, never "
+                "prescribes or recommends specific medications. "
+                "Example: 'Assess maternal risk for this patient'"
             ),
             tags=["maternal", "risk", "pregnancy", "fhir"],
         ),
@@ -53,11 +57,14 @@ a2a_app = create_a2a_app(
             id="pediatric-care-transition",
             name="Pediatric Care Transition",
             description=(
-                "Manages pediatric care using 5 FHIR tools: immunization gap "
-                "analysis against CDC schedule, developmental screening per AAP "
-                "Bright Futures, and preventive care gap detection. Creates "
-                "CommunicationRequest for follow-up. Considers maternal risk "
-                "factors for newborns. "
+                "Specialist agent with 5 FHIR tools covering immunization gap "
+                "analysis (CDC schedule), developmental screening (AAP Bright "
+                "Futures), and preventive care gaps. Integrates maternal context "
+                "for newborns — screens for GDM-related neonatal risks, SGA from "
+                "preeclampsia, and adjusts milestones for prematurity. Returns "
+                "structured 5T output (Talk, Template, Table, Task, Transaction) "
+                "and creates CommunicationRequest for follow-up. Operates as a "
+                "Liaison Agent — flags all clinical decisions for clinician review. "
                 "Example: 'Check immunization status and developmental milestones'"
             ),
             tags=["pediatric", "immunization", "screening", "newborn"],
@@ -66,11 +73,15 @@ a2a_app = create_a2a_app(
             id="sdoh-screening-outreach",
             name="SDOH Screening & Outreach",
             description=(
-                "Screens for social determinants using 6 FHIR tools: insurance "
-                "coverage gaps, language barriers, Z-code conditions (housing, food, "
-                "economic). Looks up concrete community resources (211, WIC, SNAP, "
-                "Medicaid). Writes FHIR Goal + CarePlan for trackable referrals and "
-                "CommunicationRequest for outreach. "
+                "Specialist agent with 6 FHIR tools that screens for social "
+                "determinants: insurance coverage gaps, language barriers, and "
+                "ICD-10 Z-code conditions (housing, food, transport, economic). "
+                "Matches patients to concrete community resources (211, WIC, SNAP, "
+                "Medicaid) and writes FHIR Goal + CarePlan for trackable referrals "
+                "plus CommunicationRequest for outreach. Returns structured 5T "
+                "output (Talk, Template, Table, Task, Transaction) prioritized by "
+                "domain severity. Operates as a Liaison Agent — coordinates "
+                "referrals while keeping clinicians in the loop. "
                 "Example: 'Screen for social determinants and find resources'"
             ),
             tags=["sdoh", "social-determinants", "outreach", "care-plan"],
@@ -79,10 +90,15 @@ a2a_app = create_a2a_app(
             id="comprehensive-care-plan",
             name="Comprehensive Care Plan",
             description=(
-                "Runs all three specialists sequentially — maternal risk, pediatric "
-                "transition, SDOH screening — then synthesizes findings into a "
-                "prioritized 5T care coordination plan (Talk, Template, Table, Task, "
-                "Transaction). Best for full patient assessments. "
+                "Runs all three specialist agents sequentially — maternal risk "
+                "(7 tools), pediatric transition (5 tools), SDOH screening "
+                "(6 tools) — then synthesizes findings into a unified 5T care "
+                "coordination plan (Talk, Template, Table, Task, Transaction). "
+                "Applies cross-domain risk elevation rules: SDOH gaps with chronic "
+                "medications escalate risk; maternal complications elevate pediatric "
+                "monitoring. Highest risk from any domain wins. Operates as a "
+                "Liaison Agent — all critical decisions flagged for clinician "
+                "review. Best for full patient assessments. "
                 "Example: 'Run a comprehensive assessment for this patient'"
             ),
             tags=["care-plan", "coordination", "summary"],
