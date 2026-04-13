@@ -44,6 +44,7 @@
         "synthesis_risk_level": "ROUTINE",
         "synthesis_risk_factor_count": 0,
         "synthesis_evidence_ref_count": 0,
+        "synthesis_evidence_refs": [],
         "synthesis_has_clinician_reason": false,
         "synthesis_has_recommendation": false,
         "synthesis_has_confidence": true,
@@ -120,6 +121,12 @@
         "synthesis_risk_level": "HIGH",
         "synthesis_risk_factor_count": 2,
         "synthesis_evidence_ref_count": 4,
+        "synthesis_evidence_refs": [
+          "Observation/bp-mod-1 (BP 146/92 on 2026-03-25)",
+          "Observation/bp-mod-2 (BP 142/88 on 2026-03-12)",
+          "Observation/hba1c-mod-1 (HbA1c 6.8% on 2026-03-22)",
+          "Patient primary language: Spanish"
+        ],
         "synthesis_has_clinician_reason": true,
         "synthesis_has_recommendation": true,
         "synthesis_has_confidence": true,
@@ -217,6 +224,14 @@
         "synthesis_risk_level": "URGENT",
         "synthesis_risk_factor_count": 2,
         "synthesis_evidence_ref_count": 6,
+        "synthesis_evidence_refs": [
+          "Observation/bp-sev-1 (BP 164/106 on 2026-03-30)",
+          "Observation/bp-sev-2 (BP 160/100 on 2026-03-20)",
+          "Observation/hba1c-sev-1 (HbA1c 7.4% on 2026-03-28)",
+          "No Coverage resources found for patient",
+          "Patient primary language: Spanish",
+          "Condition/cond-housing-sev (Housing problem)"
+        ],
         "synthesis_has_clinician_reason": true,
         "synthesis_has_recommendation": true,
         "synthesis_has_confidence": true,

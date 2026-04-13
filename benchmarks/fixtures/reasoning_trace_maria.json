@@ -136,9 +136,9 @@
       "compound_risk_level": "URGENT",
       "clinical_sdoh_interactions": [
         "Severe hypertension co-occurs with a coverage gap: antihypertensive access is at risk. Treat as an urgent continuity-of-care issue, not just a medication adjustment.",
-        "Postpartum severe BP teaching must be delivered in the patient's preferred language (Spanish); English-only discharge instructions are a known driver of readmission for postpartum preeclampsia.",
+        "Postpartum BP teaching must be delivered in the patient's preferred language; English-only discharge instructions are a known driver of postpartum readmission.",
         "Diabetes management is incompatible with unstable housing (refrigeration for insulin, consistent meal timing). SDOH team should be looped in before any glycemic medication change.",
-        "Overlap of postpartum hypertension and diabetes range HbA1c raises long-term cardiovascular risk \u2014 flag for extended postpartum follow-up beyond the 6-week standard.",
+        "Overlap of postpartum hypertension and diabetes-range HbA1c raises long-term cardiovascular risk \u2014 flag for extended postpartum follow-up beyond the 6-week standard.",
         "All three social determinants (housing, coverage, language) are present simultaneously \u2014 escalate to SDOH navigator for bundled wraparound referral, not three independent referrals."
       ],
       "recommended_priorities": [
@@ -153,10 +153,13 @@
   },
   "synthesis_advantage": {
     "baseline_flag_count": 5,
-    "baseline_has_compound_risk_level": false,
-    "baseline_has_evidence_basis": false,
-    "baseline_has_clinician_reason": false,
-    "baseline_has_cross_factor_insights": false,
+    "baseline_flags": [
+      "HIGH_BP",
+      "DIABETES",
+      "HOUSING_ISSUE",
+      "LANGUAGE_BARRIER",
+      "NO_COVERAGE"
+    ],
     "synthesis_risk_level": "URGENT",
     "synthesis_risk_factor_count": 2,
     "synthesis_evidence_ref_count": 7,

@@ -1,34 +1,30 @@
 """
-Baseline comparison table (Phase 3 — AI Factor judging evidence).
+Baseline comparison & reasoning-trace benchmarks (AI Factor evidence).
 
-Extends the single-case reasoning-trace benchmark with a multi-case side-by-
-side comparison: for each of three clinical scenarios (mild / moderate /
-severe) we run the naive rule-engine baseline and the MamaGuard liaison
-synthesis against the same mocked FHIR bundles, then quantify the lift the
-synthesis layer contributes.
+Two suites in one module — they share case infrastructure, rule-engine
+baseline, synthesis driver, cross-factor insight logic, and advantage diff:
 
-Purpose
--------
-Gives the hackathon judges a single artefact that shows, across a range of
-complexity, what a non-AI rule engine would have produced versus what the
-MamaGuard synthesis actually produces. It is the concrete evidence for the
-"AI Factor" judging axis called out in TASK.md Phase 3.
+  **baseline_comparison** — side-by-side rule-engine baseline vs. MamaGuard
+  liaison synthesis across low / moderate / severe cases.  Shows the
+  concrete affordances (compound risk level, evidence citation, cross-factor
+  insight) that a non-AI rule engine cannot produce from the same FHIR
+  inputs.
+
+  **reasoning_trace** — deep dive into a single compound case (Maria) with
+  five concurrent risk domains.  Captures the full structured reasoning
+  trace to ``benchmarks/fixtures/reasoning_trace_maria.json`` for
+  submission materials and pins it against live output on every Tier-1 run.
 
 Outputs
 -------
-- `benchmarks/fixtures/baseline_comparison_table.json` — full per-case data
-  (baseline flags, synthesis risk level, cross-factor insights, advantage
-  diff, per-case deltas) for downstream tooling.
-- `benchmarks/fixtures/baseline_comparison_table.md` — human-readable
-  markdown table for inclusion in submission materials / README.
+- ``benchmarks/fixtures/baseline_comparison_table.json`` / ``.md``
+- ``benchmarks/fixtures/reasoning_trace_maria.json``
 
-Both are committed. The `baseline_comparison_fixture_current` Tier-1 case
-pins the fixtures against live synthesis output so drift in the synthesis
-layer, rule engine, or mocked FHIR fixtures is surfaced on every benchmark
-run. Regenerate via:
-
+Regenerate:
     python3 -m benchmarks.clinical_reasoning.bench_baseline_comparison \
-        --regenerate-fixture
+        --regenerate-fixture          # baseline comparison table
+    python3 -m benchmarks.clinical_reasoning.bench_baseline_comparison \
+        --regenerate-reasoning-trace  # reasoning trace fixture
 """
 
 from __future__ import annotations
@@ -44,6 +40,11 @@ from benchmarks.base import BenchmarkResult, BenchmarkSuite, MockToolContext, Ve
 suite = BenchmarkSuite(
     name="baseline_comparison",
     description="Rule-engine baseline vs. MamaGuard synthesis across mild/moderate/severe cases",
+)
+
+reasoning_trace_suite = BenchmarkSuite(
+    name="reasoning_trace",
+    description="Compound-case synthesis vs. rule-engine baseline (AI Factor evidence)",
 )
 
 
@@ -67,6 +68,9 @@ class CaseFixture:
     all_conditions_bundle: dict = field(default_factory=dict)
     patient_resource: dict = field(default_factory=dict)
     coverage_bundle: dict = field(default_factory=dict)
+
+
+# -- FHIR bundle helpers -------------------------------------------------------
 
 
 def _empty_bundle() -> dict:
@@ -151,8 +155,6 @@ def _normal_pregnancy_condition(cond_id: str = "cond-preg") -> dict:
 def _patient_resource(patient_id: str, language: str | None) -> dict:
     res: dict[str, Any] = {"resourceType": "Patient", "id": patient_id}
     if language:
-        # Language code: english -> en, spanish -> es. Good enough for the
-        # bench; the real tool uses BCP-47 codes or display text.
         code = {"english": "en", "spanish": "es"}.get(language.lower(), language[:2])
         res["communication"] = [
             {
@@ -339,60 +341,83 @@ def _case_severe() -> CaseFixture:
     )
 
 
+def _case_compound_maria() -> CaseFixture:
+    """Original compound Maria case — used by the reasoning_trace suite."""
+    pid = "compound-maria-001"
+    return CaseFixture(
+        case_id="compound_maria_postpartum",
+        display_name="Compound Maria — severe HTN + diabetes + housing + language + coverage gap",
+        tier="severe",
+        narrative=(
+            "Postpartum Stage-2 hypertension (BP 162/104, 158/98, 144/92), "
+            "HbA1c 7.2% (diabetes range), housing instability Z-code, "
+            "Spanish language preference, Medicaid coverage gap. Five "
+            "concurrent risk domains that a rule engine sees as isolated "
+            "flags; the liaison synthesis produces compound risk with "
+            "cross-factor insights."
+        ),
+        patient_id=pid,
+        bp_bundle={
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "entry": [
+                _bp_entry("2026-03-20", 162, 104, "bp-compound-1"),
+                _bp_entry("2026-03-10", 158, 98, "bp-compound-2"),
+                _bp_entry("2026-02-15", 144, 92, "bp-compound-3"),
+            ],
+        },
+        hba1c_bundle={
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "entry": [_hba1c_entry("2026-03-18", 7.2, "hba1c-compound-1")],
+        },
+        glucose_bundle={
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "entry": [_glucose_entry("2026-03-18", 148, "glucose-compound-1")],
+        },
+        pregnancy_bundle={
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "entry": [_normal_pregnancy_condition("preg-compound-1")],
+        },
+        loss_bundle=_empty_bundle(),
+        all_conditions_bundle={
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "entry": [
+                _housing_condition("sdoh-housing-1"),
+                {
+                    "resource": {
+                        "resourceType": "Condition",
+                        "id": "preg-compound-1",
+                        "code": {
+                            "coding": [{"code": "72892002", "display": "Normal pregnancy"}],
+                            "text": "Normal pregnancy",
+                        },
+                        "clinicalStatus": {"coding": [{"code": "resolved"}]},
+                    }
+                },
+            ],
+        },
+        patient_resource=_patient_resource(pid, "spanish"),
+        coverage_bundle=_empty_bundle(),
+    )
+
+
 CASES: list[CaseFixture] = [_case_low(), _case_moderate(), _case_severe()]
+COMPOUND_MARIA: CaseFixture = _case_compound_maria()
 
 
-# -- Mock side-effect factories ------------------------------------------------
-
-
-def _maternal_side_effect_for(case: CaseFixture) -> Callable:
-    """Route mocked `_fhir_get` calls made from `mamaguard.shared.tools.maternal`."""
-
-    def _side_effect(fhir_url, token, path, params=None):
-        params = params or {}
-        code = params.get("code", "")
-        if path == "Observation":
-            if "55284-4" in code:
-                return case.bp_bundle
-            if "4548-4" in code:
-                return case.hba1c_bundle
-            if "2339-0" in code:
-                return case.glucose_bundle
-            return _empty_bundle()
-        if path == "Condition":
-            if "72892002" in code:
-                return case.pregnancy_bundle
-            return case.loss_bundle
-        return _empty_bundle()
-
-    return _side_effect
-
-
-def _sdoh_side_effect_for(case: CaseFixture) -> Callable:
-    """Route mocked `_fhir_get` calls made from `mamaguard.shared.tools.sdoh`."""
-
-    def _side_effect(fhir_url, token, path, params=None):
-        if path.startswith("Patient/"):
-            return case.patient_resource
-        if path == "Condition":
-            return case.all_conditions_bundle
-        if path == "Coverage":
-            return case.coverage_bundle
-        return _empty_bundle()
-
-    return _side_effect
-
-
-# -- Rule-engine baseline (parametric version of the reasoning_trace one) ------
+# -- Shared synthesis & comparison engine --------------------------------------
 
 
 def rule_engine_baseline(case: CaseFixture) -> dict:
     """
-    Deliberately naive non-AI baseline. Walks the same raw bundles the
+    Deliberately naive non-AI baseline.  Walks the same raw bundles the
     synthesis path will see and emits a flat list of isolated flags with no
     risk level, evidence, clinician-review reasoning, or cross-factor
-    structure. Same shape and philosophy as the function of the same name
-    in `bench_reasoning_trace.py`, parametrised over a `CaseFixture`.
+    structure.
     """
     flags: list[str] = []
 
@@ -431,12 +456,7 @@ def rule_engine_baseline(case: CaseFixture) -> dict:
     return {
         "engine": "rule_based_baseline",
         "flags": flags,
-        # Intentionally absent: risk_level, risk_factors, clinician_review,
-        # evidence_basis, confidence, recommendations, interactions.
     }
-
-
-# -- MamaGuard synthesis driver ------------------------------------------------
 
 
 def mamaguard_synthesis(case: CaseFixture) -> dict:
@@ -485,9 +505,8 @@ def mamaguard_synthesis(case: CaseFixture) -> dict:
 
 def _compose_cross_factor_insights(maternal: dict, sdoh: dict) -> dict:
     """
-    Cross-domain insights: exactly the liaison-layer synthesis the rule
-    engine cannot produce. Mirrors `_compose_cross_factor_insights` in
-    bench_reasoning_trace so the comparison stays apples-to-apples.
+    Cross-domain insights: the liaison-layer synthesis the rule engine
+    cannot produce.
     """
     m_data = maternal.get("data", {}) if maternal.get("status") == "success" else {}
     s_data = sdoh.get("data", {}) if sdoh.get("status") == "success" else {}
@@ -582,6 +601,7 @@ def _synthesis_advantage(baseline: dict, synthesis: dict) -> dict:
             maternal.get("data", {}).get("risk_factors", [])
         ),
         "synthesis_evidence_ref_count": len(evidence_refs),
+        "synthesis_evidence_refs": evidence_refs,
         "synthesis_has_clinician_reason": bool(m_review.get("reason"))
         or bool(s_review.get("reason")),
         "synthesis_has_recommendation": bool(m_review.get("recommendation"))
@@ -611,7 +631,7 @@ def _synthesis_advantage(baseline: dict, synthesis: dict) -> dict:
     return advantages
 
 
-# -- Table build + render ------------------------------------------------------
+# -- Baseline comparison table build + render ----------------------------------
 
 
 FIXTURE_DIR = Path(__file__).resolve().parent.parent / "fixtures"
@@ -630,9 +650,6 @@ def _build_case_record(case: CaseFixture) -> dict:
         "narrative": case.narrative,
         "rule_engine_baseline": baseline,
         "mamaguard_synthesis": {
-            # Trim synthesis payload: we only need the liaison-facing slice,
-            # not the full raw FHIR dump (which bench_reasoning_trace already
-            # captures for the compound case).
             "maternal_risk_level": synthesis["maternal_profile"]
             .get("data", {})
             .get("risk_level"),
@@ -782,16 +799,16 @@ def _render_markdown(table: dict) -> str:
     return "\n".join(lines)
 
 
-def _load_json_fixture() -> dict | None:
-    if not JSON_FIXTURE_PATH.exists():
+def _load_json_fixture(path: Path) -> dict | None:
+    if not path.exists():
         return None
     try:
-        return json.loads(JSON_FIXTURE_PATH.read_text())
+        return json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return None
 
 
-def _regenerate_fixtures() -> None:
+def _regenerate_baseline_fixtures() -> None:
     table = _build_full_table()
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
     JSON_FIXTURE_PATH.write_text(json.dumps(table, indent=2, default=str) + "\n")
@@ -800,7 +817,39 @@ def _regenerate_fixtures() -> None:
     print(f"Wrote markdown fixture: {MD_FIXTURE_PATH}")
 
 
-# -- Benchmark cases -----------------------------------------------------------
+# -- Reasoning trace fixture ---------------------------------------------------
+
+REASONING_TRACE_PATH = FIXTURE_DIR / "reasoning_trace_maria.json"
+
+
+def _build_full_trace() -> dict:
+    baseline = rule_engine_baseline(COMPOUND_MARIA)
+    synthesis = mamaguard_synthesis(COMPOUND_MARIA)
+    diff = _synthesis_advantage(baseline, synthesis)
+    return {
+        "case_name": "compound_maria_postpartum",
+        "description": (
+            "Compound synthesis scenario: postpartum Stage-2 HTN + HbA1c "
+            "diabetes-range + housing instability Z-code + Spanish language "
+            "preference + Medicaid gap. Demonstrates AI Factor lift of "
+            "MamaGuard's liaison-pattern synthesis vs. a naive rule engine."
+        ),
+        "rule_engine_baseline": baseline,
+        "mamaguard_synthesis": synthesis,
+        "synthesis_advantage": diff,
+    }
+
+
+def _regenerate_reasoning_trace() -> None:
+    trace = _build_full_trace()
+    FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
+    REASONING_TRACE_PATH.write_text(json.dumps(trace, indent=2, default=str) + "\n")
+    print(f"Wrote reasoning-trace fixture to {REASONING_TRACE_PATH}")
+
+
+# ===========================================================================
+#  BASELINE COMPARISON SUITE — benchmark cases
+# ===========================================================================
 
 
 @suite.case(
@@ -918,7 +967,7 @@ def bench_severe_case_produces_urgent_compound():
 
 @suite.case(
     "lift_monotonic_across_tiers",
-    "Synthesis produces strictly more (or equal) affordances as case tier escalates low→moderate→severe",
+    "Synthesis produces strictly more (or equal) affordances as case tier escalates low->moderate->severe",
     "baseline_comparison",
 )
 def bench_lift_monotonic_across_tiers():
@@ -965,7 +1014,7 @@ def bench_lift_monotonic_across_tiers():
 )
 def bench_baseline_comparison_fixture_current():
     live = _build_full_table()
-    json_fixture = _load_json_fixture()
+    json_fixture = _load_json_fixture(JSON_FIXTURE_PATH)
     md_current = MD_FIXTURE_PATH.read_text() if MD_FIXTURE_PATH.exists() else ""
     md_live = _render_markdown(live) + "\n"
 
@@ -1017,25 +1066,196 @@ def bench_baseline_comparison_fixture_current():
     )
 
 
-# -- CLI: regenerate the fixtures ---------------------------------------------
+# ===========================================================================
+#  REASONING TRACE SUITE — benchmark cases (compound Maria case)
+# ===========================================================================
+
+
+@reasoning_trace_suite.case(
+    "compound_synthesis_detects_all_factors",
+    "Liaison synthesis detects BP + diabetes range + housing + language + coverage gap together",
+    "reasoning_trace",
+)
+def bench_compound_synthesis_detects_all_factors():
+    synthesis = mamaguard_synthesis(COMPOUND_MARIA)
+    maternal = synthesis["maternal_profile"]
+    sdoh = synthesis["sdoh_profile"]
+
+    m_data = maternal["data"]
+    s_data = sdoh["data"]
+
+    checks = {
+        "risk_level_elevated": m_data["risk_level"] in ("URGENT", "HIGH"),
+        "bp_severe_flagged": bool(m_data["bp_summary"]["alert_severe"]),
+        "hba1c_diabetes_range": bool(m_data["glucose_summary"]["diabetes_range"]),
+        "multi_factor": len(m_data["risk_factors"]) >= 2,
+        "maternal_clinician_review": maternal["clinician_review"]["required"] is True,
+        "housing_condition_present": any(
+            "housing" in (c.get("condition") or "").lower()
+            for c in s_data["sdoh_conditions"]
+        ),
+        "spanish_language_detected": (s_data.get("language") or "").lower() == "spanish",
+        "coverage_gap_detected": len(s_data.get("coverage", [])) == 0,
+        "sdoh_clinician_review": sdoh["clinician_review"]["required"] is True,
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="compound_synthesis_detects_all_factors",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details=checks,
+    )
+
+
+@reasoning_trace_suite.case(
+    "rule_engine_baseline_is_flat",
+    "Rule-engine baseline produces isolated flags without synthesis structure",
+    "reasoning_trace",
+)
+def bench_rule_engine_baseline_is_flat():
+    baseline = rule_engine_baseline(COMPOUND_MARIA)
+    expected = {"HIGH_BP", "DIABETES", "HOUSING_ISSUE", "LANGUAGE_BARRIER", "NO_COVERAGE"}
+    checks = {
+        "all_five_flags_present": set(baseline["flags"]) == expected,
+        "no_risk_level_field": "risk_level" not in baseline,
+        "no_clinician_review_field": "clinician_review" not in baseline,
+        "no_evidence_basis_field": "evidence_basis" not in baseline,
+        "no_confidence_field": "confidence" not in baseline,
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="rule_engine_baseline_is_flat",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details=checks,
+    )
+
+
+@reasoning_trace_suite.case(
+    "synthesis_beats_baseline_diff",
+    "Liaison synthesis adds compound risk, evidence refs, cross-factor insights",
+    "reasoning_trace",
+)
+def bench_synthesis_beats_baseline_diff():
+    baseline = rule_engine_baseline(COMPOUND_MARIA)
+    synthesis = mamaguard_synthesis(COMPOUND_MARIA)
+    diff = _synthesis_advantage(baseline, synthesis)
+
+    checks = {
+        "baseline_had_five_flat_flags": diff["baseline_flag_count"] == 5,
+        "synthesis_has_compound_risk_level": diff["synthesis_risk_level"] in ("URGENT", "HIGH"),
+        "synthesis_adds_all_six_affordances": diff["affordances_added_by_synthesis"] == 6,
+        "synthesis_cites_fhir_evidence": diff["synthesis_evidence_ref_count"] >= 3,
+        "synthesis_has_cross_factor_insights": diff["synthesis_cross_factor_insight_count"] >= 3,
+        "evidence_multiplier_gt_baseline": diff["evidence_multiplier"] >= 1.0,
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="synthesis_beats_baseline_diff",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details={**checks, "diff_summary": {
+            "baseline_flag_count": diff["baseline_flag_count"],
+            "synthesis_risk_level": diff["synthesis_risk_level"],
+            "synthesis_evidence_ref_count": diff["synthesis_evidence_ref_count"],
+            "synthesis_cross_factor_insight_count": diff["synthesis_cross_factor_insight_count"],
+            "affordances_added_by_synthesis": diff["affordances_added_by_synthesis"],
+        }},
+    )
+
+
+@reasoning_trace_suite.case(
+    "cross_factor_insights_reference_interactions",
+    "Cross-factor layer explicitly names clinical x SDOH interactions",
+    "reasoning_trace",
+)
+def bench_cross_factor_insights_reference_interactions():
+    synthesis = mamaguard_synthesis(COMPOUND_MARIA)
+    cross = synthesis["cross_factor_insights"]
+    insight_text = " ".join(cross.get("clinical_sdoh_interactions", [])).lower()
+    priorities = cross.get("recommended_priorities", [])
+
+    checks = {
+        "mentions_coverage_interaction": "coverage" in insight_text,
+        "mentions_language_education": "language" in insight_text,
+        "mentions_housing_diabetes_interaction": "housing" in insight_text and "insulin" in insight_text,
+        "mentions_postpartum_followup": "postpartum" in insight_text,
+        "has_recommended_priorities": len(priorities) >= 4,
+        "compound_risk_label_populated": cross.get("compound_risk_level") in ("URGENT", "HIGH"),
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="cross_factor_insights_reference_interactions",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details={**checks, "insight_count": len(cross.get("clinical_sdoh_interactions", []))},
+    )
+
+
+@reasoning_trace_suite.case(
+    "reasoning_trace_fixture_current",
+    "Committed reasoning-trace fixture matches live synthesis output",
+    "reasoning_trace",
+)
+def bench_reasoning_trace_fixture_current():
+    live = _build_full_trace()
+    fixture = _load_json_fixture(REASONING_TRACE_PATH)
+
+    checks = {
+        "fixture_exists": fixture is not None,
+        "case_name_matches": bool(fixture) and fixture.get("case_name") == live["case_name"],
+        "baseline_flags_match": bool(fixture) and fixture.get("rule_engine_baseline", {}).get("flags") == live["rule_engine_baseline"]["flags"],
+        "synthesis_risk_level_matches": bool(fixture) and fixture.get("mamaguard_synthesis", {}).get("maternal_profile", {}).get("data", {}).get("risk_level") == live["mamaguard_synthesis"]["maternal_profile"]["data"]["risk_level"],
+        "cross_factor_count_matches": bool(fixture) and len(
+            fixture.get("mamaguard_synthesis", {}).get("cross_factor_insights", {}).get("clinical_sdoh_interactions", [])
+        ) == len(live["mamaguard_synthesis"]["cross_factor_insights"]["clinical_sdoh_interactions"]),
+        "synthesis_advantage_matches": bool(fixture) and fixture.get("synthesis_advantage", {}).get("affordances_added_by_synthesis") == live["synthesis_advantage"]["affordances_added_by_synthesis"],
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="reasoning_trace_fixture_current",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details={
+            **checks,
+            "fixture_path": str(REASONING_TRACE_PATH),
+            "hint": (
+                "If this fails, the synthesis layer or mocked FHIR fixtures "
+                "changed — regenerate with "
+                "`python3 -m benchmarks.clinical_reasoning.bench_baseline_comparison "
+                "--regenerate-reasoning-trace`."
+            ),
+        },
+    )
+
+
+# -- CLI -----------------------------------------------------------------------
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Baseline comparison table benchmark (Phase 3)"
+        description="Baseline comparison & reasoning-trace benchmarks"
     )
     parser.add_argument(
         "--regenerate-fixture",
         action="store_true",
-        help="Rewrite the committed JSON + markdown fixtures from live synthesis output",
+        help="Rewrite the baseline comparison JSON + markdown fixtures",
+    )
+    parser.add_argument(
+        "--regenerate-reasoning-trace",
+        action="store_true",
+        help="Rewrite the reasoning-trace fixture from live synthesis output",
     )
     args = parser.parse_args()
     if args.regenerate_fixture:
-        _regenerate_fixtures()
+        _regenerate_baseline_fixtures()
+    elif args.regenerate_reasoning_trace:
+        _regenerate_reasoning_trace()
     else:
         print(
-            "Run via `python3 -m benchmarks.runner --suite baseline_comparison` "
-            "to execute the benchmark cases."
+            "Run via `python3 -m benchmarks.runner` to execute benchmark cases.\n"
+            "  --regenerate-fixture          rewrite baseline comparison fixtures\n"
+            "  --regenerate-reasoning-trace  rewrite reasoning trace fixture"
         )

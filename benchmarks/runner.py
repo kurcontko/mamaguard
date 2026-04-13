@@ -50,8 +50,8 @@ from benchmarks.fhir_tools.bench_maternal import suite as fhir_maternal_suite
 from benchmarks.fhir_tools.bench_pediatric import suite as fhir_pediatric_suite
 from benchmarks.fhir_tools.bench_sdoh import suite as fhir_sdoh_suite
 from benchmarks.clinical_reasoning.bench_risk_assessment import suite as clinical_suite
-from benchmarks.clinical_reasoning.bench_reasoning_trace import suite as reasoning_trace_suite
 from benchmarks.clinical_reasoning.bench_baseline_comparison import suite as baseline_comparison_suite
+from benchmarks.clinical_reasoning.bench_baseline_comparison import reasoning_trace_suite
 from benchmarks.clinical_reasoning.bench_care_plan_synthesis import suite as care_plan_synthesis_suite
 from benchmarks.clinical_reasoning.bench_ai_factor_comparison import suite as ai_factor_comparison_suite
 from benchmarks.orchestration.bench_routing import suite as orchestration_suite
