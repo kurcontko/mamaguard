@@ -3,7 +3,7 @@
 import json
 import os
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import httpx

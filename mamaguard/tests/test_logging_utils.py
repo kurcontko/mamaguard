@@ -33,7 +33,6 @@ import hashlib
 import logging
 import unittest
 
-from mamaguard.shared import logging_utils as lu
 from mamaguard.shared.logging_utils import (
     _AnsiColorFormatter,
     configure_logging,

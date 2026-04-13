@@ -34,14 +34,6 @@ def check_contains_any(text: str, keywords: list[str], case_sensitive: bool = Fa
     return any(k in text for k in keywords)
 
 
-def check_contains_all(text: str, keywords: list[str], case_sensitive: bool = False) -> bool:
-    """Check if text contains all of the keywords."""
-    if not case_sensitive:
-        text = text.lower()
-        keywords = [k.lower() for k in keywords]
-    return all(k in text for k in keywords)
-
-
 def check_no_hallucinated_data(response: str, allowed_values: set[str]) -> dict:
     """
     Check for fabricated clinical values in the response.

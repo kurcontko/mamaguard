@@ -16,7 +16,6 @@ from benchmarks.llm_eval.judge import (
     JudgeScore,
     check_5t_format,
     check_clinician_review,
-    check_contains_all,
     check_contains_any,
     check_no_hallucinated_data,
     judge_response,

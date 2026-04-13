@@ -1,10 +1,7 @@
 """Unit tests for FHIR base tools — mock FHIR server responses."""
 
-import json
 import unittest
-from unittest.mock import MagicMock, patch
-
-import httpx
+from unittest.mock import patch
 
 
 class MockToolContext:
