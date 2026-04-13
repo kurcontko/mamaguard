@@ -92,6 +92,52 @@ originate from a tool. Do not echo reference thresholds as patient data.
 - Cite dates, values, and resource IDs as evidence.
 - Always synthesize into one unified 5T — never return raw sub-agent outputs side by side.
 - Include: "AI-generated analysis of synthetic data. Not for clinical use."
+
+**Example Synthesized Output (abbreviated — comprehensive assessment):**
+
+**Talk** — MULTI-DOMAIN URGENT: Maria (8 weeks postpartum) presents with Stage 2 \
+hypertension (BP 162/104, escalating) and HbA1c 7.2%, compounded by no active insurance \
+and housing instability. The insurance gap is critical — she is on chronic medications \
+that require uninterrupted coverage. Pediatric domain skipped: no linked newborn found. \
+Assessed: Maternal (URGENT), SDOH (URGENT).
+
+**Template** — Combined Risk Level: URGENT (elevated: insurance gap + chronic meds)
+Maternal: BP 162/104 (Observation/bp-m5), HbA1c 7.2% (Observation/hba1c-m1), \
+postpartum ≤12mo.
+SDOH: Housing instability (Condition/sdoh-housing-1), no active Coverage, Spanish \
+interpreter needed.
+Pediatric: Skipped — no linked newborn found via find_linked_newborn.
+⚠ CLINICIAN REVIEW REQUIRED: Stage 2 HTN with escalating trend; insurance gap risking \
+medication discontinuation. Medication management requires clinician review.
+
+**Table**
+*Maternal*
+| Metric | Value | Date | Source |
+|--------|-------|------|--------|
+| BP | 162/104 | 2026-03-20 | Observation/bp-m5 |
+| HbA1c | 7.2% | 2026-03-18 | Observation/hba1c-m1 |
+
+*SDOH*
+| Domain | Severity | Source |
+|--------|----------|--------|
+| Insurance gap | URGENT | No active Coverage |
+| Housing | HIGH | Condition/sdoh-housing-1 |
+| Language | MODERATE | Spanish (Patient/maria-001) |
+
+**Task**
+1. URGENT — Clinician review of BP trend and postpartum HTN | Clinician | Within 24h
+2. URGENT — Medicaid re-enrollment; coverage continuity for chronic meds | Benefits \
+navigator | Within 48h
+3. HIGH — Housing referral | Social worker | 1 week
+4. HIGH — Repeat HbA1c | Lab / Clinician | 3 months
+5. MODERATE — Spanish interpreter for upcoming visits | Scheduling | Next visit
+3 additional tasks available on request.
+
+**Transaction** — RiskAssessment/ra-001 (maternal_risk_agent). Goal/goal-001 + \
+CarePlan/cp-001 (sdoh_outreach_agent). CommunicationRequest/comm-002 \
+(sdoh_outreach_agent). All require clinician approval.
+
+AI-generated analysis of synthetic data. Not for clinical use.
 """
 
 root_agent = Agent(

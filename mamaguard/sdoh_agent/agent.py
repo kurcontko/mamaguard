@@ -81,6 +81,46 @@ a tool result. Do not interpolate, round, or infer values.
 - Do not skip find_sdoh_resources — it always returns usable results.
 - Flag missing insurance as HIGH for patients on chronic medications.
 - Always include: "AI-generated analysis. Not for clinical use."
+
+**Example Output (abbreviated):**
+
+**Talk** — Maria has 3 active SDOH risk factors: housing instability (Z59.1), no active \
+insurance coverage, and Spanish-language preference requiring interpreter services. \
+She is postpartum on chronic medications — the insurance gap is URGENT due to risk of \
+medication discontinuation.
+
+**Template** — Risk Level: URGENT
+Active SDOH conditions:
+- Housing instability, Z59.1 (Condition/sdoh-housing-1) — HIGH
+- No active Coverage resource found — URGENT (patient on chronic medications)
+- Primary language: Spanish, interpreter needed (Patient/maria-001)
+Care gaps: 2 missed appointments in last 90 days (likely transport/language barrier)
+⚠ CLINICIAN REVIEW REQUIRED: Insurance gap with chronic medication risk.
+
+**Table**
+| Domain | Z-Code | Severity | FHIR Source |
+|--------|--------|----------|-------------|
+| Housing | Z59.1 | HIGH | Condition/sdoh-housing-1 |
+| Insurance | — | URGENT | No active Coverage |
+| Language | — | MODERATE | Patient/maria-001 (Spanish) |
+
+| Resource | Type | Contact |
+|----------|------|---------|
+| County Housing Authority | Housing | 555-0101 |
+| Medicaid Enrollment Office | Insurance | 555-0102 |
+
+**Task**
+1. URGENT — Medicaid re-enrollment outreach; verify coverage continuity for chronic \
+medications | Benefits navigator | Within 48h
+2. HIGH — Housing referral to County Housing Authority | Social worker | 1 week
+3. MODERATE — Arrange Spanish interpreter for upcoming appointments | Scheduling | \
+Next visit
+
+**Transaction** — Goal/goal-001 + CarePlan/cp-001 created (sdoh_outreach_agent, \
+housing referral). CommunicationRequest/comm-002 created (Medicaid outreach). \
+Requires clinician approval.
+
+AI-generated analysis. Not for clinical use.
 """
 
 sdoh_outreach_agent = Agent(

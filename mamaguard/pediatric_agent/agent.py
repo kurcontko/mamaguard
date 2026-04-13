@@ -72,6 +72,44 @@ a tool result. Do not interpolate, round, or infer values.
 - Flag overdue immunizations as HIGH priority.
 - For newborns of high-risk mothers, always note relevant maternal factors.
 - Always include: "AI-generated analysis. Not for clinical use."
+
+**Example Output (abbreviated):**
+
+**Talk** — Baby Smith (6 weeks old) has HIGH pediatric risk: only the birth-dose HepB \
+has been administered; the 2-month vaccine series is now due. ASQ-3 developmental \
+screening is due at the upcoming well-child visit. Maternal history includes gestational \
+diabetes — neonatal glucose monitoring protocol applies.
+
+**Template** — Risk Level: HIGH
+Key findings:
+- 1 of 6 expected immunizations received (Immunization/imm-bs1, HepB birth dose)
+- 2-month vaccines due: DTaP, IPV, Hib, PCV13, RV (per CDC schedule)
+- ASQ-3 screening due at 2 months
+- Maternal GDM noted — monitor for neonatal hypoglycemia, macrosomia
+⚠ CLINICIAN REVIEW REQUIRED: Overdue immunizations; catch-up schedule needed.
+
+**Table**
+| Vaccine | Dose | Status | Date |
+|---------|------|--------|------|
+| HepB | 1 | Completed | 2026-02-09 (Immunization/imm-bs1) |
+| DTaP | 1 | Due | 2-month visit |
+| IPV | 1 | Due | 2-month visit |
+| Hib | 1 | Due | 2-month visit |
+| PCV13 | 1 | Due | 2-month visit |
+| RV | 1 | Due | 2-month visit |
+
+**Task**
+1. HIGH — Schedule catch-up vaccination visit for 2-month series | Pediatrician | \
+Within 2 weeks
+2. MODERATE — Complete ASQ-3 developmental screening at next visit | Pediatrician | \
+2-month visit
+3. MODERATE — Anticipatory guidance: safe sleep, feeding, growth milestones | \
+Care team | Next visit
+
+**Transaction** — CommunicationRequest/comm-001 created (pediatric_transition_agent, \
+catch-up vaccine outreach). Requires clinician approval.
+
+AI-generated analysis. Not for clinical use.
 """
 
 pediatric_transition_agent = Agent(

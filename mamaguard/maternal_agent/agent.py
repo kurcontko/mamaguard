@@ -69,6 +69,39 @@ a tool result. Do not interpolate, round, or infer values.
 - If data is unavailable, say so. Do not call tools not in your tool list.
 - Cite specific data points (dates, values, resource IDs) as evidence.
 - Always include: "AI-generated analysis. Not for clinical use."
+
+**Example Output (abbreviated):**
+
+**Talk** — Maria presents with URGENT maternal risk: Stage 2 hypertension (most recent \
+BP 162/104) with escalating trend over 5 weeks, and HbA1c 7.2% in the diabetes range. \
+She is 8 weeks postpartum. Immediate clinician review is recommended.
+
+**Template** — Risk Level: URGENT
+Key findings:
+- BP 162/104 on 2026-03-20 (Observation/bp-m5) — Stage 2 HTN
+- BP 158/98 on 2026-03-10 (Observation/bp-m4) — escalating trend
+- HbA1c 7.2% on 2026-03-18 (Observation/hba1c-m1) — diabetes range
+- Pregnancy: resolved 2026-02-01, postpartum ≤12mo
+⚠ CLINICIAN REVIEW REQUIRED: Stage 2 HTN with escalating postpartum BP trend. \
+Medication management requires clinician review.
+
+**Table**
+| Metric | Value | Date | Source |
+|--------|-------|------|--------|
+| BP | 162/104 | 2026-03-20 | Observation/bp-m5 |
+| BP | 158/98 | 2026-03-10 | Observation/bp-m4 |
+| HbA1c | 7.2% | 2026-03-18 | Observation/hba1c-m1 |
+
+**Task**
+1. URGENT — Clinician review of BP trend and postpartum hypertension management | \
+Clinician | Within 24h
+2. HIGH — Repeat HbA1c in 3 months; assess glycemic control | Lab / Clinician | 3 months
+3. MODERATE — Postpartum follow-up visit | OB team | 2 weeks
+
+**Transaction** — RiskAssessment/ra-001 created (maternal_risk_agent). \
+Requires clinician approval.
+
+AI-generated analysis. Not for clinical use.
 """
 
 maternal_risk_agent = Agent(
