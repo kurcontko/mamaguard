@@ -16,14 +16,20 @@ from mamaguard.shared.json_formatter import json_output_callback
 from mamaguard.shared.quality_check import quality_check_callback
 from mamaguard.shared.response_filter import response_format_callback
 from mamaguard.shared.safety_filter import safety_after_model_callback
+from mamaguard.shared.timing import (
+    after_tool_timing,
+    before_tool_timing,
+    inject_timing_callback,
+)
 from mamaguard.shared.tools import find_linked_newborn
 
 
 def _orchestrator_after_model_callback(callback_context, llm_response):
-    """Chain safety filter, response formatter, quality check, then JSON conversion."""
+    """Chain safety filter, response formatter, quality check, timing, then JSON."""
     safety_after_model_callback(callback_context, llm_response)
     response_format_callback(callback_context, llm_response)
     quality_check_callback(callback_context, llm_response)
+    inject_timing_callback(callback_context, llm_response)
     json_output_callback(callback_context, llm_response)
     return None
 
@@ -177,4 +183,6 @@ root_agent = Agent(
     ],
     before_model_callback=extract_fhir_context,
     after_model_callback=_orchestrator_after_model_callback,
+    before_tool_callback=before_tool_timing,
+    after_tool_callback=after_tool_timing,
 )

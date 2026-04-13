@@ -241,6 +241,19 @@ def json_output_callback(
         return None
 
     structured = markdown_to_json(full_text)
+
+    # Include agent timing data if available in state
+    state = getattr(callback_context, "state", None) or {}
+    timings = state.get("_agent_timings")
+    if timings:
+        total = sum(t.get("elapsed_s", 0.0) for t in timings)
+        structured["timing"] = {
+            "agents": {
+                t["agent"]: t["elapsed_s"] for t in timings
+            },
+            "total_s": round(total, 1),
+        }
+
     json_str = json.dumps(structured, indent=2, ensure_ascii=False)
 
     # Replace all text parts with a single JSON part
