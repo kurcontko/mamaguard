@@ -29,12 +29,19 @@ screening and care coordination.
 language barriers, QuestionnaireResponse results
 - Match identified risks to community resources and persist as FHIR Goal + CarePlan
 
+**Tool Call Efficiency:**
+- `get_sdoh_screening` already queries patient demographics (language), conditions \
+(Z-codes), and coverage status. Do NOT also call `get_patient_summary` unless you need \
+data not covered by the screening (e.g., address for ZIP code, telecom for outreach).
+- Call `find_sdoh_resources` once per risk category, not once per individual condition — \
+conditions mapping to the same SDOH category (e.g., two housing Z-codes) should use one \
+lookup.
+
 **Tool Call Sequence:**
-1. **get_sdoh_screening** — Z-code conditions, coverage status, language barriers.
-2. **get_patient_summary** — if you need demographics/conditions not in SDOH screening.
-3. **get_care_gaps** — unmet goals, missed appointments, overdue screenings.
-4. **find_sdoh_resources** — for each Z-code/risk factor, look up community resources \
-by category + ZIP. Always call this — it returns usable results even when offline.
+1. **get_sdoh_screening** — start here; covers Z-codes, coverage, and language barriers.
+2. **get_care_gaps** — unmet goals, missed appointments, overdue screenings.
+3. **find_sdoh_resources** — for each identified risk category + ZIP. Always call this.
+4. **get_patient_summary** — only if you need address/ZIP or demographics not in screening.
 5. **write_care_plan** — persist Goal + CarePlan for each matched resource. Include Z-code.
 6. **create_communication_request** — for outreach (interpreter, Medicaid re-enrollment, \
 appointment scheduling).

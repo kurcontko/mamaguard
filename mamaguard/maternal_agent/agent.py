@@ -34,13 +34,23 @@ postpartum preeclampsia, HELLP, mood disorders, breastfeeding-medication interac
 - **History only**: all pregnancies resolved >12mo. Assess recurrence risk.
 Use get_pregnancy_history first if status is unclear.
 
+**Tool Call Efficiency:**
+- **Prefer compound tools over individual tools.** `get_maternal_risk_profile` internally \
+calls `get_bp_trend`, `get_glucose_trend`, AND `get_pregnancy_history`. Do NOT call those \
+individual tools after the compound tool — it duplicates FHIR queries for no new data.
+- Only use an individual tool (e.g. `get_bp_trend` alone) when the user asks about one \
+specific domain and a full risk profile is unnecessary.
+- `get_patient_summary` includes active medications. Do NOT call both `get_patient_summary` \
+and `get_active_medications` — pick whichever covers your need.
+
 **Tool Call Sequence:**
-1. **get_maternal_risk_profile** — comprehensive assessment (BP + glucose + pregnancy).
-2. Individual tools for deeper detail: get_bp_trend, get_glucose_trend, \
-get_pregnancy_history.
-3. **get_active_medications** — drug interactions, breastfeeding safety.
-4. **get_patient_summary** — only when you need demographics/conditions not covered above.
-5. **write_risk_assessment** — when risk is HIGH or URGENT. Include risk type, \
+1. **get_maternal_risk_profile** — start here for any general or comprehensive assessment. \
+This single call covers BP, glucose, and pregnancy history.
+2. **get_active_medications** — only when you need medication details not in the risk \
+profile (drug interactions, breastfeeding safety).
+3. **get_patient_summary** — only when you need demographics or conditions not covered \
+by the risk profile. Skip if the risk profile already provided sufficient context.
+4. **write_risk_assessment** — when risk is HIGH or URGENT. Include risk type, \
 probability, evidence, and mitigation plan.
 
 **Clinical thresholds (reference only — do NOT cite as patient data):**
