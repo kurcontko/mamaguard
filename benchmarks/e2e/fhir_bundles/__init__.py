@@ -13,15 +13,20 @@ Usage:
 """
 
 from benchmarks.e2e.fhir_bundles import (
+    aisha_sdoh_only,
     baby_santos,
     baby_williams,
+    chen_conflicting_bp,
     child_smith,
     destiny_young_maternal,
     elena_preeclampsia,
     fatima_complex,
+    grace_no_conditions,
     james_insured,
+    lisa_expired_insurance,
     maria_high_risk,
     priya_gdm,
+    rosa_postpartum,
     sarah_low_risk,
     toddler_jones,
 )
@@ -102,5 +107,30 @@ ALL_PATIENTS: dict[str, dict] = {
         "bundle": baby_williams.BUNDLE,
         "label": "Mia Williams (7 months)",
         "scenario": "7-month-old who missed 4-month visit, overdue immunizations",
+    },
+    grace_no_conditions.PATIENT_ID: {
+        "bundle": grace_no_conditions.BUNDLE,
+        "label": "Grace Park",
+        "scenario": "healthy pregnancy, zero conditions — should be ROUTINE, not error",
+    },
+    aisha_sdoh_only.PATIENT_ID: {
+        "bundle": aisha_sdoh_only.BUNDLE,
+        "label": "Aisha Johnson",
+        "scenario": "SDOH-only issues (unemployment, food insecurity, housing), no medical risk",
+    },
+    chen_conflicting_bp.PATIENT_ID: {
+        "bundle": chen_conflicting_bp.BUNDLE,
+        "label": "Lin Chen",
+        "scenario": "active HTN condition but recent BP readings all normal — conflicting data",
+    },
+    lisa_expired_insurance.PATIENT_ID: {
+        "bundle": lisa_expired_insurance.BUNDLE,
+        "label": "Lisa Brown",
+        "scenario": "expired insurance (coverage.period.end in past), otherwise low-risk",
+    },
+    rosa_postpartum.PATIENT_ID: {
+        "bundle": rosa_postpartum.BUNDLE,
+        "label": "Rosa Martinez",
+        "scenario": "postpartum >6 months, resolved gestational HTN — deprioritize pregnancy risks",
     },
 }

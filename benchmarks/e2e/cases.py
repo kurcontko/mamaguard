@@ -656,7 +656,115 @@ COMPREHENSIVE_CASES = [
 ]
 
 
-ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES + EQUITY_CASES + MULTI_TURN_CASES + COMPREHENSIVE_CASES
+# =============================================================================
+# Clinical edge cases — tricky scenarios that probe boundary behavior
+#
+# (a) No conditions at all → ROUTINE, not error
+# (b) SDOH-only issues → MODERATE from SDOH, not URGENT
+# (c) Conflicting data: active HTN condition + normal recent BP → flag discrepancy
+# (d) Expired insurance → flag lapsed coverage
+# (e) Postpartum >6 months → deprioritize pregnancy-specific risks
+# =============================================================================
+
+EDGE_CASES = [
+    # (a) No conditions — should return ROUTINE, not error
+    E2ECase(
+        id="e2e_edge_no_conditions",
+        name="Grace: zero conditions — ROUTINE, not error",
+        category="edge_case",
+        user_message=(
+            "Perform a maternal risk assessment on this patient. "
+            "Check BP trends, glucose control, and pregnancy history."
+        ),
+        patient_id="bench-grace-008",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["ROUTINE"],
+        answer_must_not_contain=[
+            "URGENT", "HIGH", "error", "unavailable",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety"],
+    ),
+    # (b) SDOH-only issues — MODERATE from SDOH, not URGENT
+    E2ECase(
+        id="e2e_edge_sdoh_only",
+        name="Aisha: SDOH-only issues — MODERATE, not URGENT",
+        category="edge_case",
+        user_message=(
+            "Do a comprehensive assessment for this patient including "
+            "maternal risk and social determinants of health."
+        ),
+        patient_id="bench-aisha-009",
+        expected_tools={"get_maternal_risk_profile", "get_sdoh_screening"},
+        expected_agents={"maternal_risk_agent", "sdoh_outreach_agent"},
+        answer_must_contain=["food", "housing"],
+        answer_must_not_contain=[
+            "URGENT",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    # (c) Conflicting data — active HTN but normal recent BP
+    E2ECase(
+        id="e2e_edge_conflicting_bp",
+        name="Lin Chen: active HTN condition + normal BP — flag discrepancy",
+        category="edge_case",
+        user_message=(
+            "This patient has a history of hypertension. Check her recent "
+            "BP trend and perform a maternal risk assessment."
+        ),
+        patient_id="bench-chen-010",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["hypertension"],
+        answer_must_not_contain=[
+            "Stage 2",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    # (d) Expired insurance — coverage.period.end in the past
+    E2ECase(
+        id="e2e_edge_expired_insurance",
+        name="Lisa: expired insurance — flag lapsed coverage",
+        category="edge_case",
+        user_message=(
+            "Screen this patient for social determinants of health. "
+            "Check coverage status and any barriers to care."
+        ),
+        patient_id="bench-lisa-011",
+        expected_tools={"get_sdoh_screening"},
+        expected_agents={"sdoh_outreach_agent"},
+        answer_must_contain=["expir"],
+        answer_must_not_contain=[
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    # (e) Postpartum >6 months — deprioritize pregnancy-specific risks
+    E2ECase(
+        id="e2e_edge_postpartum_late",
+        name="Rosa: postpartum >6 months — deprioritize pregnancy risks",
+        category="edge_case",
+        user_message=(
+            "Perform a maternal risk assessment on this patient. "
+            "She delivered about 10 months ago."
+        ),
+        patient_id="bench-rosa-012",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["postpartum"],
+        answer_must_not_contain=[
+            "URGENT",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+]
+
+
+ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES + EQUITY_CASES + MULTI_TURN_CASES + COMPREHENSIVE_CASES + EDGE_CASES
 
 CASES_BY_CATEGORY: dict[str, list[E2ECase]] = {}
 for c in ALL_CASES:
