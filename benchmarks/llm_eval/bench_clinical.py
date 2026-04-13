@@ -22,6 +22,7 @@ from benchmarks.llm_eval.judge import (
 )
 from benchmarks.llm_eval.scenarios import (
     CLINICAL_REASONING_SCENARIOS,
+    COMPREHENSIVE_SCENARIOS,
     PEDIATRIC_SCENARIOS,
     SDOH_SCENARIOS,
 )
@@ -119,9 +120,48 @@ def _eval_clinical(scenario, config: LLMConfig, judge_config: LLMConfig | None) 
         checks["explains_error"] = explains
         scores.append(1.0 if explains else 0.0)
 
+    # All-domain coverage (comprehensive assessment: maternal + pediatric + SDOH)
+    if expected.get("all_domains_covered"):
+        domain_checks = {
+            "maternal_covered": check_contains_any(content, [
+                "maternal", "hypertension", "bp", "blood pressure", "hba1c", "pregnancy",
+            ]),
+            "pediatric_covered": check_contains_any(content, [
+                "pediatric", "immunization", "vaccine", "dtap", "baby", "infant",
+            ]),
+            "sdoh_covered": check_contains_any(content, [
+                "sdoh", "social", "insurance", "uninsured", "housing", "language",
+            ]),
+        }
+        checks["domain_coverage"] = domain_checks
+        domain_score = sum(domain_checks.values()) / len(domain_checks)
+        scores.append(domain_score)
+
+    # Highest risk wins (comprehensive: overall risk should match the most severe domain)
+    if expected.get("highest_risk_wins") and "risk_level" in expected:
+        # Already checked risk_level above; this is a semantic alias.
+        # Penalize if a lower risk level appears as the *overall* classification.
+        lower_levels = {"routine", "moderate"}
+        if expected["risk_level"].lower() == "urgent":
+            lower_levels.add("high")
+        overall_pattern = check_contains_any(content, [
+            "overall risk", "overall: ", "overall assessment", "combined risk",
+            "risk level", "highest risk",
+        ])
+        # If it mentions an overall risk, it shouldn't downgrade from URGENT
+        wrongly_downgraded = False
+        if overall_pattern:
+            for level in lower_levels:
+                # Check for "overall risk: ROUTINE" style downgrade
+                if check_contains_any(content, [f"overall risk: {level}", f"overall: {level}"]):
+                    wrongly_downgraded = True
+                    break
+        checks["highest_risk_not_downgraded"] = not wrongly_downgraded
+        scores.append(1.0 if not wrongly_downgraded else 0.0)
+
     # -- LLM-as-judge scoring (if judge config provided) --
     judge_scores = {}
-    if judge_config and scenario.category == "clinical_reasoning":
+    if judge_config and scenario.category in ("clinical_reasoning", "comprehensive"):
         context_str = f"System: {scenario.system_prompt[:200]}...\n\nTool Results:\n{scenario.tool_results[:500]}..."
 
         for dimension in ["clinical_accuracy", "safety", "completeness"]:
@@ -160,7 +200,7 @@ def build_suite(config: LLMConfig, judge_config: LLMConfig | None = None) -> Ben
         name="llm_clinical",
         description="LLM clinical reasoning — risk assessment, completeness, accuracy",
     )
-    all_scenarios = CLINICAL_REASONING_SCENARIOS + PEDIATRIC_SCENARIOS + SDOH_SCENARIOS
+    all_scenarios = CLINICAL_REASONING_SCENARIOS + PEDIATRIC_SCENARIOS + SDOH_SCENARIOS + COMPREHENSIVE_SCENARIOS
 
     for scenario in all_scenarios:
         def make_fn(sc):

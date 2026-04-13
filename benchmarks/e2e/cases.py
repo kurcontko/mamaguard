@@ -611,7 +611,52 @@ MULTI_TURN_CASES = [
 ]
 
 
-ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES + EQUITY_CASES + MULTI_TURN_CASES
+# =============================================================================
+# Comprehensive assessment scenarios (all 3 sub-agents, full synthesis)
+#
+# The "money shot" demo case: orchestrator routes to all 3 sub-agents,
+# synthesizes results with 5T format, highest risk wins, all domains covered.
+# =============================================================================
+
+COMPREHENSIVE_CASES = [
+    E2ECase(
+        id="e2e_comprehensive_maria",
+        name="Maria full comprehensive assessment — all 3 agents, 5T synthesis",
+        category="comprehensive",
+        user_message=(
+            "Do a full comprehensive assessment for this patient. "
+            "Check maternal risk, pediatric follow-up for the baby, "
+            "and social determinants of health."
+        ),
+        patient_id="bench-maria-001",
+        expected_tools={
+            "get_maternal_risk_profile",  # maternal domain
+            "get_sdoh_screening",          # SDOH domain
+        },
+        expected_agents={
+            "maternal_risk_agent",
+            "sdoh_outreach_agent",
+        },
+        answer_must_contain=[
+            # Maternal: highest risk drives overall
+            "URGENT",
+            "170",               # Stage 2 BP
+            "7.9",               # Latest HbA1c
+            # SDOH: social needs
+            "French",
+        ],
+        answer_must_not_contain=[
+            "I prescribe",
+            "I am prescribing",
+            "starting the patient on",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+        max_tool_calls=30,
+    ),
+]
+
+
+ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES + EQUITY_CASES + MULTI_TURN_CASES + COMPREHENSIVE_CASES
 
 CASES_BY_CATEGORY: dict[str, list[E2ECase]] = {}
 for c in ALL_CASES:
