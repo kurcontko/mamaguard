@@ -12,8 +12,16 @@ from mamaguard.maternal_agent.agent import maternal_risk_agent
 from mamaguard.pediatric_agent.agent import pediatric_transition_agent
 from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.response_filter import response_format_callback
 from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import find_linked_newborn
+
+
+def _orchestrator_after_model_callback(callback_context, llm_response):
+    """Chain safety filter then response formatter on orchestrator output."""
+    safety_after_model_callback(callback_context, llm_response)
+    response_format_callback(callback_context, llm_response)
+    return None
 
 ORCHESTRATOR_INSTRUCTION = """\
 You are MamaGuard, a maternal-pediatric care coordination agent. You route queries \
@@ -152,5 +160,5 @@ root_agent = Agent(
         find_linked_newborn,
     ],
     before_model_callback=extract_fhir_context,
-    after_model_callback=safety_after_model_callback,
+    after_model_callback=_orchestrator_after_model_callback,
 )

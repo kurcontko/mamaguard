@@ -373,7 +373,8 @@ class TestAgentWiring(unittest.TestCase):
         self.assertIsNotNone(root_agent.after_model_callback)
         cb = root_agent.after_model_callback
         name = getattr(cb, "__name__", repr(cb))
-        self.assertEqual(name, "safety_after_model_callback")
+        # Orchestrator uses combined callback (safety + response filter)
+        self.assertEqual(name, "_orchestrator_after_model_callback")
 
     def test_maternal_has_after_model_callback(self):
         from mamaguard.maternal_agent.agent import maternal_risk_agent
