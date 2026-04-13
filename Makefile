@@ -1,4 +1,4 @@
-.PHONY: setup test mypy lint tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp clean
+.PHONY: setup test mypy lint tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp smoke clean
 
 # --- Setup ---
 setup:
@@ -60,6 +60,13 @@ serve:
 
 serve-mcp:
 	uv run python -m mamaguard.mcp_server.server
+
+# --- Smoke test ---
+smoke:
+	uv run python scripts/smoke_test.py
+
+smoke-verbose:
+	uv run python scripts/smoke_test.py --verbose
 
 # --- Nemotron check ---
 nemotron-check:
