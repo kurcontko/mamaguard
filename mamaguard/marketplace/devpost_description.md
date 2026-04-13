@@ -55,7 +55,7 @@ MamaGuard's AI factor is **compound clinical reasoning across heterogeneous data
 
 4. **Natural language care plans** — Converting structured FHIR data into prioritized, evidence-cited care summaries using the 5T framework (Talk, Template, Table, Task, Transaction).
 
-5. **Compound clinical reasoning** — Demonstrated with side-by-side benchmarks: a rule engine produces 5 flat flags; MamaGuard synthesizes URGENT compound risk across BP + HbA1c + pregnancy loss + housing + Medicaid gap, citing 7 FHIR evidence refs and 5 cross-factor clinical-SDOH interactions the rule engine cannot produce.
+5. **Compound clinical reasoning** — Demonstrated with side-by-side benchmarks (90.0% overall, 68/73 cases passed): a rule engine produces 5 flat flags; MamaGuard synthesizes URGENT compound risk across BP + HbA1c + pregnancy loss + housing + Medicaid gap, citing 7 FHIR evidence refs and 5 cross-factor clinical-SDOH interactions the rule engine cannot produce.
 
 ## Technical Architecture
 
@@ -92,8 +92,9 @@ Prompt Opinion ──┬── BYO Agent → A2A JSON-RPC ─┐
 - A2A SDK (a2a-sdk >= 0.3.0)
 - MCP SDK (mcp[server] >= 1.0.0)
 - PyJWT (SMART Permission Tickets)
-- Gemini 2.5 Flash
+- Gemini 2.5 Flash (production) / Nemotron-3-Super-120B (eval agent) / DeepSeek v3.2 (eval judge)
 - FHIR R4 (SMART sandbox + HAPI)
+- 4-tier benchmark pipeline (1009 tests, 73 benchmark cases, 5-run stability tracking)
 - Google Cloud Run
 - Prompt Opinion Platform
 - Docker
@@ -102,13 +103,24 @@ Prompt Opinion ──┬── BYO Agent → A2A JSON-RPC ─┐
 
 ## Safety and Evaluation
 
-MamaGuard includes a 3-tier benchmark suite with 894 unit tests and 57 deterministic Tier-1 benchmarks (100% pass rate):
+MamaGuard includes a **4-tier benchmark suite** with **1009 unit tests** and **73 benchmark cases** evaluated across 5 runs:
 
-- **Liaison pattern** — Every FHIR-reading tool returns a `clinician_review` object. All URGENT findings pause the agent (INPUT_REQUIRED) for clinician approval. AI never prescribes treatments, names drugs, or provides dosages.
+| Metric | Result |
+|--------|--------|
+| Overall weighted score | **90.0%** (up from 88.2% baseline) |
+| Tier-1 deterministic (59 cases) | **100% pass rate** — FHIR tools, clinical reasoning, orchestration |
+| Tier-2a LLM eval (14 cases) | **9/14 passed** — routing, clinical, safety with Nemotron-3-Super-120B |
+| Total cases passed | **68/73** (0 errors) |
+| Safety — defers to clinician | **100%** across all 5 runs |
+| Safety — explains FHIR errors | **100%** across all 5 runs |
+
+**How we evaluated:** We built a 4-tier evaluation pipeline — Tier-1 deterministic checks (mocked FHIR, no LLM), Tier-2a LLM reasoning eval (simulated tool output, Nemotron-3-Super-120B as agent), Tier-2b end-to-end (real HAPI FHIR server), and Tier-3 MedAgentBench cases. Tier-2a runs used an independent **DeepSeek v3.2 judge** for clinical accuracy, safety, and completeness scoring. We ran 5 evaluation passes, tracking per-case stability and score progression (88.2% → 92.7% → 90.1% → 94.0% → 90.0%) to separate real improvements from LLM stochasticity.
+
+- **Liaison pattern** — Every FHIR-reading tool returns a `clinician_review` object. All URGENT findings pause the agent (INPUT_REQUIRED) for clinician approval. AI never prescribes treatments, names drugs, or provides dosages. Verified: clinician deferral at **100%** across all runs.
 - **No fabrication** — Every numeric value in the output must originate from a tool result. Reference-only thresholds in the agent prompt are labeled as such and may not be cited as patient data.
 - **FHIR AuditEvent** — When enabled, every tool invocation emits a FHIR R4 AuditEvent recording what data was accessed, by which agent, with what outcome (HIPAA compliance trail).
 - **AI Factor benchmark** — Side-by-side comparison of a naive LLM (no tools, no agents) vs. MamaGuard on identical patient data scored by an independent judge. Result: **+30% average score lift**, with the largest gain in safety (+37%) from the liaison pattern.
-- **Equity evaluation** — Benchmark cases include Fatima (Arabic, uninsured), Priya (Hindi, GDM), Maria (French, SDOH), and James (insured) to test for language-barrier handling and insurance disparity detection.
+- **Equity evaluation** — Benchmark cases include Fatima (Arabic, uninsured), Priya (Hindi, GDM), Maria (French, SDOH), and James (insured) to test for language-barrier handling and insurance disparity detection. Agents provide patient summaries in the patient's primary language (Spanish, Arabic, Hindi) when detected from FHIR Patient.communication.
 
 ## Demo
 
