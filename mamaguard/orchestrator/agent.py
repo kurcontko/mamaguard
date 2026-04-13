@@ -89,6 +89,18 @@ prioritize barrier-removal over clinical follow-up.
 - Tasks: top 5 highest-priority. Note "N additional tasks available on request."
 - Provide full version if user asks for more detail.
 
+**FHIR Error Recovery:**
+If a sub-agent reports tool errors or partial data due to FHIR server issues:
+- In Talk, state which data sources were unavailable and which domains are incomplete.
+- Synthesize normally from domains/tools that DID succeed — partial data is better than \
+no assessment.
+- In Template, list unavailable data with "⚠ DATA UNAVAILABLE" markers. Do not fabricate \
+findings for failed tools.
+- Add a Task item: "Clinician manual review of [unavailable domains/data] — automated \
+retrieval failed" with HIGH priority.
+- If ALL sub-agents fail due to FHIR errors, report the outage clearly and recommend \
+the clinician perform a manual chart review. Do not attempt to assess without data.
+
 **Liaison / Safety Rules:**
 - Mark clinician reviews as "⚠ CLINICIAN REVIEW REQUIRED". Collect all flags in one section.
 - Do NOT name specific drugs or dosages in synthesized output. Replace with generic \
