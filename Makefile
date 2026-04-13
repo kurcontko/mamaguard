@@ -1,4 +1,4 @@
-.PHONY: setup test mypy lint tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp smoke clean
+.PHONY: setup test mypy lint tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp smoke smoke-mcp clean
 
 # --- Setup ---
 setup:
@@ -67,6 +67,9 @@ smoke:
 
 smoke-verbose:
 	uv run python scripts/smoke_test.py --verbose
+
+smoke-mcp:
+	uv run python scripts/smoke_test_mcp.py
 
 # --- Nemotron check ---
 nemotron-check:
