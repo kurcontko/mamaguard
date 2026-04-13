@@ -213,3 +213,80 @@ def bench_writeback_risk_assessment():
         score=score,
         details=checks,
     )
+
+
+# -- JSON Output Mode Validation ---------------------------------------------
+
+@suite.case("json_output_mode_converts_5t", "JSON formatter produces valid structured output from 5T markdown", "orchestration")
+def bench_json_output_mode():
+    import json
+    from mamaguard.shared.json_formatter import markdown_to_json
+
+    sample = (
+        "**Talk** — Maria presents with Stage 2 hypertension.\n\n"
+        "**Template** — Combined Risk Level: URGENT\n"
+        "BP 162/104 (Observation/bp-m5), HbA1c 7.2% (Observation/hba1c-m1).\n\n"
+        "**Table**\n"
+        "| Metric | Value | Date | Source |\n"
+        "|--------|-------|------|--------|\n"
+        "| BP | 162/104 | 2026-03-20 | Observation/bp-m5 |\n\n"
+        "**Task**\n"
+        "1. URGENT — Clinician review of BP trend | Clinician | Within 24h\n"
+        "2. HIGH — Repeat HbA1c | Lab | 3 months\n\n"
+        "**Transaction** — RiskAssessment/ra-001 (maternal_risk_agent). "
+        "CarePlan/cp-001 (sdoh_outreach_agent).\n\n"
+        "AI-generated analysis of synthetic data. Not for clinical use."
+    )
+
+    result = markdown_to_json(sample)
+
+    checks = {
+        "valid_json": True,
+        "has_risk_level": result.get("risk_level") == "URGENT",
+        "has_talk": bool(result.get("talk")),
+        "has_findings": len(result.get("findings", [])) > 0,
+        "has_tasks": len(result.get("tasks", [])) > 0,
+        "tasks_have_priority": all("priority" in t for t in result.get("tasks", [])),
+        "has_fhir_writes": len(result.get("fhir_writes", [])) > 0,
+        "fhir_writes_have_structure": all(
+            "resource_type" in w and "reference" in w
+            for w in result.get("fhir_writes", [])
+        ),
+        "has_disclaimer": "Not for clinical use" in result.get("disclaimer", ""),
+        "serializable": False,
+    }
+
+    try:
+        json.loads(json.dumps(result))
+        checks["serializable"] = True
+    except (TypeError, ValueError):
+        pass
+
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="json_output_mode_converts_5t",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details={**checks, "result_keys": list(result.keys())},
+    )
+
+
+@suite.case("json_output_mode_callback_wired", "Orchestrator callback chain includes JSON formatter", "orchestration")
+def bench_json_callback_wired():
+    import inspect
+    from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
+
+    source = inspect.getsource(_orchestrator_after_model_callback)
+    checks = {
+        "has_safety_filter": "safety_after_model_callback" in source,
+        "has_response_format": "response_format_callback" in source,
+        "has_json_output": "json_output_callback" in source,
+        "json_after_format": source.index("json_output_callback") > source.index("response_format_callback"),
+    }
+    score = sum(checks.values()) / len(checks)
+    return BenchmarkResult(
+        name="json_output_mode_callback_wired",
+        verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
+        score=score,
+        details=checks,
+    )

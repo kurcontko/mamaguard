@@ -237,6 +237,12 @@ def extract_fhir_context(callback_context, llm_request):
             metadata_keys,
         )
 
+    # -- output_format extraction (for JSON output mode) --------------------
+    output_format = metadata.get("output_format", "")
+    if output_format:
+        callback_context.state["output_format"] = output_format
+        logger.info("output_format=%s", output_format)
+
     logger.info(
         "hook_called_exit task_id=%s context_id=%s message_id=%s patient_id=%s",
         correlation["task_id"], correlation["context_id"], correlation["message_id"],
