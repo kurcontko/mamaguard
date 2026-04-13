@@ -1,4 +1,4 @@
-.PHONY: setup test mypy lint tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp smoke smoke-mcp clean
+.PHONY: setup test mypy lint tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp smoke smoke-mcp profile-startup clean
 
 # --- Setup ---
 setup:
@@ -77,6 +77,10 @@ nemotron-check:
 
 judge-check:
 	@curl -sf https://openrouter.ai/api/v1/models -H "Authorization: Bearer $${JUDGE_API_KEY}" | python3 -c "import sys,json; print('OpenRouter OK')" 2>/dev/null || echo "OpenRouter not reachable"
+
+# --- Profiling ---
+profile-startup:
+	uv run python scripts/profile_startup.py --detail
 
 # --- Clean ---
 clean:
