@@ -1,0 +1,107 @@
+# MamaGuard Submission Checklist
+
+Ordered launch checklist for the Agents Assemble hackathon.
+Deadline: **May 11, 2026 @ 11:00pm EDT**.
+
+---
+
+## 1. Accounts & Registration
+
+- [ ] Devpost account created and registered for [Agents Assemble](https://agents-assemble.devpost.com/)
+- [ ] Prompt Opinion account created at [promptopinion.ai](https://promptopinion.ai)
+- [ ] Google AI Studio API key obtained (for BYO Agent model)
+- [ ] Google Cloud project with Cloud Run enabled
+
+## 2. Pre-deploy Verification
+
+- [ ] `make test` passes (all unit tests green)
+- [ ] `make tier1` passes (100% deterministic benchmarks)
+- [ ] `make smoke` passes (agent smoke test)
+- [ ] `make smoke-mcp` passes (MCP server smoke test)
+- [ ] `scripts/pre_deploy_check.sh` passes
+
+## 3. Deploy A2A Agent to Cloud Run
+
+- [ ] Build Docker image (`mamaguard/Dockerfile`)
+- [ ] Push image to Google Container Registry / Artifact Registry
+- [ ] Deploy to Cloud Run with env vars (API keys, FHIR config)
+- [ ] Verify health: `curl https://<CLOUD_RUN_URL>/.well-known/agent-card.json` returns 200
+- [ ] Verify A2A endpoint responds to test query
+
+See: [`scripts/deploy.sh`](../../scripts/deploy.sh)
+
+## 4. Deploy MCP Server (Superpower Track)
+
+- [ ] Deploy MCP server with SSE transport (same image, different entrypoint)
+- [ ] Verify MCP endpoint responds: `curl https://<MCP_URL>/sse`
+- [ ] Test tool invocation: `get_patient_summary` returns valid response
+
+See: [`mcp_setup.md`](mcp_setup.md)
+
+## 5. Publish to Prompt Opinion Marketplace
+
+### A2A Agent (Agent Track)
+
+- [ ] Register external agent in PO (agent card URL)
+- [ ] Create BYO Agent with system prompt from [`byo_system_prompt.md`](byo_system_prompt.md)
+- [ ] Set consultation prompt from [`byo_consultation_prompt.md`](byo_consultation_prompt.md)
+- [ ] Apply BYO config from [`byo_config.json`](byo_config.json)
+- [ ] Enable FHIR context extension
+- [ ] Publish BYO Agent to Marketplace
+- [ ] Verify: agent appears on PO launchpad and is invokable
+
+### MCP Server (Superpower Track)
+
+- [ ] Register MCP server in PO with SSE endpoint URL
+- [ ] Configure MCP tools from [`mcp_config.json`](mcp_config.json)
+- [ ] Verify: tools appear in PO and return results
+
+See: [`README.md`](README.md), [`po_integration.md`](po_integration.md)
+
+## 6. End-to-End Validation on Prompt Opinion
+
+- [ ] Launch MamaGuard from PO launchpad
+- [ ] Select patient Maria (Patient/bench-maria-001)
+- [ ] Run: "Assess maternal risk for this patient" -- verify 5T output
+- [ ] Run: "Screen for social determinants" -- verify SDOH findings
+- [ ] Run: "Do a full comprehensive assessment" -- verify all 3 agents fire
+- [ ] Verify FHIR context flows correctly (check [`po_integration.md`](po_integration.md) troubleshooting if issues)
+
+## 7. Record Demo Video (< 3 minutes)
+
+- [ ] Follow script in [`demo_script.md`](demo_script.md)
+- [ ] Pre-copy all 3 inputs (no typing during recording)
+- [ ] Scene 1: Intro + architecture (0:00-0:15)
+- [ ] Scene 2: Launch from Marketplace (0:15-0:30)
+- [ ] Scene 3: Maternal risk assessment (0:30-1:15)
+- [ ] Scene 4: SDOH screening (1:15-1:55)
+- [ ] Scene 5: Comprehensive assessment (1:55-2:40)
+- [ ] Scene 6: Close (2:40-3:00)
+- [ ] Upload video (YouTube/Loom/Vimeo unlisted link)
+
+## 8. Devpost Submission
+
+- [ ] Title: "MamaGuard: Maternal-Pediatric Care Coordinator"
+- [ ] Description: copy from [`devpost_description.md`](devpost_description.md)
+- [ ] Attach demo video link
+- [ ] Tag: both Agent (A2A) and Superpower (MCP) tracks
+- [ ] Link to GitHub repo
+- [ ] Link to Prompt Opinion marketplace listing
+- [ ] Submit before deadline
+
+## Reference Artifacts
+
+| Artifact | Path | Purpose |
+|----------|------|---------|
+| Devpost description | [`devpost_description.md`](devpost_description.md) | Submission text |
+| Demo script | [`demo_script.md`](demo_script.md) | Video recording guide |
+| Why MamaGuard | [`why_mamaguard.md`](why_mamaguard.md) | Judge-facing one-pager |
+| PO integration | [`po_integration.md`](po_integration.md) | FHIR context flow reference |
+| MCP setup | [`mcp_setup.md`](mcp_setup.md) | MCP server deployment |
+| BYO system prompt | [`byo_system_prompt.md`](byo_system_prompt.md) | PO agent system prompt |
+| BYO consultation prompt | [`byo_consultation_prompt.md`](byo_consultation_prompt.md) | PO consultation prompt |
+| BYO config | [`byo_config.json`](byo_config.json) | PO agent configuration |
+| MCP config | [`mcp_config.json`](mcp_config.json) | MCP tool definitions |
+| Eval summary | [`../../benchmarks/fixtures/eval_summary.md`](../../benchmarks/fixtures/eval_summary.md) | Benchmark results for Devpost |
+| Judge scorecard | [`../../benchmarks/fixtures/judge_scorecard.md`](../../benchmarks/fixtures/judge_scorecard.md) | Detailed scoring breakdown |
+| Deploy script | [`../../scripts/deploy.sh`](../../scripts/deploy.sh) | Cloud Run deployment |
