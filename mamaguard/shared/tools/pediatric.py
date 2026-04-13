@@ -13,6 +13,7 @@ from typing import TypedDict
 
 from google.adk.tools import ToolContext
 
+from .cache import cached_tool
 from .fhir_base import (
     _bundle_resources,
     _clinician_review,
@@ -97,6 +98,7 @@ def _compute_age_months(birth_date_str: str) -> int | None:
         return None
 
 
+@cached_tool
 def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
     """
     Check immunization status against CDC recommended schedule.
@@ -204,6 +206,7 @@ def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
     }
 
 
+@cached_tool
 def get_developmental_screening_status(tool_context: ToolContext | None = None) -> dict:
     """
     Check developmental screening status against AAP Bright Futures schedule.
@@ -287,6 +290,7 @@ def get_developmental_screening_status(tool_context: ToolContext | None = None) 
     }
 
 
+@cached_tool
 def get_care_gaps(tool_context: ToolContext | None = None) -> dict:
     """
     Identify care gaps -- overdue screenings, missed appointments, unmet goals.

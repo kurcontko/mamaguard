@@ -18,6 +18,7 @@ from ..sdoh_resources import (
     classify_category,
     curated_resources,
 )
+from .cache import cached_tool
 from .fhir_base import (
     _bundle_resources,
     _clinician_review,
@@ -49,6 +50,7 @@ _SDOH_SNOMED_CODES = {
 }
 
 
+@cached_tool
 def get_sdoh_screening(tool_context: ToolContext | None = None) -> dict:
     """
     Screen for social determinants of health from FHIR data.

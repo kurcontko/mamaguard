@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 from google.adk.tools import ToolContext
 
+from .cache import cached_tool
 from .fhir_base import (
     _bundle_resources,
     _clinician_review,
@@ -62,6 +63,7 @@ def _compute_trend(values: list[float], threshold: float = 2.0) -> str:
     return "increasing" if diff > 0 else "decreasing"
 
 
+@cached_tool
 def get_bp_trend(months_back: int = 24, tool_context: ToolContext | None = None) -> dict:
     """
     Get blood pressure trend for maternal monitoring.
@@ -154,6 +156,7 @@ def get_bp_trend(months_back: int = 24, tool_context: ToolContext | None = None)
     }
 
 
+@cached_tool
 def get_glucose_trend(months_back: int = 24, tool_context: ToolContext | None = None) -> dict:
     """
     Get glucose and HbA1c trend for maternal monitoring.
@@ -229,6 +232,7 @@ def get_glucose_trend(months_back: int = 24, tool_context: ToolContext | None = 
     }
 
 
+@cached_tool
 def get_pregnancy_history(tool_context: ToolContext | None = None) -> dict:
     """
     Get pregnancy history from FHIR Condition resources.
@@ -322,6 +326,7 @@ def get_pregnancy_history(tool_context: ToolContext | None = None) -> dict:
     }
 
 
+@cached_tool
 def get_maternal_risk_profile(tool_context: ToolContext | None = None) -> dict:
     """
     Get comprehensive maternal risk profile — compound query.

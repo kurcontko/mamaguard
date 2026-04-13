@@ -11,6 +11,7 @@ import httpx
 from google.adk.tools import ToolContext
 
 from ..smart_tickets import enforce_smart_ticket
+from .cache import cached_tool
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,7 @@ def _clinician_review(
 
 # -- Tool: patient summary ---------------------------------------------------
 
+@cached_tool
 def get_patient_summary(tool_context: ToolContext) -> dict:
     """
     Fetches a comprehensive summary of the current patient from the FHIR server.
@@ -260,6 +262,7 @@ def get_patient_summary(tool_context: ToolContext) -> dict:
 
 # -- Tool: active medications ------------------------------------------------
 
+@cached_tool
 def get_active_medications(tool_context: ToolContext) -> dict:
     """
     Retrieves the patient's current active medication list from the FHIR server.
