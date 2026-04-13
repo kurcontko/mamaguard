@@ -1,20 +1,21 @@
 # MamaGuard Demo Script (< 3 minutes)
 
 ## Pre-demo checklist
-- [ ] Cloud Run agent healthy (curl agent card returns 200)
+- [ ] Cloud Run agent healthy (`curl <AGENT_URL>/.well-known/agent-card.json` returns 200)
 - [ ] BYO Agent published on PO Marketplace
 - [ ] Maria patient ID ready: bench-maria-001 (linked child: bench-baby-santos-001)
 - [ ] All inputs pre-copied (no typing during recording)
+- [ ] Verify 5T output rendering (Talk/Template/Table/Task/Transaction sections visible)
 
 ---
 
-## Scene 1: Introduction (0:00 - 0:15)
+## Scene 1: Introduction (0:00 – 0:15) ~15s
 
-**Voiceover:** "MamaGuard is an AI care coordination agent for maternal and pediatric health. It analyzes FHIR patient records using three specialist agents and fifteen tools — maternal risk, pediatric transitions, and social determinants — with seamless mother-to-child handoff and the clinician always in control. It ships as both an A2A agent and an MCP server."
+**Voiceover:** "MamaGuard is an AI care coordination agent for maternal and pediatric health. It analyzes FHIR patient records using three specialist agents and fifteen tools — maternal risk, pediatric transitions, and social determinants — with seamless mother-to-child handoff and the clinician always in control. Every response follows the 5T framework: Talk, Template, Table, Task, Transaction. It ships as both an A2A agent and an MCP server."
 
-**Visual:** Architecture diagram (dual A2A + MCP paths, 3 agents, 15 FHIR tools, Liaison pattern)
+**Visual:** Architecture diagram (dual A2A + MCP paths, 3 agents, 15 FHIR tools, Liaison pattern, 5T output)
 
-## Scene 2: Launch from Marketplace (0:15 - 0:30)
+## Scene 2: Launch from Marketplace (0:15 – 0:30) ~15s
 
 **Action:** Open PO Marketplace → find "MamaGuard" → Launch
 
@@ -22,62 +23,166 @@
 
 **Action:** Select patient Maria (bench-maria-001)
 
-## Scene 3: Maternal Risk Assessment (0:30 - 1:15)
+## Scene 3: Maternal Risk Assessment (0:30 – 1:15) ~45s
 
-**Input:** "Assess maternal risk for this patient"
+**Input:** `Assess maternal risk for this patient`
 
-**Wait for response.** Expected output shows:
-- URGENT risk level
-- BP trend: consistently >140/90, spike to 170/98 postpartum
-- HbA1c trend: diabetes range
-- 6 pregnancies, 5 losses
-- CLINICIAN REVIEW REQUIRED for BP management
+**Wait for response (~5–8s).** Expected 5T output:
 
-**Voiceover:** "The maternal agent queries the FHIR server for BP trends, glucose, pregnancy history, and medications. It identifies Stage 2 hypertension and recurrent pregnancy loss — flagging clinician review before any treatment recommendations."
+> **Talk** — Maria presents with URGENT maternal risk: Stage 2 hypertension (most recent BP 162/104) with escalating trend, and HbA1c 7.2% in the diabetes range. She is 8 weeks postpartum. Immediate clinician review is recommended.
+>
+> **Template** — Risk Level: URGENT
+> Key findings:
+> - BP 162/104 on 2026-03-20 (Observation/bp-m5) — Stage 2 HTN
+> - BP 158/98 on 2026-03-10 (Observation/bp-m4) — escalating trend
+> - HbA1c 7.2% on 2026-03-18 (Observation/hba1c-m1) — diabetes range
+> - Pregnancy: resolved 2026-02-01, postpartum ≤12mo
+> ⚠ CLINICIAN REVIEW REQUIRED: Stage 2 HTN with escalating postpartum BP trend. Medication management requires clinician review.
+>
+> **Table**
+> | Metric | Value | Date | Source |
+> |--------|-------|------|--------|
+> | BP | 162/104 | 2026-03-20 | Observation/bp-m5 |
+> | BP | 158/98 | 2026-03-10 | Observation/bp-m4 |
+> | HbA1c | 7.2% | 2026-03-18 | Observation/hba1c-m1 |
+>
+> **Task**
+> 1. URGENT — Clinician review of BP trend and postpartum HTN | Clinician | Within 24h
+> 2. HIGH — Repeat HbA1c in 3 months | Lab / Clinician | 3 months
+> 3. MODERATE — Postpartum follow-up visit | OB team | 2 weeks
+>
+> **Transaction** — RiskAssessment/ra-001 created (maternal_risk_agent). Requires clinician approval.
+>
+> AI-generated analysis. Not for clinical use.
 
-**Flash:** Briefly show the FHIR JSON in the response (resource IDs, dates, values)
+**Key points to highlight:**
+- Structured 5T format with FHIR resource citations (Observation IDs, dates)
+- Safety filter: no specific drug names — says "Medication management requires clinician review"
+- ⚠ CLINICIAN REVIEW REQUIRED block (Liaison pattern)
+- RiskAssessment FHIR resource written back to patient record
 
-## Scene 4: SDOH Screening + Actionable Resources (1:15 - 1:50)
+**Voiceover:** "The maternal agent queries the FHIR server for BP trends, glucose, pregnancy history, and medications using a compound risk profile tool. It identifies Stage 2 hypertension and diabetes-range HbA1c — flagging clinician review. Notice the structured 5T output: every finding cites a FHIR resource ID, and the agent never prescribes — it writes a RiskAssessment and defers treatment to the clinician."
 
-**Input:** "Screen for social determinants, find resources, and create a care plan"
+## Scene 4: SDOH Screening + Actionable Resources (1:15 – 1:50) ~35s
 
-**Wait for response.** Expected output shows:
-- No insurance coverage found
-- Primary language: French (language barrier)
-- Concrete community resources found: Medicaid enrollment, 211 hotline, WIC, interpreter services
-- FHIR Goal + CarePlan written (trackable SDOH referral)
-- CommunicationRequest resource created for outreach
+**Input:** `Screen for social determinants, find resources, and create a care plan`
 
-**Voiceover:** "The SDOH agent screens FHIR data, detects Maria has no insurance and speaks French, then looks up concrete resources — Medicaid enrollment, WIC, interpreter services — and writes a trackable FHIR CarePlan linked to a Goal so the care team can follow through. This is the actionable SDOH loop: screen, find resources, persist the intervention."
+**Wait for response (~6–10s).** Expected 5T output:
 
-## Scene 5: Mother-to-Child Handoff (1:50 - 2:15)
+> **Talk** — Maria has active SDOH risk factors: no active insurance coverage and French-language preference requiring interpreter services. She is postpartum on chronic medications — the insurance gap is URGENT due to risk of medication discontinuation.
+>
+> **Template** — Risk Level: URGENT
+> Active SDOH conditions:
+> - No active Coverage resource found — URGENT (patient on chronic medications)
+> - Primary language: French, interpreter needed (Patient/bench-maria-001)
+> ⚠ CLINICIAN REVIEW REQUIRED: Insurance gap with chronic medication risk.
+>
+> **Table**
+> | Domain | Severity | FHIR Source |
+> |--------|----------|-------------|
+> | Insurance | URGENT | No active Coverage |
+> | Language | MODERATE | Patient/bench-maria-001 (French) |
+>
+> | Resource | Type | Contact |
+> |----------|------|---------|
+> | Medicaid Enrollment Office | Insurance | 555-0102 |
+> | WIC Program | Nutrition | 211 hotline |
+> | Interpreter Services | Language | 555-0199 |
+>
+> **Task**
+> 1. URGENT — Medicaid re-enrollment; coverage continuity for chronic meds | Benefits navigator | Within 48h
+> 2. MODERATE — Arrange French interpreter for upcoming appointments | Scheduling | Next visit
+>
+> **Transaction** — Goal/goal-001 + CarePlan/cp-001 created (sdoh_outreach_agent). CommunicationRequest/comm-002 created (Medicaid outreach). Requires clinician approval.
+>
+> AI-generated analysis. Not for clinical use.
 
-**Input:** "Find linked children and check their immunization status"
+**Key points to highlight:**
+- Community resources table with actionable contacts
+- FHIR Goal + CarePlan written — trackable SDOH referral, not just a text recommendation
+- CommunicationRequest for outreach follow-up
+- Cross-domain risk elevation: insurance gap + chronic medications = URGENT
 
-**Wait for response.** Expected output shows:
-- Orchestrator calls `find_linked_newborn` → discovers Lucas (linked via RelatedPerson)
-- Maternal risk factors carried into pediatric context (DM2 → neonatal hypoglycemia screening)
-- Immunization gap analysis against CDC schedule (birth through adolescent vaccines)
-- Developmental screening status per AAP Bright Futures
+**Voiceover:** "The SDOH agent screens FHIR data, detects Maria has no insurance and speaks French, then looks up concrete resources — Medicaid enrollment, WIC, interpreter services — and writes a trackable FHIR CarePlan linked to a Goal so the care team can follow through. This is the actionable SDOH loop: screen, find resources, persist the intervention as FHIR write-backs."
 
-**Voiceover:** "The orchestrator automatically discovers Maria's linked newborn, Lucas, via FHIR RelatedPerson resources — no manual patient switch needed. It carries maternal risk factors into the pediatric context and routes to the pediatric agent for immunization and developmental assessment."
+## Scene 5: Mother-to-Child Handoff (1:50 – 2:15) ~25s
 
-## Scene 6: Technical Depth (2:15 - 2:45)
+**Input:** `Find linked children and check their immunization status`
+
+**Wait for response (~5–8s).** Expected 5T output:
+
+> **Talk** — Baby Santos (6 weeks old) has HIGH pediatric risk: only the birth-dose HepB has been administered; the 2-month vaccine series is now due. Maternal history includes diabetes — neonatal glucose monitoring applies. Linked via FHIR RelatedPerson from Maria (bench-maria-001).
+>
+> **Template** — Risk Level: HIGH
+> Key findings:
+> - 1 of 6 expected immunizations received (HepB birth dose)
+> - 2-month vaccines due: DTaP, IPV, Hib, PCV13, RV
+> - ASQ-3 developmental screening due at 2 months
+> - Maternal DM2 noted — monitor for neonatal hypoglycemia
+> ⚠ CLINICIAN REVIEW REQUIRED: Overdue immunizations; catch-up schedule needed.
+>
+> **Table**
+> | Vaccine | Dose | Status | Date |
+> |---------|------|--------|------|
+> | HepB | 1 | Completed | 2026-02-09 |
+> | DTaP | 1 | Due | 2-month visit |
+> | IPV | 1 | Due | 2-month visit |
+> | Hib | 1 | Due | 2-month visit |
+> | PCV13 | 1 | Due | 2-month visit |
+> | RV | 1 | Due | 2-month visit |
+>
+> **Task**
+> 1. HIGH — Schedule catch-up vaccination visit | Pediatrician | Within 2 weeks
+> 2. MODERATE — Complete ASQ-3 developmental screening | Pediatrician | 2-month visit
+> 3. MODERATE — Anticipatory guidance: safe sleep, feeding | Care team | Next visit
+>
+> **Transaction** — CommunicationRequest/comm-001 created (pediatric_transition_agent, catch-up vaccine outreach). Requires clinician approval.
+>
+> AI-generated analysis. Not for clinical use.
+
+**Key points to highlight:**
+- `find_linked_newborn` discovers child via FHIR RelatedPerson — no manual patient switch
+- Maternal risk factors (DM2) carried into pediatric context
+- CDC immunization gap analysis with per-vaccine status table
+- Tool response caching: second agent reuses patient data fetched by first agent
+
+**Voiceover:** "The orchestrator automatically discovers Maria's linked newborn via FHIR RelatedPerson resources — no manual patient switch needed. It carries maternal risk factors into the pediatric context and routes to the pediatric agent for immunization gap analysis and developmental screening. Notice the mother-to-child handoff is seamless — one conversation covers both patients."
+
+## Scene 6: Technical Depth (2:15 – 2:45) ~30s
 
 **Flash through quickly:**
-1. Agent card JSON at `/.well-known/agent-card.json` (4 skills, FHIR extension, SMART tickets)
-2. `clinician_review` object in tool response (Liaison pattern — every tool)
-3. FHIR resources written: RiskAssessment, CommunicationRequest, Goal + CarePlan
-4. MCP server exposing same 15 tools (dual submission: A2A + MCP)
-5. API key security + FHIR token never in LLM prompt
+1. Agent card JSON at `/.well-known/agent-card.json` — 4 skills with 5T descriptions, FHIR extension, SMART Permission Tickets
+2. `clinician_review` object in every tool response — `{ required, reason, evidence_basis, confidence }` (Liaison pattern)
+3. FHIR write-back with validation: RiskAssessment, CommunicationRequest, Goal + CarePlan — required fields checked, risk_level validated, patient_id verified before POST
+4. Safety filter: prescribing language auto-redacted, replaced with clinician deferral
+5. Response filter: formatting cleanup (no triple backticks, collapsed rules, duplicate headers stripped)
+6. Session-level tool response caching: second sub-agent reuses FHIR data from first — fewer server round-trips
+7. FHIR error recovery: partial data triggers "⚠ DATA UNAVAILABLE" markers with manual review tasks, not silent failures
+8. MCP server exposing same 15 tools (dual submission: A2A + MCP)
 
-**Voiceover:** "Under the hood: A2A protocol with FHIR context and SMART Permission Tickets, Liaison Agent pattern for human-in-the-loop, bidirectional FHIR write-back with four resource types, and a standalone MCP server exposing the same tools for any MCP-compatible client."
+**Voiceover:** "Under the hood: A2A protocol with FHIR context and SMART Permission Tickets, Liaison Agent pattern for human-in-the-loop, bidirectional FHIR write-back with field validation, a safety filter that prevents autonomous prescribing, session-level tool caching across sub-agents, graceful FHIR error recovery, and a standalone MCP server exposing the same fifteen tools for any MCP-compatible client."
 
-## Scene 7: Closing (2:45 - 3:00)
+## Scene 7: Closing (2:45 – 3:00) ~15s
 
-**Voiceover:** "MamaGuard targets the coordination gap responsible for 80% of preventable maternal deaths. Three specialist agents, fifteen FHIR tools, seamless mother-to-child handoff, dual A2A and MCP submission — with the clinician always in control."
+**Voiceover:** "MamaGuard targets the coordination gap responsible for 80% of preventable maternal deaths. Three specialist agents, fifteen FHIR tools, structured 5T output, seamless mother-to-child handoff, dual A2A and MCP submission — with the clinician always in control."
 
 **Visual:** Impact metrics table from Devpost description
+
+---
+
+## Timing Summary
+
+| Scene | Duration | Cumulative |
+|-------|----------|------------|
+| 1. Introduction | ~15s | 0:15 |
+| 2. Marketplace launch | ~15s | 0:30 |
+| 3. Maternal risk | ~45s | 1:15 |
+| 4. SDOH screening | ~35s | 1:50 |
+| 5. Pediatric handoff | ~25s | 2:15 |
+| 6. Technical depth | ~30s | 2:45 |
+| 7. Closing | ~15s | 3:00 |
+
+**Buffer:** If agent response times vary, trim Scene 6 flash-throughs first (cut items 5–7). Scenes 3–5 are the core demo.
 
 ---
 
