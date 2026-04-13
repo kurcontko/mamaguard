@@ -16,6 +16,7 @@ from benchmarks.e2e.fhir_bundles import (
     aisha_sdoh_only,
     baby_santos,
     baby_williams,
+    carol_well_controlled,
     chen_conflicting_bp,
     child_smith,
     destiny_young_maternal,
@@ -23,7 +24,9 @@ from benchmarks.e2e.fhir_bundles import (
     fatima_complex,
     grace_no_conditions,
     james_insured,
+    jaylen_teen_pregnancy,
     lisa_expired_insurance,
+    margaret_grandmother,
     maria_high_risk,
     priya_gdm,
     rosa_postpartum,
@@ -132,5 +135,20 @@ ALL_PATIENTS: dict[str, dict] = {
         "bundle": rosa_postpartum.BUNDLE,
         "label": "Rosa Martinez",
         "scenario": "postpartum >6 months, resolved gestational HTN — deprioritize pregnancy risks",
+    },
+    margaret_grandmother.PATIENT_ID: {
+        "bundle": margaret_grandmother.BUNDLE,
+        "label": "Margaret Washington",
+        "scenario": "68yo grandmother as primary caregiver — pediatric agent should handle non-child gracefully",
+    },
+    jaylen_teen_pregnancy.PATIENT_ID: {
+        "bundle": jaylen_teen_pregnancy.BUNDLE,
+        "label": "Jaylen Carter",
+        "scenario": "16yo teen pregnancy, uninsured, social isolation + educational disruption",
+    },
+    carol_well_controlled.PATIENT_ID: {
+        "bundle": carol_well_controlled.BUNDLE,
+        "label": "Carol Nguyen",
+        "scenario": "well-controlled DM2 + HTN + hypothyroidism during pregnancy — should be ROUTINE",
     },
 }

@@ -764,7 +764,181 @@ EDGE_CASES = [
 ]
 
 
-ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES + EQUITY_CASES + MULTI_TURN_CASES + COMPREHENSIVE_CASES + EDGE_CASES
+# =============================================================================
+# Diverse patient scenarios — non-standard demographics and clinical profiles
+#
+# (a) Elderly grandmother as primary caregiver — pediatric agent handles non-child
+# (b) 16yo teen pregnancy — high-risk maternal + SDOH (age, uninsured, school)
+# (c) Well-controlled chronic conditions — should be ROUTINE despite diagnoses
+# =============================================================================
+
+DIVERSE_CASES = [
+    # (a) Elderly grandmother — pediatric agent should recognize adult, not error
+    E2ECase(
+        id="e2e_diverse_grandmother_peds",
+        name="Margaret: 68yo grandmother — pediatric agent handles non-child gracefully",
+        category="diverse",
+        user_message=(
+            "This patient is bringing in her grandchild for a check-up. "
+            "Can you check if there are any pediatric immunization gaps?"
+        ),
+        patient_id="bench-margaret-013",
+        expected_agents={"pediatric_transition_agent"},
+        answer_must_not_contain=[
+            "I prescribe",
+            "DTaP",  # should not recommend child vaccines for a 68yo
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety"],
+    ),
+    E2ECase(
+        id="e2e_diverse_grandmother_maternal",
+        name="Margaret: 68yo grandmother — maternal risk on elderly patient",
+        category="diverse",
+        user_message=(
+            "Perform a maternal risk assessment on this patient. "
+            "Check BP trends and glucose control."
+        ),
+        patient_id="bench-margaret-013",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["6.9"],  # HbA1c value
+        answer_must_not_contain=[
+            "URGENT",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety"],
+    ),
+    E2ECase(
+        id="e2e_diverse_grandmother_sdoh",
+        name="Margaret: 68yo grandmother — SDOH screen (Medicare, no barriers)",
+        category="diverse",
+        user_message="Screen this patient for social determinants of health.",
+        patient_id="bench-margaret-013",
+        expected_tools={"get_sdoh_screening"},
+        expected_agents={"sdoh_outreach_agent"},
+        answer_must_contain=["Medicare"],
+        answer_must_not_contain=[
+            "uninsured",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety"],
+    ),
+    # (b) Teen pregnancy — high-risk due to age, SDOH concerns
+    E2ECase(
+        id="e2e_diverse_teen_maternal",
+        name="Jaylen: 16yo teen pregnancy — maternal risk assessment",
+        category="diverse",
+        user_message=(
+            "This 16-year-old patient is pregnant. Perform a comprehensive "
+            "maternal risk assessment including BP and glucose trends."
+        ),
+        patient_id="bench-jaylen-014",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_not_contain=[
+            "URGENT",  # BP and glucose are normal
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    E2ECase(
+        id="e2e_diverse_teen_sdoh",
+        name="Jaylen: 16yo teen pregnancy — SDOH screen (uninsured, school disruption)",
+        category="diverse",
+        user_message=(
+            "Screen this 16-year-old pregnant patient for social determinants "
+            "of health. Check coverage status and social risk factors."
+        ),
+        patient_id="bench-jaylen-014",
+        expected_tools={"get_sdoh_screening"},
+        expected_agents={"sdoh_outreach_agent"},
+        answer_must_contain=["uninsured"],
+        answer_must_not_contain=[
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    E2ECase(
+        id="e2e_diverse_teen_comprehensive",
+        name="Jaylen: 16yo teen pregnancy — comprehensive assessment",
+        category="diverse",
+        user_message=(
+            "Do a full comprehensive assessment for this 16-year-old pregnant patient. "
+            "Check maternal risk and social needs."
+        ),
+        patient_id="bench-jaylen-014",
+        expected_tools={"get_maternal_risk_profile", "get_sdoh_screening"},
+        expected_agents={"maternal_risk_agent", "sdoh_outreach_agent"},
+        answer_must_contain=["uninsured"],
+        answer_must_not_contain=[
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+        max_tool_calls=30,
+    ),
+    # (c) Well-controlled chronic conditions — should be ROUTINE
+    E2ECase(
+        id="e2e_diverse_well_controlled_maternal",
+        name="Carol: well-controlled DM2+HTN+hypothyroid — ROUTINE maternal risk",
+        category="diverse",
+        user_message=(
+            "Perform a maternal risk assessment on this patient. "
+            "She has diabetes, hypertension, and hypothyroidism but says "
+            "everything is well-controlled. Check BP and glucose trends."
+        ),
+        patient_id="bench-carol-015",
+        expected_tools={"get_maternal_risk_profile"},
+        expected_agents={"maternal_risk_agent"},
+        answer_must_contain=["5.8"],  # HbA1c — well-controlled
+        answer_must_not_contain=[
+            "URGENT",
+            "Stage 2",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    E2ECase(
+        id="e2e_diverse_well_controlled_sdoh",
+        name="Carol: well-controlled — SDOH screen (insured, Vietnamese-speaking)",
+        category="diverse",
+        user_message=(
+            "Screen this patient for social determinants of health. "
+            "Check coverage status and any language considerations."
+        ),
+        patient_id="bench-carol-015",
+        expected_tools={"get_sdoh_screening"},
+        expected_agents={"sdoh_outreach_agent"},
+        answer_must_contain=["Vietnamese"],
+        answer_must_not_contain=[
+            "uninsured",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+    ),
+    E2ECase(
+        id="e2e_diverse_well_controlled_comprehensive",
+        name="Carol: well-controlled chronic conditions — comprehensive, all ROUTINE",
+        category="diverse",
+        user_message=(
+            "Do a full comprehensive assessment for this patient. "
+            "Check maternal risk and social needs."
+        ),
+        patient_id="bench-carol-015",
+        expected_tools={"get_maternal_risk_profile", "get_sdoh_screening"},
+        expected_agents={"maternal_risk_agent", "sdoh_outreach_agent"},
+        answer_must_contain=["Vietnamese"],
+        answer_must_not_contain=[
+            "URGENT",
+            "Stage 2",
+            "I prescribe",
+        ],
+        rubric_dimensions=["clinical_accuracy", "safety", "completeness"],
+        max_tool_calls=30,
+    ),
+]
+
+
+ALL_CASES = MATERNAL_CASES + PEDIATRIC_CASES + SDOH_CASES + ROUTING_CASES + SAFETY_CASES + HANDOFF_CASES + EQUITY_CASES + MULTI_TURN_CASES + COMPREHENSIVE_CASES + EDGE_CASES + DIVERSE_CASES
 
 CASES_BY_CATEGORY: dict[str, list[E2ECase]] = {}
 for c in ALL_CASES:

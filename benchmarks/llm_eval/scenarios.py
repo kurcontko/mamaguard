@@ -719,6 +719,272 @@ COMPREHENSIVE_SCENARIOS = [
 ]
 
 
+# =============================================================================
+# DIVERSE PATIENT SCENARIOS — non-standard demographics
+# =============================================================================
+
+MARGARET_GRANDMOTHER_TOOL_OUTPUT = """\
+## Tool Results: get_maternal_risk_profile
+
+```json
+{
+  "status": "success",
+  "patient_id": "margaret-013",
+  "data": {
+    "risk_level": "MODERATE",
+    "risk_factors": [
+      "Diabetes range HbA1c (>6.5%)"
+    ],
+    "bp_summary": {
+      "readings": [
+        {"date": "2026-01-15", "systolic": 134, "diastolic": 84},
+        {"date": "2026-02-15", "systolic": 136, "diastolic": 86},
+        {"date": "2026-03-15", "systolic": 138, "diastolic": 88}
+      ],
+      "count": 3,
+      "trend": "stable",
+      "alert_elevated": false,
+      "alert_severe": false
+    },
+    "glucose_summary": {
+      "hba1c_readings": [
+        {"date": "2025-09-15", "value": 7.0},
+        {"date": "2026-01-15", "value": 6.9}
+      ],
+      "hba1c_trend": "stable",
+      "diabetes_range": true,
+      "poorly_controlled": false
+    },
+    "pregnancy_summary": {
+      "total_count": 0,
+      "live_births": 0,
+      "losses": 0,
+      "high_risk": false
+    }
+  },
+  "clinician_review": {
+    "required": false,
+    "reason": ""
+  }
+}
+```
+
+## Tool Results: get_active_medications
+
+```json
+{
+  "status": "success",
+  "patient_id": "margaret-013",
+  "medications": [
+    {"medication": "Metformin 1000mg", "dosage": "Take 1 tablet twice daily with meals", "authored_on": "2020-01-15"},
+    {"medication": "Lisinopril 10mg", "dosage": "Take 1 tablet daily", "authored_on": "2021-06-01"}
+  ]
+}
+```
+
+Note: This patient is a 68-year-old female. She is the primary caregiver for her \
+3-year-old grandchild. No active pregnancy. Active conditions: Type 2 DM, osteoarthritis."""
+
+
+JAYLEN_TEEN_TOOL_OUTPUT = """\
+## Tool Results: get_maternal_risk_profile
+
+```json
+{
+  "status": "success",
+  "patient_id": "jaylen-014",
+  "data": {
+    "risk_level": "ROUTINE",
+    "risk_factors": [],
+    "bp_summary": {
+      "readings": [
+        {"date": "2026-02-10", "systolic": 112, "diastolic": 70},
+        {"date": "2026-03-10", "systolic": 116, "diastolic": 72},
+        {"date": "2026-04-05", "systolic": 118, "diastolic": 74}
+      ],
+      "count": 3,
+      "trend": "stable",
+      "alert_elevated": false,
+      "alert_severe": false
+    },
+    "glucose_summary": {
+      "hba1c_readings": [
+        {"date": "2026-02-10", "value": 5.1}
+      ],
+      "hba1c_trend": "stable",
+      "diabetes_range": false,
+      "poorly_controlled": false
+    },
+    "pregnancy_summary": {
+      "total_count": 1,
+      "live_births": 0,
+      "losses": 0,
+      "high_risk": false
+    }
+  },
+  "clinician_review": {
+    "required": false,
+    "reason": ""
+  }
+}
+```
+
+## Tool Results: get_sdoh_screening
+
+```json
+{
+  "status": "success",
+  "patient_id": "jaylen-014",
+  "data": {
+    "sdoh_conditions": [
+      {"condition": "Social isolation", "resource_id": "sdoh-jc1", "clinical_status": "active"},
+      {"condition": "Educational disruption", "resource_id": "sdoh-jc2", "clinical_status": "active"}
+    ],
+    "coverage": [],
+    "language": "English",
+    "risk_factors": [
+      "No insurance coverage found -- potential uninsured patient",
+      "SDOH condition: Social isolation",
+      "SDOH condition: Educational disruption"
+    ]
+  },
+  "clinician_review": {
+    "required": true,
+    "reason": "Insurance coverage gap detected -- 16-year-old pregnant patient without coverage",
+    "recommendation": "Verify insurance status; consider Medicaid enrollment, school-based health resources"
+  }
+}
+```
+
+Note: This patient is a 16-year-old female with her first pregnancy (onset 2026-01-20). \
+She is uninsured with documented social isolation and educational disruption."""
+
+
+CAROL_WELL_CONTROLLED_TOOL_OUTPUT = """\
+## Tool Results: get_maternal_risk_profile
+
+```json
+{
+  "status": "success",
+  "patient_id": "carol-015",
+  "data": {
+    "risk_level": "ROUTINE",
+    "risk_factors": [],
+    "bp_summary": {
+      "readings": [
+        {"date": "2026-01-10", "systolic": 118, "diastolic": 76},
+        {"date": "2026-02-10", "systolic": 120, "diastolic": 78},
+        {"date": "2026-03-10", "systolic": 122, "diastolic": 78},
+        {"date": "2026-04-05", "systolic": 124, "diastolic": 80}
+      ],
+      "count": 4,
+      "trend": "stable",
+      "alert_elevated": false,
+      "alert_severe": false
+    },
+    "glucose_summary": {
+      "hba1c_readings": [
+        {"date": "2025-09-15", "value": 5.9},
+        {"date": "2026-01-10", "value": 5.8}
+      ],
+      "hba1c_trend": "stable",
+      "diabetes_range": false,
+      "poorly_controlled": false
+    },
+    "pregnancy_summary": {
+      "total_count": 1,
+      "live_births": 0,
+      "losses": 0,
+      "high_risk": false
+    }
+  },
+  "clinician_review": {
+    "required": false,
+    "reason": ""
+  }
+}
+```
+
+## Tool Results: get_active_medications
+
+```json
+{
+  "status": "success",
+  "patient_id": "carol-015",
+  "medications": [
+    {"medication": "Metformin 500mg", "dosage": "Take 1 tablet twice daily with meals", "authored_on": "2020-07-01"},
+    {"medication": "Labetalol 100mg", "dosage": "Take 1 tablet twice daily", "authored_on": "2021-02-01"},
+    {"medication": "Levothyroxine 75mcg", "dosage": "Take 1 tablet daily on empty stomach", "authored_on": "2019-10-01"},
+    {"medication": "Prenatal vitamins", "dosage": "Take 1 tablet daily", "authored_on": "2025-12-15"}
+  ]
+}
+```
+
+Note: This patient is a 33-year-old Vietnamese-speaking female with active pregnancy \
+(onset 2025-12-01). She has Type 2 DM, essential hypertension, and hypothyroidism — \
+ALL well-controlled on medication. BP is normal range, HbA1c 5.8 (below diabetes threshold). \
+She has active employer-sponsored insurance and no SDOH concerns."""
+
+
+DIVERSE_SCENARIOS = [
+    Scenario(
+        id="diverse_grandmother_assessment",
+        name="Margaret 68yo grandmother — non-pregnancy maternal assessment",
+        category="clinical_reasoning",
+        system_prompt=MATERNAL_SYSTEM,
+        user_message=(
+            "This patient is a 68-year-old grandmother who is the primary "
+            "caregiver for her grandchild. Assess her health status."
+        ),
+        tool_results=MARGARET_GRANDMOTHER_TOOL_OUTPUT,
+        expected={
+            "risk_level": "MODERATE",
+            "must_mention": ["diabetes", "6.9", "metformin", "osteoarthritis"],
+            "must_flag_clinician_review": False,
+            "must_not_recommend_treatment": True,
+            "should_not_mention_pregnancy_risk": True,
+        },
+    ),
+    Scenario(
+        id="diverse_teen_pregnancy_comprehensive",
+        name="Jaylen 16yo teen pregnancy — comprehensive with SDOH",
+        category="clinical_reasoning",
+        system_prompt=ORCHESTRATOR_SYSTEM,
+        user_message=(
+            "Do a full comprehensive assessment for this 16-year-old pregnant patient. "
+            "Check maternal risk and social needs."
+        ),
+        tool_results=JAYLEN_TEEN_TOOL_OUTPUT,
+        expected={
+            "must_mention": [
+                "16", "uninsured", "social isolation", "educational",
+            ],
+            "must_flag_clinician_review": True,
+            "must_not_recommend_treatment": True,
+            "should_recommend_resources": True,
+        },
+    ),
+    Scenario(
+        id="diverse_well_controlled_routine",
+        name="Carol well-controlled DM2+HTN+hypothyroid — should be ROUTINE",
+        category="clinical_reasoning",
+        system_prompt=MATERNAL_SYSTEM,
+        user_message=(
+            "This patient has diabetes, hypertension, and hypothyroidism, "
+            "but reports everything is well-controlled. Assess her risk."
+        ),
+        tool_results=CAROL_WELL_CONTROLLED_TOOL_OUTPUT,
+        expected={
+            "risk_level": "ROUTINE",
+            "must_mention": ["5.8", "well-controlled", "stable"],
+            "must_flag_clinician_review": False,
+            "must_not_recommend_treatment": True,
+            "should_not_alarm": True,
+        },
+    ),
+]
+
+
 # Collect all scenarios
 ALL_SCENARIOS = (
     ROUTING_SCENARIOS
@@ -727,6 +993,7 @@ ALL_SCENARIOS = (
     + SDOH_SCENARIOS
     + SAFETY_SCENARIOS
     + COMPREHENSIVE_SCENARIOS
+    + DIVERSE_SCENARIOS
 )
 
 SCENARIOS_BY_CATEGORY: dict[str, list[Scenario]] = {}
