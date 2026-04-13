@@ -24,37 +24,23 @@ Every tool response includes a **Liaison Agent pattern** `clinician_review` obje
 ## Architecture
 
 ```
-                     Prompt Opinion Platform
-                    +--------------------------+
-                    |  BYO Agent (configured    |
-                    |  in PO with system        |
-                    |  prompt + FHIR context)   |
-                    +------+----------+--------+
-          A2A JSON-RPC |          | MCP (SSE/stdio)
-          + FHIR metadata|          | + SHARP params
-                         v          v
-+--------------------------------+  +--------------------------+
-|  MamaGuard A2A Agent           |  |  MamaGuard MCP Server    |
-|  (Cloud Run -- Agent track)    |  |  (Superpower track)      |
-|  +---------------------------+ |  |  FastMCP, 15 tools       |
-|  |  Orchestrator (Gemini)    | |  |  stdio + SSE transport   |
-|  |  +-- Maternal Agent       | |  +-----------+--------------+
-|  |  +-- Pediatric Agent      | |              |
-|  |  +-- SDOH Agent           | |              |
-|  +------------+--------------+ |              |
-|               |                |              |
-|  Shared FHIR Tool Layer        |              |
-|  (15 tools, single source     <--- shared code |
-|   of truth -- no duplication)  |              |
-|  +----------------------------+|              |
-|               |                |              |
-|  Middleware + FHIR Hook        |              |
-+---------------+----------------+              |
-                | HTTPS + Bearer Token          |
-                +---------------+---------------+
-                                v
-                       FHIR R4 Server
-                     (SMART / HAPI)
+                      Prompt Opinion Platform
+                       /                  \
+              A2A JSON-RPC           MCP (SSE/stdio)
+              + FHIR context         + SHARP params
+                   |                       |
+                   v                       v
+      +-----------------------+   +------------------+
+      |  A2A Agent            |   |  MCP Server      |
+      |  Orchestrator         |   |  (Superpower)    |
+      |   +-- Maternal Agent  |   +--------+---------+
+      |   +-- Pediatric Agent |            |
+      |   +-- SDOH Agent      |            |
+      |  Shared FHIR Tools  <--- shared ---+
+      +-----------+-----------+
+                  | HTTPS + Bearer Token
+                  v
+           FHIR R4 Server
 ```
 
 **Data flow:** Clinician launches MamaGuard from Prompt Opinion > selects patient > PO sends FHIR context (server URL, bearer token, patient ID) via A2A metadata > orchestrator routes to specialist agents > agents query FHIR server using shared tool layer > results include structured risk assessments with evidence citations > clinician reviews and decides.

@@ -26,9 +26,12 @@ a2a_app = create_a2a_app(
     name="MamaGuard Care Coordinator",
     description=(
         "Maternal-pediatric care coordination agent with 15 FHIR tools. "
-        "Monitors high-risk pregnancies, manages mother-to-child care transitions, "
-        "screens for SDOH with actionable community resource referrals, and writes "
-        "back RiskAssessment, CommunicationRequest, Goal, and CarePlan resources. "
+        "Three specialist agents (Maternal Risk, Pediatric Transition, SDOH Outreach) "
+        "coordinate through an Orchestrator that routes queries, synthesizes findings "
+        "into 5T output (Talk, Template, Table, Task, Transaction), and writes back "
+        "RiskAssessment, CarePlan, and CommunicationRequest resources. "
+        "Architecture: User -> Prompt Opinion -> A2A/MCP -> Orchestrator -> "
+        "{Maternal, Pediatric, SDOH} agents -> shared FHIR tool layer -> FHIR R4 Server. "
         "Pauses for clinician review on critical decisions (Liaison Agent pattern). "
         "Requires FHIR context (server URL, bearer token, patient ID)."
     ),
