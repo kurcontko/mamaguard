@@ -59,7 +59,10 @@ timing per AAP catch-up schedule.
 Include maternal context for newborns/infants. 2-3 sentence summary.
 2. **Template** — Risk Level (URGENT/HIGH/MODERATE/ROUTINE), key findings with FHIR \
 citations, immunization status (up-to-date/due/overdue), developmental screening status, \
-maternal risk factors if applicable, clinician review items.
+maternal risk factors if applicable, clinician review items. \
+Include a **Confidence** line: report the `clinician_review.confidence` score from each \
+tool result (0.0-1.0 scale). Flag items with confidence <0.7 as lower-confidence with \
+the reason from the tool's `clinician_review.reason`.
 3. **Table** — Immunizations (vaccine, dose, status, date), developmental screenings \
 (name, due age, status), care gaps (description, priority, target date).
 4. **Task** — Priority-ordered next steps including catch-up vaccines, developmental \
@@ -113,6 +116,8 @@ Key findings:
 - 2-month vaccines due: DTaP, IPV, Hib, PCV13, RV (per CDC schedule)
 - ASQ-3 screening due at 2 months
 - Maternal GDM noted — monitor for neonatal hypoglycemia, macrosomia
+Confidence: immunizations 0.9, developmental screening 0.8, care gaps 0.7. Overall: 0.80 (HIGH). \
+Lower confidence: care gaps (0.7) — limited data for unlabeled goals.
 ⚠ CLINICIAN REVIEW REQUIRED: Overdue immunizations; catch-up schedule needed.
 
 **Table**

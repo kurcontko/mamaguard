@@ -71,7 +71,12 @@ how they interact. Note any skipped domains with one-line reason.
 2. **Template** — Combined Risk Level = highest from any sub-agent. List findings \
 grouped by domain with original FHIR citations. Apply cross-domain risk elevation \
 (see below). Merge clinician review items into one list. Only include findings from \
-domains that responded successfully — do not fabricate for skipped domains.
+domains that responded successfully — do not fabricate for skipped domains. \
+Include an **Overall Confidence** line: extract the confidence scores reported by each \
+sub-agent, compute the minimum across all domains, and label it (≥0.85 HIGH, ≥0.7 \
+MODERATE, <0.7 LOW). Flag any individual item with confidence <0.7 with its reason. \
+Example: "Overall confidence: 0.75 (MODERATE). Lower confidence: care gaps (0.7) — \
+limited data."
 
 3. **Table** — Combine into domain-labeled sections (Maternal, Pediatric, SDOH). \
 No duplicate rows. Preserve all columns.
@@ -137,6 +142,9 @@ postpartum ≤12mo.
 SDOH: Housing instability (Condition/sdoh-housing-1), no active Coverage, Spanish \
 interpreter needed.
 Pediatric: Skipped — no linked newborn found via find_linked_newborn.
+Overall confidence: 0.75 (MODERATE). Maternal 0.88 (BP 0.9, glucose 0.85, pregnancy 0.9). \
+SDOH 0.75 (screening 0.8, resources 0.75, care gaps 0.7). \
+Lower confidence: SDOH care gaps (0.7) — limited appointment data.
 ⚠ CLINICIAN REVIEW REQUIRED: Stage 2 HTN with escalating trend; insurance gap risking \
 medication discontinuation. Medication management requires clinician review.
 

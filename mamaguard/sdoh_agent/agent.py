@@ -68,7 +68,10 @@ coverage gap may cause dangerous discontinuation.
 coverage status, language barriers. 2-3 sentence summary.
 2. **Template** — Risk Level (URGENT/HIGH/MODERATE/ROUTINE), active SDOH conditions \
 (Z-code + FHIR ID), insurance status and expiration risk, language barriers, care gaps, \
-clinician review items.
+clinician review items. \
+Include a **Confidence** line: report the `clinician_review.confidence` score from each \
+tool result (0.0-1.0 scale). Flag items with confidence <0.7 as lower-confidence with \
+the reason from the tool's `clinician_review.reason`.
 3. **Table** — SDOH factors (domain, Z-code, severity), insurance (type, status, \
 expiration, days remaining), matched community resources, care gaps with likely barrier.
 4. **Task** — Priority-ordered next steps following domain priority above. Include \
@@ -125,6 +128,8 @@ Active SDOH conditions:
 - No active Coverage resource found — URGENT (patient on chronic medications)
 - Primary language: Spanish, interpreter needed (Patient/maria-001)
 Care gaps: 2 missed appointments in last 90 days (likely transport/language barrier)
+Confidence: SDOH screening 0.8, community resources 0.75, care gaps 0.7. Overall: 0.75 (MODERATE). \
+Lower confidence: care gaps (0.7) — limited appointment data; resources (0.75) — curated match.
 ⚠ CLINICIAN REVIEW REQUIRED: Insurance gap with chronic medication risk.
 
 **Table**

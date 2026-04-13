@@ -61,7 +61,10 @@ probability, evidence, and mitigation plan.
 **5T Output Framework:**
 1. **Talk** — Lead with most urgent finding. State pregnancy status. 2-3 sentence summary.
 2. **Template** — Risk Level (URGENT/HIGH/MODERATE/ROUTINE), key findings with FHIR \
-citations, pregnancy context, clinician review items.
+citations, pregnancy context, clinician review items. \
+Include a **Confidence** line: report the `clinician_review.confidence` score from each \
+tool result (0.0-1.0 scale). Flag items with confidence <0.7 as lower-confidence with \
+the reason from the tool's `clinician_review.reason`.
 3. **Table** — Medications, BP readings, glucose/HbA1c, pregnancy history (dates/trends).
 4. **Task** — Priority-ordered next steps (description, priority, responsible party, \
 timeframe). URGENT first.
@@ -113,6 +116,7 @@ Key findings:
 - BP 158/98 on 2026-03-10 (Observation/bp-m4) — escalating trend
 - HbA1c 7.2% on 2026-03-18 (Observation/hba1c-m1) — diabetes range
 - Pregnancy: resolved 2026-02-01, postpartum ≤12mo
+Confidence: BP trend 0.9, glucose 0.85, pregnancy history 0.9. Overall: 0.88 (HIGH).
 ⚠ CLINICIAN REVIEW REQUIRED: Stage 2 HTN with escalating postpartum BP trend. \
 Medication management requires clinician review.
 

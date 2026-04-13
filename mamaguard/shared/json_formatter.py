@@ -70,6 +70,23 @@ _DISCLAIMER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Confidence patterns:
+# "Overall confidence: 0.75 (MODERATE)" or "Overall: 0.88 (HIGH)"
+_OVERALL_CONFIDENCE_PATTERN = re.compile(
+    r"Overall\s+(?:confidence:?\s*)?(\d+\.\d+)\s*\((\w+)\)",
+    re.IGNORECASE,
+)
+
+# Per-domain: "Maternal 0.88" or "BP trend 0.9" or "SDOH screening 0.8"
+_ITEM_CONFIDENCE_PATTERN = re.compile(
+    r"(?:^|[,;.])\s*([A-Za-z][A-Za-z /]+?)\s+(\d+\.\d+)",
+)
+
+# Lower confidence flagged items: "Lower confidence: care gaps (0.7) — reason"
+_LOW_CONFIDENCE_PATTERN = re.compile(
+    r"[Ll]ower\s+confidence[:\s]+(.+?)(?:\n|$)",
+)
+
 
 def _extract_sections(text: str) -> dict[str, str]:
     """Split a 5T markdown response into section name → content."""
@@ -141,6 +158,52 @@ def _extract_fhir_writes(transaction_text: str) -> list[dict[str, str]]:
     return writes
 
 
+def _extract_confidence(template_text: str) -> dict[str, Any] | None:
+    """Extract confidence scoring from the Template section.
+
+    Returns a dict with overall score/label and any flagged low-confidence
+    items, or None if no confidence info found.
+    """
+    m = _OVERALL_CONFIDENCE_PATTERN.search(template_text)
+    if not m:
+        return None
+
+    result: dict[str, Any] = {
+        "overall": float(m.group(1)),
+        "label": m.group(2).upper(),
+    }
+
+    # Extract per-item confidence scores from the same block
+    # Find the confidence line(s) — everything between "Overall confidence" and the next section
+    conf_start = template_text.find("onfidence")
+    if conf_start >= 0:
+        # Find start of line containing "onfidence"
+        line_start = template_text.rfind("\n", 0, conf_start)
+        line_start = line_start + 1 if line_start >= 0 else 0
+        # Find the next section marker or clinician review
+        rest = template_text[line_start:]
+        # Grab all text until next ⚠ or section marker
+        end_markers = [rest.find("⚠"), rest.find("\n**"), rest.find("\n#")]
+        end_markers = [e for e in end_markers if e > 0]
+        conf_block = rest[:min(end_markers)] if end_markers else rest
+        items: dict[str, float] = {}
+        for im in _ITEM_CONFIDENCE_PATTERN.finditer(conf_block):
+            name = im.group(1).strip()
+            score = float(im.group(2))
+            # Skip "Overall" itself and very short matches
+            if name.lower() != "overall" and len(name) > 1:
+                items[name] = score
+        if items:
+            result["items"] = items
+
+    # Extract lower-confidence flags
+    low_m = _LOW_CONFIDENCE_PATTERN.search(template_text)
+    if low_m:
+        result["low_confidence_flags"] = low_m.group(1).strip()
+
+    return result
+
+
 def _extract_disclaimer(text: str) -> str:
     """Extract the AI disclaimer from the full response."""
     m = _DISCLAIMER_PATTERN.search(text)
@@ -162,9 +225,11 @@ def markdown_to_json(text: str) -> dict[str, Any]:
 
     risk_level = "UNKNOWN"
     findings: list[str] = []
+    confidence: dict[str, Any] | None = None
     if "template" in sections:
         risk_level = _extract_risk_level(sections["template"])
         findings = _extract_findings(sections["template"])
+        confidence = _extract_confidence(sections["template"])
 
     tasks: list[dict[str, str]] = []
     if "task" in sections:
@@ -174,7 +239,7 @@ def markdown_to_json(text: str) -> dict[str, Any]:
     if "transaction" in sections:
         fhir_writes = _extract_fhir_writes(sections["transaction"])
 
-    return {
+    result: dict[str, Any] = {
         "risk_level": risk_level,
         "talk": sections.get("talk", ""),
         "findings": findings,
@@ -182,6 +247,9 @@ def markdown_to_json(text: str) -> dict[str, Any]:
         "fhir_writes": fhir_writes,
         "disclaimer": _extract_disclaimer(text),
     }
+    if confidence:
+        result["confidence"] = confidence
+    return result
 
 
 # ---------------------------------------------------------------------------

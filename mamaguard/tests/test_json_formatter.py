@@ -342,5 +342,152 @@ class TestOrchestratorJsonWiring(unittest.TestCase):
         self.assertIn("5T", ORCHESTRATOR_INSTRUCTION)
 
 
+# ===========================================================================
+# 7. Confidence extraction
+# ===========================================================================
+
+SAMPLE_5T_WITH_CONFIDENCE = """\
+**Talk** — MULTI-DOMAIN URGENT: Maria (8 weeks postpartum) presents with Stage 2 \
+hypertension (BP 162/104, escalating) and HbA1c 7.2%.
+
+**Template** — Combined Risk Level: URGENT (elevated: insurance gap + chronic meds)
+Maternal: BP 162/104 (Observation/bp-m5), HbA1c 7.2% (Observation/hba1c-m1).
+SDOH: Housing instability (Condition/sdoh-housing-1), no active Coverage.
+Overall confidence: 0.75 (MODERATE). Maternal 0.88 (BP 0.9, glucose 0.85, pregnancy 0.9). \
+SDOH 0.75 (screening 0.8, resources 0.75, care gaps 0.7). \
+Lower confidence: SDOH care gaps (0.7) — limited appointment data.
+⚠ CLINICIAN REVIEW REQUIRED: Stage 2 HTN with escalating trend.
+
+**Table**
+| Metric | Value | Date | Source |
+|--------|-------|------|--------|
+| BP | 162/104 | 2026-03-20 | Observation/bp-m5 |
+
+**Task**
+1. URGENT — Clinician review of BP trend | Clinician | Within 24h
+
+**Transaction** — RiskAssessment/ra-001 (maternal_risk_agent).
+
+AI-generated analysis of synthetic data. Not for clinical use.
+"""
+
+
+class TestConfidenceExtraction(unittest.TestCase):
+
+    def test_overall_confidence_extracted(self):
+        result = markdown_to_json(SAMPLE_5T_WITH_CONFIDENCE)
+        self.assertIn("confidence", result)
+        self.assertAlmostEqual(result["confidence"]["overall"], 0.75)
+        self.assertEqual(result["confidence"]["label"], "MODERATE")
+
+    def test_per_item_confidence_extracted(self):
+        result = markdown_to_json(SAMPLE_5T_WITH_CONFIDENCE)
+        self.assertIn("confidence", result)
+        items = result["confidence"].get("items", {})
+        self.assertGreater(len(items), 0)
+        # Should capture at least some domain scores
+        all_vals = list(items.values())
+        self.assertTrue(all(isinstance(v, float) for v in all_vals))
+
+    def test_low_confidence_flags(self):
+        result = markdown_to_json(SAMPLE_5T_WITH_CONFIDENCE)
+        self.assertIn("confidence", result)
+        flags = result["confidence"].get("low_confidence_flags", "")
+        self.assertIn("care gaps", flags.lower())
+
+    def test_no_confidence_when_absent(self):
+        result = markdown_to_json(SAMPLE_5T)
+        self.assertNotIn("confidence", result)
+
+    def test_confidence_in_json_callback(self):
+        resp = _make_response(SAMPLE_5T_WITH_CONFIDENCE)
+        json_output_callback(_ctx("json"), resp)
+        parsed = json.loads(resp.content.parts[0].text)
+        self.assertIn("confidence", parsed)
+        self.assertAlmostEqual(parsed["confidence"]["overall"], 0.75)
+
+    def test_confidence_high_label(self):
+        text = (
+            "**Template** — Risk Level: URGENT\n"
+            "Overall confidence: 0.90 (HIGH). BP 0.9, glucose 0.85.\n"
+            "**Task**\n"
+        )
+        result = markdown_to_json(text)
+        self.assertIn("confidence", result)
+        self.assertAlmostEqual(result["confidence"]["overall"], 0.90)
+        self.assertEqual(result["confidence"]["label"], "HIGH")
+
+    def test_confidence_low_label(self):
+        text = (
+            "**Template** — Risk Level: MODERATE\n"
+            "Overall confidence: 0.55 (LOW). Limited data available.\n"
+            "**Task**\n"
+        )
+        result = markdown_to_json(text)
+        self.assertIn("confidence", result)
+        self.assertAlmostEqual(result["confidence"]["overall"], 0.55)
+        self.assertEqual(result["confidence"]["label"], "LOW")
+
+    def test_single_domain_confidence(self):
+        text = (
+            "**Template** — Risk Level: HIGH\n"
+            "Confidence: BP trend 0.9, glucose 0.85, pregnancy history 0.9. "
+            "Overall confidence: 0.88 (HIGH).\n"
+            "**Task**\n"
+        )
+        result = markdown_to_json(text)
+        self.assertIn("confidence", result)
+        self.assertAlmostEqual(result["confidence"]["overall"], 0.88)
+
+    def test_confidence_serializes_to_json(self):
+        result = markdown_to_json(SAMPLE_5T_WITH_CONFIDENCE)
+        # Must be JSON-serializable
+        json_str = json.dumps(result)
+        parsed = json.loads(json_str)
+        self.assertIn("confidence", parsed)
+        self.assertAlmostEqual(parsed["confidence"]["overall"], 0.75)
+
+
+# ===========================================================================
+# 8. Prompt confidence instructions
+# ===========================================================================
+
+class TestPromptConfidenceInstructions(unittest.TestCase):
+    """Verify all agent prompts include confidence scoring instructions."""
+
+    def test_orchestrator_has_confidence_instruction(self):
+        from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
+        self.assertIn("Overall Confidence", ORCHESTRATOR_INSTRUCTION)
+        self.assertIn("confidence", ORCHESTRATOR_INSTRUCTION.lower())
+
+    def test_maternal_has_confidence_instruction(self):
+        from mamaguard.maternal_agent.agent import MATERNAL_INSTRUCTION
+        self.assertIn("clinician_review.confidence", MATERNAL_INSTRUCTION)
+
+    def test_pediatric_has_confidence_instruction(self):
+        from mamaguard.pediatric_agent.agent import PEDIATRIC_INSTRUCTION
+        self.assertIn("clinician_review.confidence", PEDIATRIC_INSTRUCTION)
+
+    def test_sdoh_has_confidence_instruction(self):
+        from mamaguard.sdoh_agent.agent import SDOH_INSTRUCTION
+        self.assertIn("clinician_review.confidence", SDOH_INSTRUCTION)
+
+    def test_orchestrator_example_has_confidence(self):
+        from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
+        self.assertIn("Overall confidence:", ORCHESTRATOR_INSTRUCTION)
+
+    def test_maternal_example_has_confidence(self):
+        from mamaguard.maternal_agent.agent import MATERNAL_INSTRUCTION
+        self.assertIn("Confidence:", MATERNAL_INSTRUCTION)
+
+    def test_pediatric_example_has_confidence(self):
+        from mamaguard.pediatric_agent.agent import PEDIATRIC_INSTRUCTION
+        self.assertIn("Confidence:", PEDIATRIC_INSTRUCTION)
+
+    def test_sdoh_example_has_confidence(self):
+        from mamaguard.sdoh_agent.agent import SDOH_INSTRUCTION
+        self.assertIn("Confidence:", SDOH_INSTRUCTION)
+
+
 if __name__ == "__main__":
     unittest.main()
