@@ -26,6 +26,22 @@ from benchmarks.e2e.agent_factory import build_agent_tree
 from benchmarks.e2e.trace_capture import TraceCollector
 
 
+# Defaults for multi-turn safety
+MAX_TURNS = 10
+TURN_TIMEOUT_SECONDS = 120.0
+
+
+@dataclass
+class TurnTrace:
+    """Per-turn trace snapshot within a multi-turn conversation."""
+    turn: int
+    user_message: str
+    response_text: str
+    tool_calls: list[str]
+    event_count: int
+    elapsed_ms: float
+
+
 @dataclass
 class AgentRunResult:
     """Result of a single agent invocation."""
@@ -35,6 +51,7 @@ class AgentRunResult:
     event_count: int
     error: str | None = None
     events: list[Any] = field(default_factory=list)
+    turn_traces: list[TurnTrace] = field(default_factory=list)
 
 
 class MamaGuardHarness:
@@ -133,12 +150,28 @@ class MamaGuardHarness:
         messages: list[str],
         patient_id: str,
         user_id: str = "bench_user",
+        max_turns: int = MAX_TURNS,
+        turn_timeout: float = TURN_TIMEOUT_SECONDS,
     ) -> AgentRunResult:
         """Send multiple user messages in sequence within one session.
 
         The trace accumulates across all turns. The final_text is from the
         last turn only. Elapsed time covers all turns.
+
+        Safety features:
+          - max_turns: hard cap on conversation length (default 10)
+          - turn_timeout: per-turn timeout in seconds (default 120)
+          - turn_traces: per-turn trace snapshots for diagnostics
         """
+        if len(messages) > max_turns:
+            return AgentRunResult(
+                final_text="",
+                trace=self.trace,
+                elapsed_ms=0.0,
+                event_count=0,
+                error=f"Exceeded max turns: {len(messages)} messages but limit is {max_turns}",
+            )
+
         self.trace.reset()
 
         session_id = f"bench-{uuid.uuid4().hex[:8]}"
@@ -157,30 +190,67 @@ class MamaGuardHarness:
 
         t0 = time.perf_counter()
         all_events: list[Any] = []
+        turn_traces: list[TurnTrace] = []
         error: str | None = None
         final_text = ""
 
         try:
-            for user_text in messages:
+            for turn_idx, user_text in enumerate(messages):
                 msg = genai_types.Content(
                     role="user",
                     parts=[genai_types.Part(text=user_text)],
                 )
                 turn_text = ""
-                async for event in self.runner.run_async(
-                    user_id=user_id,
-                    session_id=session_id,
-                    new_message=msg,
-                ):
-                    all_events.append(event)
-                    content = getattr(event, "content", None)
-                    if content is not None:
-                        parts = getattr(content, "parts", None) or []
-                        for part in parts:
-                            text = getattr(part, "text", None)
-                            if text:
-                                turn_text = text
-                final_text = turn_text  # keep last turn's response
+                turn_events: list[Any] = []
+                trace_before = len(self.trace.calls)
+                turn_t0 = time.perf_counter()
+
+                async def _consume_turn():
+                    nonlocal turn_text
+                    async for event in self.runner.run_async(
+                        user_id=user_id,
+                        session_id=session_id,
+                        new_message=msg,
+                    ):
+                        turn_events.append(event)
+                        content = getattr(event, "content", None)
+                        if content is not None:
+                            parts = getattr(content, "parts", None) or []
+                            for part in parts:
+                                text = getattr(part, "text", None)
+                                if text:
+                                    turn_text = text
+
+                try:
+                    await asyncio.wait_for(_consume_turn(), timeout=turn_timeout)
+                except asyncio.TimeoutError:
+                    turn_elapsed = (time.perf_counter() - turn_t0) * 1000
+                    turn_tools = [c.tool_name for c in self.trace.calls[trace_before:]]
+                    turn_traces.append(TurnTrace(
+                        turn=turn_idx,
+                        user_message=user_text,
+                        response_text=turn_text,
+                        tool_calls=turn_tools,
+                        event_count=len(turn_events),
+                        elapsed_ms=turn_elapsed,
+                    ))
+                    all_events.extend(turn_events)
+                    error = f"TimeoutError: Turn {turn_idx} timed out after {turn_timeout}s"
+                    final_text = turn_text
+                    break
+
+                turn_elapsed = (time.perf_counter() - turn_t0) * 1000
+                turn_tools = [c.tool_name for c in self.trace.calls[trace_before:]]
+                turn_traces.append(TurnTrace(
+                    turn=turn_idx,
+                    user_message=user_text,
+                    response_text=turn_text,
+                    tool_calls=turn_tools,
+                    event_count=len(turn_events),
+                    elapsed_ms=turn_elapsed,
+                ))
+                all_events.extend(turn_events)
+                final_text = turn_text
         except Exception as e:
             error = f"{type(e).__name__}: {e}"
 
@@ -193,6 +263,7 @@ class MamaGuardHarness:
             event_count=len(all_events),
             error=error,
             events=all_events,
+            turn_traces=turn_traces,
         )
 
     def run(
@@ -211,10 +282,15 @@ class MamaGuardHarness:
         messages: list[str],
         patient_id: str,
         user_id: str = "bench_user",
+        max_turns: int = MAX_TURNS,
+        turn_timeout: float = TURN_TIMEOUT_SECONDS,
     ) -> AgentRunResult:
         """Run a multi-turn conversation. Synchronous wrapper."""
         return asyncio.run(
-            self._run_multi_turn_async(messages, patient_id, user_id)
+            self._run_multi_turn_async(
+                messages, patient_id, user_id,
+                max_turns=max_turns, turn_timeout=turn_timeout,
+            )
         )
 
     async def close(self) -> None:
