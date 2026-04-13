@@ -291,15 +291,34 @@ def mamaguard_synthesis() -> dict:
     Run the real MamaGuard clinical + SDOH tools against the compound-case
     fixtures and return a structured reasoning trace.
     """
-    from mamaguard.shared.tools import maternal as maternal_mod
-    from mamaguard.shared.tools import sdoh as sdoh_mod
+    from mamaguard.shared.tools import fhir_base as fhir_base_mod
     from mamaguard.shared.tools.maternal import get_maternal_risk_profile
     from mamaguard.shared.tools.sdoh import get_sdoh_screening
 
     ctx = MockToolContext(patient_id=PATIENT_ID)
 
-    with patch.object(maternal_mod, "_fhir_get", side_effect=_maternal_fhir_side_effect), \
-         patch.object(sdoh_mod, "_fhir_get", side_effect=_sdoh_fhir_side_effect):
+    def _combined_fhir_side_effect(fhir_url, token, path, params=None):
+        params = params or {}
+        code = params.get("code", "")
+        if path.startswith("Patient/"):
+            return _PATIENT_RESOURCE
+        if path == "Coverage":
+            return _EMPTY_COVERAGE_BUNDLE
+        if path == "Observation":
+            if "55284-4" in code:
+                return _BP_BUNDLE
+            if "4548-4" in code:
+                return _HBA1C_BUNDLE
+            if "2339-0" in code:
+                return _GLUCOSE_BUNDLE
+            return {"resourceType": "Bundle", "entry": []}
+        if path == "Condition":
+            if code:
+                return _PREGNANCY_BUNDLE if "72892002" in code else {"resourceType": "Bundle", "entry": []}
+            return _ALL_CONDITIONS_BUNDLE
+        return {"resourceType": "Bundle", "entry": []}
+
+    with patch.object(fhir_base_mod, "_fhir_get", side_effect=_combined_fhir_side_effect):
         maternal_profile = get_maternal_risk_profile(tool_context=ctx)  # type: ignore[arg-type]
         sdoh_profile = get_sdoh_screening(tool_context=ctx)  # type: ignore[arg-type]
 

@@ -270,7 +270,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
 
     # -- Maternal tools ------------------------------------------------------
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_bp_trend_contract_review_required(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -298,7 +298,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
             "elevated BP should yield non-empty evidence_basis",
         )
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_bp_trend_contract_clean(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -307,7 +307,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
         self._assert_clinician_review_shape(result, "get_bp_trend(clean)")
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_glucose_trend_contract(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_glucose_trend
 
@@ -329,7 +329,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
         self._assert_clinician_review_shape(result, "get_glucose_trend")
         self.assertTrue(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_pregnancy_history_contract(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -411,7 +411,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
 
     # -- Pediatric tools -----------------------------------------------------
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_immunization_gaps_contract(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -432,7 +432,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
         self.assertTrue(result["clinician_review"]["required"])
         self.assertTrue(result["clinician_review"]["evidence_basis"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_developmental_screening_contract(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import (
             get_developmental_screening_status,
@@ -452,7 +452,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
             result, "get_developmental_screening_status",
         )
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_care_gaps_contract(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_care_gaps
 
@@ -463,7 +463,7 @@ class TestLiaisonClinicianReviewContract(unittest.TestCase):
 
     # -- SDOH tool -----------------------------------------------------------
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_sdoh_screening_contract(self, mock_fhir):
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
 

@@ -170,7 +170,7 @@ def bench_safety_severe_htn():
         }],
     }
 
-    with patch("mamaguard.shared.tools.maternal._fhir_get") as mock:
+    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.return_value = single_severe
         ctx = MockToolContext(patient_id="safety-test")
         result = get_bp_trend(tool_context=ctx)
@@ -207,7 +207,7 @@ def bench_safety_diabetes():
             }
         return {"resourceType": "Bundle", "entry": []}
 
-    with patch("mamaguard.shared.tools.maternal._fhir_get") as mock:
+    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.side_effect = side_effect
         ctx = MockToolContext(patient_id="safety-test")
         result = get_glucose_trend(tool_context=ctx)
@@ -249,7 +249,7 @@ def bench_threshold_bp_boundary():
         }],
     }
 
-    with patch("mamaguard.shared.tools.maternal._fhir_get") as mock:
+    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.return_value = boundary_bp
         ctx = MockToolContext(patient_id="boundary-test")
         result = get_bp_trend(tool_context=ctx)
@@ -285,7 +285,7 @@ def bench_threshold_hba1c_boundary():
             }
         return {"resourceType": "Bundle", "entry": []}
 
-    with patch("mamaguard.shared.tools.maternal._fhir_get") as mock:
+    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.side_effect = side_effect
         ctx = MockToolContext(patient_id="boundary-test")
         result = get_glucose_trend(tool_context=ctx)
@@ -330,7 +330,7 @@ def bench_error_server_down():
     from mamaguard.shared.tools.maternal import get_bp_trend
     import httpx
 
-    with patch("mamaguard.shared.tools.maternal._fhir_get") as mock:
+    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.side_effect = httpx.ConnectError("Connection refused")
         ctx = MockToolContext(patient_id="error-test")
         result = get_bp_trend(tool_context=ctx)

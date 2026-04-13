@@ -103,6 +103,46 @@ def _coding_display(codings: list) -> str:
     return "Unknown"
 
 
+def _safe_fhir_get(fhir_url: str, token: str, path: str, params: dict | None = None):
+    """FHIR GET with error handling. Returns (data, None) or (None, error_dict)."""
+    try:
+        return _fhir_get(fhir_url, token, path, params), None
+    except httpx.HTTPStatusError as e:
+        return None, _http_error_result(e)
+    except Exception as e:
+        return None, _connection_error_result(e)
+
+
+def _bundle_resources(bundle: dict) -> list[dict]:
+    """Extract resource dicts from a FHIR Bundle response."""
+    return [e.get("resource", {}) for e in bundle.get("entry", [])]
+
+
+def _silent_fhir_get(fhir_url: str, token: str, path: str, params: dict | None = None) -> list[dict]:
+    """FHIR GET returning list of resource dicts, [] on any error."""
+    try:
+        return _bundle_resources(_fhir_get(fhir_url, token, path, params))
+    except Exception:
+        return []
+
+
+def _clinician_review(
+    required: bool,
+    reason: str = "",
+    recommendation: str = "",
+    evidence: list | None = None,
+    confidence: float = 0.5,
+) -> dict:
+    """Build a standard clinician_review block."""
+    return {
+        "required": required,
+        "reason": reason,
+        "recommendation": recommendation,
+        "evidence_basis": evidence or [],
+        "confidence": confidence,
+    }
+
+
 # -- Tool: patient summary ---------------------------------------------------
 
 def get_patient_summary(tool_context: ToolContext) -> dict:
@@ -121,127 +161,99 @@ def get_patient_summary(tool_context: ToolContext) -> dict:
     result = {"status": "success", "patient_id": patient_id}
 
     # Demographics
-    try:
-        patient = _fhir_get(fhir_url, fhir_token, f"Patient/{patient_id}")
-        names = patient.get("name", [])
-        official = next((n for n in names if n.get("use") == "official"), names[0] if names else {})
-        given = " ".join(official.get("given", []))
-        family = official.get("family", "")
-        result["name"] = f"{given} {family}".strip() or "Unknown"
-        result["birth_date"] = patient.get("birthDate")
-        result["gender"] = patient.get("gender")
+    patient, err = _safe_fhir_get(fhir_url, fhir_token, f"Patient/{patient_id}")
+    if err:
+        return err
 
-        contacts = [
-            {"system": t.get("system"), "value": t.get("value"), "use": t.get("use")}
-            for t in patient.get("telecom", [])
-        ]
-        result["contacts"] = contacts
+    names = patient.get("name", [])
+    official = next((n for n in names if n.get("use") == "official"), names[0] if names else {})
+    given = " ".join(official.get("given", []))
+    family = official.get("family", "")
+    result["name"] = f"{given} {family}".strip() or "Unknown"
+    result["birth_date"] = patient.get("birthDate")
+    result["gender"] = patient.get("gender")
+    result["contacts"] = [
+        {"system": t.get("system"), "value": t.get("value"), "use": t.get("use")}
+        for t in patient.get("telecom", [])
+    ]
 
-        addrs = patient.get("address", [])
-        if addrs:
-            a = addrs[0]
-            result["address"] = ", ".join(filter(None, [
-                " ".join(a.get("line", [])),
-                a.get("city"), a.get("state"), a.get("postalCode"), a.get("country"),
-            ]))
+    addrs = patient.get("address", [])
+    if addrs:
+        a = addrs[0]
+        result["address"] = ", ".join(filter(None, [
+            " ".join(a.get("line", [])),
+            a.get("city"), a.get("state"), a.get("postalCode"), a.get("country"),
+        ]))
 
-        result["language"] = None
-        for comm in patient.get("communication", []):
-            lang = comm.get("language", {})
-            result["language"] = lang.get("text") or _coding_display(lang.get("coding", []))
-            break
+    result["language"] = None
+    for comm in patient.get("communication", []):
+        lang = comm.get("language", {})
+        result["language"] = lang.get("text") or _coding_display(lang.get("coding", []))
+        break
 
-        result["marital_status"] = (patient.get("maritalStatus") or {}).get("text")
-    except httpx.HTTPStatusError as e:
-        return _http_error_result(e)
-    except Exception as e:
-        return _connection_error_result(e)
+    result["marital_status"] = (patient.get("maritalStatus") or {}).get("text")
 
     # Active conditions
-    try:
-        bundle = _fhir_get(
-            fhir_url, fhir_token, "Condition",
-            params={"patient": patient_id, "clinical-status": "active", "_count": "50"},
-        )
-        conditions = []
-        for entry in bundle.get("entry", []):
-            res = entry.get("resource", {})
-            code = res.get("code", {})
-            onset = res.get("onsetDateTime") or (res.get("onsetPeriod") or {}).get("start")
-            conditions.append({
-                "condition": code.get("text") or _coding_display(code.get("coding", [])),
-                "onset": onset,
-            })
-        result["active_conditions"] = conditions
-    except Exception:
-        result["active_conditions"] = []
+    result["active_conditions"] = []
+    for res in _silent_fhir_get(fhir_url, fhir_token, "Condition",
+                                params={"patient": patient_id, "clinical-status": "active", "_count": "50"}):
+        code = res.get("code", {})
+        onset = res.get("onsetDateTime") or (res.get("onsetPeriod") or {}).get("start")
+        result["active_conditions"].append({
+            "condition": code.get("text") or _coding_display(code.get("coding", [])),
+            "onset": onset,
+        })
 
     # Active medications
-    try:
-        bundle = _fhir_get(
-            fhir_url, fhir_token, "MedicationRequest",
-            params={"patient": patient_id, "status": "active", "_count": "50"},
+    result["active_medications"] = []
+    for res in _silent_fhir_get(fhir_url, fhir_token, "MedicationRequest",
+                                params={"patient": patient_id, "status": "active", "_count": "50"}):
+        med_concept = res.get("medicationCodeableConcept", {})
+        med_name = (
+            med_concept.get("text")
+            or _coding_display(med_concept.get("coding", []))
+            or res.get("medicationReference", {}).get("display", "Unknown")
         )
-        medications = []
-        for entry in bundle.get("entry", []):
-            res = entry.get("resource", {})
-            med_concept = res.get("medicationCodeableConcept", {})
-            med_name = (
-                med_concept.get("text")
-                or _coding_display(med_concept.get("coding", []))
-                or res.get("medicationReference", {}).get("display", "Unknown")
-            )
-            dosage_list = [d.get("text", "No dosage text") for d in res.get("dosageInstruction", [])]
-            medications.append({
-                "medication": med_name,
-                "dosage": dosage_list[0] if dosage_list else "Not specified",
-            })
-        result["active_medications"] = medications
-    except Exception:
-        result["active_medications"] = []
+        dosage_list = [d.get("text", "No dosage text") for d in res.get("dosageInstruction", [])]
+        result["active_medications"].append({
+            "medication": med_name,
+            "dosage": dosage_list[0] if dosage_list else "Not specified",
+        })
 
     # Recent vitals (last 10)
-    try:
-        bundle = _fhir_get(
-            fhir_url, fhir_token, "Observation",
-            params={"patient": patient_id, "category": "vital-signs", "_sort": "-date", "_count": "10"},
-        )
-        vitals = []
-        for entry in bundle.get("entry", []):
-            res = entry.get("resource", {})
-            code = res.get("code", {})
-            obs_name = code.get("text") or _coding_display(code.get("coding", []))
+    result["recent_vitals"] = []
+    for res in _silent_fhir_get(fhir_url, fhir_token, "Observation",
+                                params={"patient": patient_id, "category": "vital-signs", "_sort": "-date", "_count": "10"}):
+        code = res.get("code", {})
+        obs_name = code.get("text") or _coding_display(code.get("coding", []))
 
-            value, unit = None, None
-            if "valueQuantity" in res:
-                vq = res["valueQuantity"]
-                value = vq.get("value")
-                unit = vq.get("unit") or vq.get("code")
-            elif "valueCodeableConcept" in res:
-                value = (res["valueCodeableConcept"].get("text")
-                         or _coding_display(res["valueCodeableConcept"].get("coding", [])))
+        value, unit = None, None
+        if "valueQuantity" in res:
+            vq = res["valueQuantity"]
+            value = vq.get("value")
+            unit = vq.get("unit") or vq.get("code")
+        elif "valueCodeableConcept" in res:
+            value = (res["valueCodeableConcept"].get("text")
+                     or _coding_display(res["valueCodeableConcept"].get("coding", [])))
 
-            components = []
-            for comp in res.get("component", []):
-                comp_code = comp.get("code") or {}
-                comp_name = comp_code.get("text") or _coding_display(comp_code.get("coding", []))
-                comp_vq = comp.get("valueQuantity", {})
-                components.append({
-                    "name": comp_name,
-                    "value": comp_vq.get("value"),
-                    "unit": comp_vq.get("unit") or comp_vq.get("code"),
-                })
-
-            vitals.append({
-                "observation": obs_name,
-                "value": value,
-                "unit": unit,
-                "components": components or None,
-                "date": res.get("effectiveDateTime"),
+        components = []
+        for comp in res.get("component", []):
+            comp_code = comp.get("code") or {}
+            comp_name = comp_code.get("text") or _coding_display(comp_code.get("coding", []))
+            comp_vq = comp.get("valueQuantity", {})
+            components.append({
+                "name": comp_name,
+                "value": comp_vq.get("value"),
+                "unit": comp_vq.get("unit") or comp_vq.get("code"),
             })
-        result["recent_vitals"] = vitals
-    except Exception:
-        result["recent_vitals"] = []
+
+        result["recent_vitals"].append({
+            "observation": obs_name,
+            "value": value,
+            "unit": unit,
+            "components": components or None,
+            "date": res.get("effectiveDateTime"),
+        })
 
     return result
 
@@ -261,19 +273,15 @@ def get_active_medications(tool_context: ToolContext) -> dict:
     fhir_url, fhir_token, patient_id = ctx
     logger.info("tool_get_active_medications patient_id=%s", patient_id)
 
-    try:
-        bundle = _fhir_get(
-            fhir_url, fhir_token, "MedicationRequest",
-            params={"patient": patient_id, "status": "active", "_count": "50"},
-        )
-    except httpx.HTTPStatusError as e:
-        return _http_error_result(e)
-    except Exception as e:
-        return _connection_error_result(e)
+    bundle, err = _safe_fhir_get(
+        fhir_url, fhir_token, "MedicationRequest",
+        params={"patient": patient_id, "status": "active", "_count": "50"},
+    )
+    if err:
+        return err
 
     medications = []
-    for entry in bundle.get("entry", []):
-        res = entry.get("resource", {})
+    for res in _bundle_resources(bundle):
         med_concept = res.get("medicationCodeableConcept", {})
         med_name = (
             med_concept.get("text")
@@ -328,19 +336,15 @@ def find_linked_newborn(
         "tool_find_linked_newborn mother_patient_id=%s", mother_patient_id,
     )
 
-    try:
-        bundle = _fhir_get(
-            fhir_url, fhir_token, "RelatedPerson",
-            params={"patient": mother_patient_id, "_count": "50"},
-        )
-    except httpx.HTTPStatusError as e:
-        return _http_error_result(e)
-    except Exception as e:
-        return _connection_error_result(e)
+    bundle, err = _safe_fhir_get(
+        fhir_url, fhir_token, "RelatedPerson",
+        params={"patient": mother_patient_id, "_count": "50"},
+    )
+    if err:
+        return err
 
     linked_newborns: list[dict] = []
-    for entry in bundle.get("entry", []):
-        res = entry.get("resource", {})
+    for res in _bundle_resources(bundle):
 
         # Check relationship codes for child types
         is_child = False

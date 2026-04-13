@@ -234,7 +234,7 @@ _PREG_LOSS_BUNDLE_MISCARRIAGE = {
 
 
 class TestMaternalGoldens(_GoldenBase):
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_bp_trend_severe(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -244,7 +244,7 @@ class TestMaternalGoldens(_GoldenBase):
         self.assertEqual(result["status"], "success")
         self._assert_golden("get_bp_trend_severe", result["clinician_review"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_bp_trend_clean(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -253,7 +253,7 @@ class TestMaternalGoldens(_GoldenBase):
         self.assertEqual(result["status"], "success")
         self._assert_golden("get_bp_trend_clean", result["clinician_review"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_glucose_trend_poorly_controlled(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_glucose_trend
 
@@ -271,7 +271,7 @@ class TestMaternalGoldens(_GoldenBase):
             "get_glucose_trend_poorly_controlled", result["clinician_review"]
         )
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_pregnancy_history_high_risk(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -288,7 +288,7 @@ class TestMaternalGoldens(_GoldenBase):
             "get_pregnancy_history_high_risk", result["clinician_review"]
         )
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_maternal_risk_profile_urgent(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_maternal_risk_profile
 
@@ -324,7 +324,7 @@ class TestMaternalGoldens(_GoldenBase):
 
 class TestPediatricGoldens(_GoldenBase):
     @patch("mamaguard.shared.tools.pediatric._compute_age_months")
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_immunization_gaps_overdue(self, mock_fhir, mock_age):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -362,7 +362,7 @@ class TestPediatricGoldens(_GoldenBase):
         )
 
     @patch("mamaguard.shared.tools.pediatric._compute_age_months")
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_developmental_screening_status_due(self, mock_fhir, mock_age):
         from mamaguard.shared.tools.pediatric import (
             get_developmental_screening_status,
@@ -388,7 +388,7 @@ class TestPediatricGoldens(_GoldenBase):
             "get_developmental_screening_status_due", result["clinician_review"]
         )
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_care_gaps_unlabeled_goal(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_care_gaps
 
@@ -424,7 +424,7 @@ class TestPediatricGoldens(_GoldenBase):
 
 
 class TestSdohGoldens(_GoldenBase):
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_get_sdoh_screening_no_coverage(self, mock_fhir):
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
 

@@ -18,10 +18,14 @@ from .fhir_base import _get_fhir_context
 logger = logging.getLogger(__name__)
 
 _FHIR_TIMEOUT = 15
-
-# -- Input validation ----------------------------------------------------------
-
 _VALID_PRIORITIES = {"routine", "urgent", "asap", "stat"}
+
+
+# -- Helpers -------------------------------------------------------------------
+
+def _is_blank(value) -> bool:
+    """True if value is missing, not a string, or whitespace-only."""
+    return not value or not isinstance(value, str) or not value.strip()
 
 
 def _validation_error(resource_type: str, errors: list[str]) -> dict:
@@ -34,53 +38,34 @@ def _validation_error(resource_type: str, errors: list[str]) -> dict:
     }
 
 
-def _validate_risk_assessment(
-    risk_type: str, probability: float, basis: str, mitigation: str,
-) -> dict | None:
-    """Return error dict if inputs are invalid, else None."""
-    errors: list[str] = []
-    if not risk_type or not isinstance(risk_type, str) or not risk_type.strip():
-        errors.append("risk_type is required")
+def _validate_risk_assessment(risk_type, probability, basis, mitigation) -> dict | None:
+    errors = []
+    for name, val in [("risk_type", risk_type), ("basis", basis), ("mitigation", mitigation)]:
+        if _is_blank(val):
+            errors.append(f"{name} is required")
     if not isinstance(probability, (int, float)):
         errors.append("probability must be a number")
     elif not (0.0 <= probability <= 1.0):
         errors.append("probability must be between 0.0 and 1.0")
-    if not basis or not isinstance(basis, str) or not basis.strip():
-        errors.append("basis is required")
-    if not mitigation or not isinstance(mitigation, str) or not mitigation.strip():
-        errors.append("mitigation is required")
     return _validation_error("RiskAssessment", errors) if errors else None
 
 
-def _validate_communication_request(
-    medium: str, content: str, priority: str,
-) -> dict | None:
-    """Return error dict if inputs are invalid, else None."""
-    errors: list[str] = []
-    if not medium or not isinstance(medium, str) or not medium.strip():
-        errors.append("medium is required")
-    if not content or not isinstance(content, str) or not content.strip():
-        errors.append("content is required")
+def _validate_communication_request(medium, content, priority) -> dict | None:
+    errors = []
+    for name, val in [("medium", medium), ("content", content)]:
+        if _is_blank(val):
+            errors.append(f"{name} is required")
     if priority not in _VALID_PRIORITIES:
-        errors.append(
-            f"priority must be one of {', '.join(sorted(_VALID_PRIORITIES))}"
-        )
+        errors.append(f"priority must be one of {', '.join(sorted(_VALID_PRIORITIES))}")
     return _validation_error("CommunicationRequest", errors) if errors else None
 
 
-def _validate_care_plan(
-    category: str, goal_description: str, resource_name: str, resource_contact: str,
-) -> dict | None:
-    """Return error dict if inputs are invalid, else None."""
-    errors: list[str] = []
-    if not category or not isinstance(category, str) or not category.strip():
-        errors.append("category is required")
-    if not goal_description or not isinstance(goal_description, str) or not goal_description.strip():
-        errors.append("goal_description is required")
-    if not resource_name or not isinstance(resource_name, str) or not resource_name.strip():
-        errors.append("resource_name is required")
-    if not resource_contact or not isinstance(resource_contact, str) or not resource_contact.strip():
-        errors.append("resource_contact is required")
+def _validate_care_plan(category, goal_description, resource_name, resource_contact) -> dict | None:
+    errors = []
+    for name, val in [("category", category), ("goal_description", goal_description),
+                      ("resource_name", resource_name), ("resource_contact", resource_contact)]:
+        if _is_blank(val):
+            errors.append(f"{name} is required")
     return _validation_error("CarePlan", errors) if errors else None
 
 
@@ -98,6 +83,44 @@ def _fhir_post(fhir_url: str, token: str, resource_type: str, body: dict) -> dic
     )
     response.raise_for_status()
     return response.json()
+
+
+def _post_resource(fhir_url, token, resource_type, body, patient_id):
+    """POST with standard success/error handling. Returns (result, None) or (None, error)."""
+    try:
+        created = _fhir_post(fhir_url, token, resource_type, body)
+        resource_id = created.get("id", "unknown")
+        logger.info("%s_created id=%s patient_id=%s", resource_type.lower(), resource_id, patient_id)
+        return {
+            "status": "success",
+            "action": "created",
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "patient_id": patient_id,
+        }, None
+    except httpx.HTTPStatusError as e:
+        logger.warning(
+            "%s_write_failed patient_id=%s http_status=%d",
+            resource_type.lower(), patient_id, e.response.status_code,
+        )
+        return None, {
+            "status": "error",
+            "action": "write_failed",
+            "resource_type": resource_type,
+            "http_status": e.response.status_code,
+            "error_message": (
+                f"FHIR server rejected {resource_type} write (HTTP {e.response.status_code}). "
+                "Expected on read-only FHIR servers. "
+                "Write-back works on HAPI R4 or other CRUD-enabled servers."
+            ),
+        }
+    except Exception as e:
+        return None, {
+            "status": "error",
+            "action": "write_failed",
+            "resource_type": resource_type,
+            "error_message": f"Could not reach FHIR server: {e}",
+        }
 
 
 def write_risk_assessment(
@@ -163,42 +186,10 @@ def write_risk_assessment(
         ],
     }
 
-    try:
-        created = _fhir_post(fhir_url, fhir_token, "RiskAssessment", risk_assessment)
-        resource_id = created.get("id", "unknown")
-        logger.info("risk_assessment_created id=%s patient_id=%s", resource_id, patient_id)
-        return {
-            "status": "success",
-            "action": "created",
-            "resource_type": "RiskAssessment",
-            "resource_id": resource_id,
-            "patient_id": patient_id,
-            "risk_type": risk_type,
-            "probability": probability,
-        }
-    except httpx.HTTPStatusError as e:
-        logger.warning(
-            "risk_assessment_write_failed patient_id=%s http_status=%d",
-            patient_id, e.response.status_code,
-        )
-        return {
-            "status": "error",
-            "action": "write_failed",
-            "resource_type": "RiskAssessment",
-            "http_status": e.response.status_code,
-            "error_message": (
-                f"FHIR server rejected RiskAssessment write (HTTP {e.response.status_code}). "
-                "This is expected on read-only FHIR servers like SMART R4. "
-                "Write-back works on HAPI R4 or other CRUD-enabled servers."
-            ),
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "action": "write_failed",
-            "resource_type": "RiskAssessment",
-            "error_message": f"Could not reach FHIR server: {e}",
-        }
+    result, err = _post_resource(fhir_url, fhir_token, "RiskAssessment", risk_assessment, patient_id)
+    if err:
+        return err
+    return {**result, "risk_type": risk_type, "probability": probability}
 
 
 def create_communication_request(
@@ -259,41 +250,10 @@ def create_communication_request(
         ],
     }
 
-    try:
-        created = _fhir_post(fhir_url, fhir_token, "CommunicationRequest", comm_request)
-        resource_id = created.get("id", "unknown")
-        logger.info("communication_request_created id=%s patient_id=%s", resource_id, patient_id)
-        return {
-            "status": "success",
-            "action": "created",
-            "resource_type": "CommunicationRequest",
-            "resource_id": resource_id,
-            "patient_id": patient_id,
-            "medium": medium,
-            "priority": priority,
-        }
-    except httpx.HTTPStatusError as e:
-        logger.warning(
-            "communication_request_write_failed patient_id=%s http_status=%d",
-            patient_id, e.response.status_code,
-        )
-        return {
-            "status": "error",
-            "action": "write_failed",
-            "resource_type": "CommunicationRequest",
-            "http_status": e.response.status_code,
-            "error_message": (
-                f"FHIR server rejected CommunicationRequest write (HTTP {e.response.status_code}). "
-                "Write-back works on HAPI R4 or other CRUD-enabled servers."
-            ),
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "action": "write_failed",
-            "resource_type": "CommunicationRequest",
-            "error_message": f"Could not reach FHIR server: {e}",
-        }
+    result, err = _post_resource(fhir_url, fhir_token, "CommunicationRequest", comm_request, patient_id)
+    if err:
+        return err
+    return {**result, "medium": medium, "priority": priority}
 
 
 # ---------------------------------------------------------------------------
@@ -394,34 +354,11 @@ def write_care_plan(
             }
         ]
 
-    try:
-        created_goal = _fhir_post(fhir_url, fhir_token, "Goal", goal_body)
-    except httpx.HTTPStatusError as e:
-        logger.warning(
-            "goal_write_failed patient_id=%s http_status=%d",
-            patient_id, e.response.status_code,
-        )
-        return {
-            "status": "error",
-            "action": "write_failed",
-            "resource_type": "Goal",
-            "http_status": e.response.status_code,
-            "error_message": (
-                f"FHIR server rejected Goal write (HTTP {e.response.status_code}). "
-                "Expected on read-only FHIR servers (SMART R4 sandbox). "
-                "Write-back works on HAPI R4 or other CRUD-enabled servers."
-            ),
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "action": "write_failed",
-            "resource_type": "Goal",
-            "error_message": f"Could not reach FHIR server: {e}",
-        }
+    goal_result, err = _post_resource(fhir_url, fhir_token, "Goal", goal_body, patient_id)
+    if err:
+        return err
 
-    goal_id = created_goal.get("id", "unknown")
-    logger.info("goal_created id=%s patient_id=%s", goal_id, patient_id)
+    goal_id = goal_result["resource_id"]
 
     # -- 2. CarePlan referencing the Goal -------------------------------
     activity_detail_text_parts = [
@@ -476,49 +413,16 @@ def write_care_plan(
         ],
     }
 
-    try:
-        created_plan = _fhir_post(fhir_url, fhir_token, "CarePlan", care_plan_body)
-    except httpx.HTTPStatusError as e:
-        logger.warning(
-            "care_plan_write_failed patient_id=%s http_status=%d goal_id=%s",
-            patient_id, e.response.status_code, goal_id,
-        )
-        return {
-            "status": "partial",
-            "action": "care_plan_write_failed",
-            "resource_type": "CarePlan",
-            "http_status": e.response.status_code,
-            "goal_id": goal_id,
-            "goal_created": True,
-            "error_message": (
-                f"Goal created (id={goal_id}) but CarePlan POST failed "
-                f"with HTTP {e.response.status_code}. "
-                "Expected on read-only FHIR servers."
-            ),
-        }
-    except Exception as e:
-        return {
-            "status": "partial",
-            "action": "care_plan_write_failed",
-            "resource_type": "CarePlan",
-            "goal_id": goal_id,
-            "goal_created": True,
-            "error_message": f"Could not reach FHIR server for CarePlan POST: {e}",
-        }
-
-    plan_id = created_plan.get("id", "unknown")
-    logger.info(
-        "care_plan_created id=%s goal_id=%s patient_id=%s",
-        plan_id, goal_id, patient_id,
-    )
+    plan_result, err = _post_resource(fhir_url, fhir_token, "CarePlan", care_plan_body, patient_id)
+    if err:
+        err.update(status="partial", action="care_plan_write_failed",
+                   goal_id=goal_id, goal_created=True)
+        return err
 
     return {
-        "status": "success",
-        "action": "created",
-        "resource_type": "CarePlan",
-        "care_plan_id": plan_id,
+        **plan_result,
+        "care_plan_id": plan_result["resource_id"],
         "goal_id": goal_id,
-        "patient_id": patient_id,
         "category": category,
         "resource_name": resource_name,
         "resource_contact": resource_contact,

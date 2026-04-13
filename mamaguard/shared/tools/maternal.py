@@ -14,14 +14,12 @@ from datetime import datetime, timedelta
 from google.adk.tools import ToolContext
 
 from .fhir_base import (
+    _bundle_resources,
+    _clinician_review,
     _coding_display,
-    _connection_error_result,
-    _fhir_get,
     _get_fhir_context,
-    _http_error_result,
+    _safe_fhir_get,
 )
-
-import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -82,26 +80,22 @@ def get_bp_trend(months_back: int = 24, tool_context: ToolContext | None = None)
     fhir_url, fhir_token, patient_id = ctx
     logger.info("tool_get_bp_trend patient_id=%s months_back=%d", patient_id, months_back)
 
-    try:
-        bundle = _fhir_get(
-            fhir_url, fhir_token, "Observation",
-            params={
-                "patient": patient_id,
-                "code": "http://loinc.org|55284-4",
-                "_sort": "-date",
-                "_count": "50",
-            },
-        )
-    except httpx.HTTPStatusError as e:
-        return _http_error_result(e)
-    except Exception as e:
-        return _connection_error_result(e)
+    bundle, err = _safe_fhir_get(
+        fhir_url, fhir_token, "Observation",
+        params={
+            "patient": patient_id,
+            "code": "http://loinc.org|55284-4",
+            "_sort": "-date",
+            "_count": "50",
+        },
+    )
+    if err:
+        return err
 
     readings = []
     cutoff = datetime.now() - timedelta(days=months_back * 30)
 
-    for entry in bundle.get("entry", []):
-        res = entry.get("resource", {})
+    for res in _bundle_resources(bundle):
         date_str = res.get("effectiveDateTime", "")
         bp = _parse_bp_components(res)
         if not bp:
@@ -147,16 +141,16 @@ def get_bp_trend(months_back: int = 24, tool_context: ToolContext | None = None)
             "alert_elevated": has_elevated,
             "alert_severe": has_severe,
         },
-        "clinician_review": {
-            "required": clinician_review_required,
-            "reason": review_reason,
-            "recommendation": "Review BP management and consider medication adjustment" if has_elevated else "",
-            "evidence_basis": [
+        "clinician_review": _clinician_review(
+            clinician_review_required,
+            reason=review_reason,
+            recommendation="Review BP management and consider medication adjustment" if has_elevated else "",
+            evidence=[
                 f"Observation/{r['resource_id']} (BP {r['systolic']}/{r['diastolic']} on {r['date']})"
                 for r in readings if r["systolic"] > 140 or r["diastolic"] > 90
             ],
-            "confidence": 0.9 if has_severe else 0.8 if has_elevated else 0.5,
-        },
+            confidence=0.9 if has_severe else 0.8 if has_elevated else 0.5,
+        ),
     }
 
 
@@ -181,28 +175,20 @@ def get_glucose_trend(months_back: int = 24, tool_context: ToolContext | None = 
     glucose_readings: list[dict] = []
     hba1c_readings: list[dict] = []
 
-    # Fetch glucose
-    for loinc_code, target_list, label in [
-        ("2339-0", glucose_readings, "glucose"),
-        ("4548-4", hba1c_readings, "hba1c"),
-    ]:
-        try:
-            bundle = _fhir_get(
-                fhir_url, fhir_token, "Observation",
-                params={
-                    "patient": patient_id,
-                    "code": f"http://loinc.org|{loinc_code}",
-                    "_sort": "-date",
-                    "_count": "20",
-                },
-            )
-        except httpx.HTTPStatusError as e:
-            return _http_error_result(e)
-        except Exception as e:
-            return _connection_error_result(e)
+    for loinc_code, target_list in [("2339-0", glucose_readings), ("4548-4", hba1c_readings)]:
+        bundle, err = _safe_fhir_get(
+            fhir_url, fhir_token, "Observation",
+            params={
+                "patient": patient_id,
+                "code": f"http://loinc.org|{loinc_code}",
+                "_sort": "-date",
+                "_count": "20",
+            },
+        )
+        if err:
+            return err
 
-        for entry in bundle.get("entry", []):
-            res = entry.get("resource", {})
+        for res in _bundle_resources(bundle):
             vq = res.get("valueQuantity", {})
             if vq.get("value") is not None:
                 target_list.append({
@@ -230,16 +216,16 @@ def get_glucose_trend(months_back: int = 24, tool_context: ToolContext | None = 
             "diabetes_range": poorly_controlled,
             "poorly_controlled": very_poorly_controlled,
         },
-        "clinician_review": {
-            "required": poorly_controlled,
-            "reason": "HbA1c in diabetes range (>6.5%)" if poorly_controlled else "",
-            "recommendation": "Review glycemic management" if poorly_controlled else "",
-            "evidence_basis": [
+        "clinician_review": _clinician_review(
+            poorly_controlled,
+            reason="HbA1c in diabetes range (>6.5%)" if poorly_controlled else "",
+            recommendation="Review glycemic management" if poorly_controlled else "",
+            evidence=[
                 f"Observation/{r['resource_id']} (HbA1c {r['value']}% on {r['date']})"
                 for r in hba1c_readings if r["value"] > 6.5
             ],
-            "confidence": 0.85,
-        },
+            confidence=0.85,
+        ),
     }
 
 
@@ -266,22 +252,18 @@ def get_pregnancy_history(tool_context: ToolContext | None = None) -> dict:
     pregnancies = []
 
     for snomed in pregnancy_snomeds:
-        try:
-            bundle = _fhir_get(
-                fhir_url, fhir_token, "Condition",
-                params={
-                    "patient": patient_id,
-                    "code": f"http://snomed.info/sct|{snomed}",
-                    "_count": "50",
-                },
-            )
-        except httpx.HTTPStatusError as e:
-            return _http_error_result(e)
-        except Exception as e:
-            return _connection_error_result(e)
+        bundle, err = _safe_fhir_get(
+            fhir_url, fhir_token, "Condition",
+            params={
+                "patient": patient_id,
+                "code": f"http://snomed.info/sct|{snomed}",
+                "_count": "50",
+            },
+        )
+        if err:
+            return err
 
-        for entry in bundle.get("entry", []):
-            res = entry.get("resource", {})
+        for res in _bundle_resources(bundle):
             code = res.get("code", {})
             clinical_status = (
                 (res.get("clinicalStatus") or {}).get("coding", [{}])[0].get("code", "")
@@ -327,16 +309,16 @@ def get_pregnancy_history(tool_context: ToolContext | None = None) -> dict:
             "losses": loss_count,
             "high_risk": loss_count >= 2,
         },
-        "clinician_review": {
-            "required": loss_count >= 2,
-            "reason": f"Recurrent pregnancy loss ({loss_count} losses)" if loss_count >= 2 else "",
-            "recommendation": "Review obstetric history for recurrent loss etiology" if loss_count >= 2 else "",
-            "evidence_basis": [
+        "clinician_review": _clinician_review(
+            loss_count >= 2,
+            reason=f"Recurrent pregnancy loss ({loss_count} losses)" if loss_count >= 2 else "",
+            recommendation="Review obstetric history for recurrent loss etiology" if loss_count >= 2 else "",
+            evidence=[
                 f"Condition/{p['resource_id']} ({p['condition']} — {p['outcome']}, onset {p['onset']})"
                 for p in pregnancies if p["outcome"] in ("blighted_ovum", "miscarriage", "fetal_complication")
             ],
-            "confidence": 0.9,
-        },
+            confidence=0.9,
+        ),
     }
 
 
@@ -404,15 +386,15 @@ def get_maternal_risk_profile(tool_context: ToolContext | None = None) -> dict:
             "glucose_summary": glucose_result.get("data") if glucose_result.get("status") == "success" else None,
             "pregnancy_summary": pregnancy_result.get("data") if pregnancy_result.get("status") == "success" else None,
         },
-        "clinician_review": {
-            "required": clinician_required,
-            "reason": f"Risk level: {risk_level}. Factors: {'; '.join(risk_factors)}" if clinician_required else "",
-            "recommendation": "Comprehensive maternal risk review recommended" if clinician_required else "",
-            "evidence_basis": (
-                (bp_result.get("clinician_review", {}).get("evidence_basis", []))
-                + (glucose_result.get("clinician_review", {}).get("evidence_basis", []))
-                + (pregnancy_result.get("clinician_review", {}).get("evidence_basis", []))
+        "clinician_review": _clinician_review(
+            clinician_required,
+            reason=f"Risk level: {risk_level}. Factors: {'; '.join(risk_factors)}" if clinician_required else "",
+            recommendation="Comprehensive maternal risk review recommended" if clinician_required else "",
+            evidence=(
+                bp_result.get("clinician_review", {}).get("evidence_basis", [])
+                + glucose_result.get("clinician_review", {}).get("evidence_basis", [])
+                + pregnancy_result.get("clinician_review", {}).get("evidence_basis", [])
             ),
-            "confidence": 0.85,
-        },
+            confidence=0.85,
+        ),
     }

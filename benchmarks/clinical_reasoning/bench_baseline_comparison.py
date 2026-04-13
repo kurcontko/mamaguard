@@ -441,15 +441,34 @@ def rule_engine_baseline(case: CaseFixture) -> dict:
 
 def mamaguard_synthesis(case: CaseFixture) -> dict:
     """Run the real MamaGuard clinical + SDOH tools against the case fixture."""
-    from mamaguard.shared.tools import maternal as maternal_mod
-    from mamaguard.shared.tools import sdoh as sdoh_mod
+    from mamaguard.shared.tools import fhir_base as fhir_base_mod
     from mamaguard.shared.tools.maternal import get_maternal_risk_profile
     from mamaguard.shared.tools.sdoh import get_sdoh_screening
 
     ctx = MockToolContext(patient_id=case.patient_id)
 
-    with patch.object(maternal_mod, "_fhir_get", side_effect=_maternal_side_effect_for(case)), \
-         patch.object(sdoh_mod, "_fhir_get", side_effect=_sdoh_side_effect_for(case)):
+    def _combined_side_effect(fhir_url, token, path, params=None):
+        params = params or {}
+        code = params.get("code", "")
+        if path.startswith("Patient/"):
+            return case.patient_resource
+        if path == "Coverage":
+            return case.coverage_bundle
+        if path == "Observation":
+            if "55284-4" in code:
+                return case.bp_bundle
+            if "4548-4" in code:
+                return case.hba1c_bundle
+            if "2339-0" in code:
+                return case.glucose_bundle
+            return _empty_bundle()
+        if path == "Condition":
+            if code:
+                return case.pregnancy_bundle if "72892002" in code else case.loss_bundle
+            return case.all_conditions_bundle
+        return _empty_bundle()
+
+    with patch.object(fhir_base_mod, "_fhir_get", side_effect=_combined_side_effect):
         maternal_profile = get_maternal_risk_profile(tool_context=ctx)  # type: ignore[arg-type]
         sdoh_profile = get_sdoh_screening(tool_context=ctx)  # type: ignore[arg-type]
 

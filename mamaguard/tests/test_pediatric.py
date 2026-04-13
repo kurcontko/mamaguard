@@ -55,7 +55,7 @@ class TestComputeAgeMonths(unittest.TestCase):
 
 
 class TestGetImmunizationGaps(unittest.TestCase):
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_newborn_with_gaps(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -79,7 +79,7 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertTrue(result["data"]["has_gaps"])
         self.assertTrue(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_no_immunizations(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -93,7 +93,7 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertTrue(result["data"]["has_gaps"])
         self.assertGreater(len(result["data"]["overdue"]), 0)
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_newborn_up_to_date_hepb(self, mock_fhir):
         """A newborn (0 months) who received HepB dose 1 has no gaps."""
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
@@ -120,7 +120,7 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertFalse(result["clinician_review"]["required"])
         self.assertEqual(result["clinician_review"]["reason"], "")
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_missing_birthdate_returns_error(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -129,7 +129,7 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("birthDate", result["error_message"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_invalid_birthdate_returns_error(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -138,7 +138,7 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("birthDate", result["error_message"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_patient_fetch_http_error(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -147,7 +147,7 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["http_status"], 403)
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_immunization_fetch_connection_error(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -163,7 +163,7 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertNotIn("http_status", result)
         self.assertIn("Could not reach", result["error_message"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_immunization_fetch_http_error(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -187,7 +187,7 @@ class TestGetImmunizationGaps(unittest.TestCase):
 
 
 class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_screenings_due(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_developmental_screening_status
 
@@ -203,7 +203,7 @@ class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
         # 6-month-old is under 36 months -> clinician review required
         self.assertTrue(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_older_than_three_years_no_review_required(self, mock_fhir):
         """Review gating: gaps at >36 months should not trigger clinician_review."""
         from mamaguard.shared.tools.pediatric import get_developmental_screening_status
@@ -220,7 +220,7 @@ class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
         # age_months > 36 short-circuits clinician_review.required even if gaps exist
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_observation_fetch_exception_falls_back_to_empty(self, mock_fhir):
         """Observation fetch failure is swallowed -- function still returns success."""
         from mamaguard.shared.tools.pediatric import get_developmental_screening_status
@@ -237,7 +237,7 @@ class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
         # All milestones up to age show as due since none matched
         self.assertTrue(result["data"]["has_gaps"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_missing_birthdate_returns_error(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_developmental_screening_status
 
@@ -246,7 +246,7 @@ class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("birthDate", result["error_message"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_patient_fetch_http_error(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_developmental_screening_status
 
@@ -255,7 +255,7 @@ class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["http_status"], 404)
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_patient_fetch_connection_error(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_developmental_screening_status
 
@@ -274,7 +274,7 @@ class TestGetDevelopmentalScreeningStatus(unittest.TestCase):
 
 
 class TestGetCareGaps(unittest.TestCase):
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_with_active_plans(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_care_gaps
 
@@ -298,7 +298,7 @@ class TestGetCareGaps(unittest.TestCase):
         self.assertFalse(result["clinician_review"]["required"])
         self.assertEqual(result["data"]["identified_gaps"], [])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_goal_without_description_is_a_gap(self, mock_fhir):
         """An active goal with no description text should be flagged as a gap."""
         from mamaguard.shared.tools.pediatric import get_care_gaps
@@ -335,7 +335,7 @@ class TestGetCareGaps(unittest.TestCase):
         # Gap message is surfaced as evidence_basis for the liaison
         self.assertEqual(result["clinician_review"]["evidence_basis"], gaps)
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_careplan_fetch_exception_swallowed(self, mock_fhir):
         """CarePlan query failure falls back to empty list without raising."""
         from mamaguard.shared.tools.pediatric import get_care_gaps
@@ -350,7 +350,7 @@ class TestGetCareGaps(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["data"]["active_care_plans"], [])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_all_queries_exception_still_success(self, mock_fhir):
         """All three sub-queries failing still returns a usable success envelope."""
         from mamaguard.shared.tools.pediatric import get_care_gaps

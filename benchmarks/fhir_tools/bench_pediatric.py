@@ -39,7 +39,7 @@ def _run_immunization_gaps(patient: dict, imm_bundle: dict, patient_id: str) -> 
             return imm_bundle
         return {"resourceType": "Bundle", "entry": []}
 
-    with patch("mamaguard.shared.tools.pediatric._fhir_get") as mock:
+    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.side_effect = side_effect
         ctx = MockToolContext(patient_id=patient_id)
         return get_immunization_gaps(tool_context=ctx)  # type: ignore[arg-type]
@@ -55,7 +55,7 @@ def _run_developmental_screening(patient: dict, screening_bundle: dict, patient_
             return screening_bundle
         return {"resourceType": "Bundle", "entry": []}
 
-    with patch("mamaguard.shared.tools.pediatric._fhir_get") as mock:
+    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.side_effect = side_effect
         ctx = MockToolContext(patient_id=patient_id)
         return get_developmental_screening_status(tool_context=ctx)  # type: ignore[arg-type]

@@ -203,7 +203,7 @@ class TestComputeTrend(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestGetBpTrend(unittest.TestCase):
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_normal_bp(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -220,7 +220,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertFalse(result["data"]["alert_elevated"])
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_elevated_bp(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -236,7 +236,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertTrue(result["clinician_review"]["required"])
         self.assertGreater(len(result["clinician_review"]["evidence_basis"]), 0)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_severe_bp(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -250,7 +250,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertTrue(result["data"]["alert_severe"])
         self.assertIn("Stage 2", result["clinician_review"]["reason"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_empty_bundle(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -259,7 +259,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(result["data"]["count"], 0)
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_no_entry_key(self, mock_fhir):
         """Bundle without 'entry' key — treated as empty."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -269,7 +269,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["data"]["count"], 0)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_http_status_error(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -279,7 +279,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["http_status"], 403)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_connect_error(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -288,7 +288,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("error_message", result)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_read_timeout(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -308,7 +308,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("fhir_url", result["error_message"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_confidence_values(self, mock_fhir):
         """Severe → 0.9, elevated → 0.8, clean → 0.5."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -337,7 +337,7 @@ class TestGetBpTrend(unittest.TestCase):
         result = get_bp_trend(tool_context=MockToolContext())
         self.assertEqual(result["clinician_review"]["confidence"], 0.9)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_elevated_diastolic_only(self, mock_fhir):
         """Diastolic >90 triggers elevated even if systolic is normal."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -350,7 +350,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertTrue(result["data"]["alert_elevated"])
         self.assertFalse(result["data"]["alert_severe"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_severe_diastolic_only(self, mock_fhir):
         """Diastolic >110 triggers severe even if systolic is normal."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -362,7 +362,7 @@ class TestGetBpTrend(unittest.TestCase):
         result = get_bp_trend(tool_context=MockToolContext())
         self.assertTrue(result["data"]["alert_severe"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_evidence_basis_format(self, mock_fhir):
         """Evidence cites resource ID, BP reading, and date."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -378,7 +378,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertIn("155/95", evidence[0])
         self.assertIn("2026-03-15", evidence[0])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_evidence_basis_excludes_normal(self, mock_fhir):
         """Normal BP readings not included in evidence_basis."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -395,7 +395,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(len(evidence), 1)
         self.assertIn("Observation/high", evidence[0])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_observation_without_bp_components_skipped(self, mock_fhir):
         """Observation entries that lack BP components are silently skipped."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -411,7 +411,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(result["data"]["count"], 1)
         self.assertEqual(result["data"]["readings"][0]["resource_id"], "good")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_observation_without_date_still_included(self, mock_fhir):
         """Observation with empty effectiveDateTime is still included (no date filter applied)."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -424,7 +424,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(result["data"]["count"], 1)
         self.assertEqual(result["data"]["readings"][0]["date"], "")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_old_reading_filtered_by_months_back(self, mock_fhir):
         """Reading older than months_back is excluded."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -440,7 +440,7 @@ class TestGetBpTrend(unittest.TestCase):
         self.assertEqual(result["data"]["count"], 1)
         self.assertEqual(result["data"]["readings"][0]["resource_id"], "recent")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_invalid_date_not_filtered(self, mock_fhir):
         """Observation with un-parseable date passes through the date filter."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -452,7 +452,7 @@ class TestGetBpTrend(unittest.TestCase):
         result = get_bp_trend(tool_context=MockToolContext())
         self.assertEqual(result["data"]["count"], 1)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_trend_direction_increasing(self, mock_fhir):
         """BP trend computed from systolic values."""
         from mamaguard.shared.tools.maternal import get_bp_trend
@@ -469,7 +469,7 @@ class TestGetBpTrend(unittest.TestCase):
         result = get_bp_trend(tool_context=MockToolContext())
         self.assertEqual(result["data"]["trend"], "increasing")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_patient_id_in_result(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -494,7 +494,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
             return {"resourceType": "Bundle", "entry": []}
         return side_effect
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_normal_hba1c(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_glucose_trend
 
@@ -506,7 +506,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         self.assertFalse(result["data"]["diabetes_range"])
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_elevated_hba1c(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_glucose_trend
 
@@ -520,7 +520,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         self.assertTrue(result["data"]["diabetes_range"])
         self.assertTrue(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_very_poorly_controlled(self, mock_fhir):
         """HbA1c > 9.0 sets poorly_controlled flag."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -532,7 +532,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         self.assertTrue(result["data"]["poorly_controlled"])
         self.assertTrue(result["data"]["diabetes_range"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_hba1c_trend_increasing(self, mock_fhir):
         """HbA1c trend uses threshold=0.3."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -548,7 +548,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         result = get_glucose_trend(tool_context=MockToolContext())
         self.assertEqual(result["data"]["hba1c_trend"], "increasing")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_glucose_readings_extracted(self, mock_fhir):
         """Glucose observations are extracted with value, unit, date, resource_id."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -563,7 +563,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         self.assertEqual(reading["unit"], "mg/dL")
         self.assertEqual(reading["resource_id"], "g1")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_both_empty_bundles(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_glucose_trend
 
@@ -574,7 +574,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         self.assertEqual(len(result["data"]["hba1c_readings"]), 0)
         self.assertEqual(result["data"]["hba1c_trend"], "insufficient_data")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_http_error_on_glucose_fetch(self, mock_fhir):
         """HTTPStatusError on the glucose (first) fetch returns error immediately."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -585,7 +585,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["http_status"], 500)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_connect_error_on_hba1c_fetch(self, mock_fhir):
         """ConnectError on the HbA1c (second) fetch returns error."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -608,7 +608,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         result = get_glucose_trend(tool_context=None)
         self.assertEqual(result["status"], "error")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_evidence_basis_format(self, mock_fhir):
         """Evidence cites resource ID, HbA1c value, and date."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -623,7 +623,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         self.assertIn("7.8", evidence[0])
         self.assertIn("2026-02-15", evidence[0])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_evidence_excludes_normal_hba1c(self, mock_fhir):
         """HbA1c readings <=6.5 not in evidence_basis."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -639,7 +639,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         self.assertEqual(len(evidence), 1)
         self.assertIn("Observation/high", evidence[0])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_unit_fallback_to_code(self, mock_fhir):
         """When valueQuantity has 'code' but no 'unit', code is used."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -656,7 +656,7 @@ class TestGetGlucoseTrend(unittest.TestCase):
         result = get_glucose_trend(tool_context=MockToolContext())
         self.assertEqual(result["data"]["glucose_readings"][0]["unit"], "mg/dL")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_observation_without_value_skipped(self, mock_fhir):
         """Observation with None value in valueQuantity is not added to readings."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -673,14 +673,14 @@ class TestGetGlucoseTrend(unittest.TestCase):
         result = get_glucose_trend(tool_context=MockToolContext())
         self.assertEqual(len(result["data"]["hba1c_readings"]), 0)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_patient_id_in_result(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_glucose_trend
         mock_fhir.side_effect = self._glucose_side_effect()
         result = get_glucose_trend(tool_context=MockToolContext(patient_id="p-456"))
         self.assertEqual(result["patient_id"], "p-456")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_clinician_review_reason_text(self, mock_fhir):
         """Review reason mentions HbA1c range when in diabetes range."""
         from mamaguard.shared.tools.maternal import get_glucose_trend
@@ -710,7 +710,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
 
         return side_effect
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_multiple_pregnancies(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -730,7 +730,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertTrue(result["clinician_review"]["required"])
         self.assertIn("Recurrent", result["clinician_review"]["reason"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_no_losses_not_high_risk(self, mock_fhir):
         """Single live birth with no losses → not high risk."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history
@@ -745,7 +745,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertFalse(result["clinician_review"]["required"])
         self.assertEqual(result["clinician_review"]["reason"], "")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_single_loss_not_high_risk(self, mock_fhir):
         """One loss does not trigger high_risk (threshold is >=2)."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history
@@ -758,7 +758,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertFalse(result["data"]["high_risk"])
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_ongoing_pregnancy(self, mock_fhir):
         """Normal pregnancy with non-resolved status → outcome 'ongoing'."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history
@@ -771,7 +771,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertEqual(preg["outcome"], "ongoing")
         self.assertEqual(result["data"]["live_births"], 0)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_fetal_complication_outcome(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -783,7 +783,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertEqual(preg["outcome"], "fetal_complication")
         self.assertEqual(result["data"]["losses"], 1)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_miscarriage_outcome(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -795,7 +795,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertEqual(preg["outcome"], "miscarriage")
         self.assertEqual(preg["snomed_code"], "19169002")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_sorted_by_onset_descending(self, mock_fhir):
         """Pregnancies sorted newest-first by onset date."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history
@@ -811,7 +811,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         onsets = [p["onset"] for p in result["data"]["pregnancies"]]
         self.assertEqual(onsets, ["2020-06-01", "2018-03-01", "2015-01-01"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_onset_period_fallback(self, mock_fhir):
         """When onsetDateTime is absent, onsetPeriod.start is used."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history
@@ -829,7 +829,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         result = get_pregnancy_history(tool_context=MockToolContext())
         self.assertEqual(result["data"]["pregnancies"][0]["onset"], "2021-03-15")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_abatement_period_fallback(self, mock_fhir):
         """When abatementDateTime is absent, abatementPeriod.start is used."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history
@@ -848,7 +848,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         result = get_pregnancy_history(tool_context=MockToolContext())
         self.assertEqual(result["data"]["pregnancies"][0]["abatement"], "2021-09-15")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_condition_text_from_coding_display(self, mock_fhir):
         """When code.text is absent, coding display is used for condition name."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history
@@ -868,7 +868,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         result = get_pregnancy_history(tool_context=MockToolContext())
         self.assertEqual(result["data"]["pregnancies"][0]["condition"], "Normal pregnancy (finding)")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_empty_history(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -878,7 +878,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertEqual(result["data"]["losses"], 0)
         self.assertFalse(result["data"]["high_risk"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_http_error(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -888,7 +888,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["http_status"], 404)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_connect_error(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -901,7 +901,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         result = get_pregnancy_history(tool_context=None)
         self.assertEqual(result["status"], "error")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_evidence_basis_format(self, mock_fhir):
         """Evidence for losses cites condition, outcome, and onset."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history
@@ -920,7 +920,7 @@ class TestGetPregnancyHistory(unittest.TestCase):
         self.assertIn("miscarriage", evidence[0])
         self.assertIn("Condition/c1", evidence[1])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_loss_count_reason_string(self, mock_fhir):
         """Reason string includes exact loss count."""
         from mamaguard.shared.tools.maternal import get_pregnancy_history

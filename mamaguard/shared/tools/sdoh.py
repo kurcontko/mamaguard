@@ -19,11 +19,12 @@ from ..sdoh_resources import (
     curated_resources,
 )
 from .fhir_base import (
+    _bundle_resources,
+    _clinician_review,
     _coding_display,
-    _connection_error_result,
-    _fhir_get,
     _get_fhir_context,
-    _http_error_result,
+    _safe_fhir_get,
+    _silent_fhir_get,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,8 +79,8 @@ def get_sdoh_screening(tool_context: ToolContext | None = None) -> dict:
     }
 
     # 1. Get patient demographics (for language)
-    try:
-        patient = _fhir_get(fhir_url, fhir_token, f"Patient/{patient_id}")
+    patient, _err = _safe_fhir_get(fhir_url, fhir_token, f"Patient/{patient_id}")
+    if patient:
         for comm in patient.get("communication", []):
             lang = comm.get("language", {})
             lang_text = lang.get("text") or _coding_display(lang.get("coding", []))
@@ -90,79 +91,60 @@ def get_sdoh_screening(tool_context: ToolContext | None = None) -> dict:
                 )
             elif lang_text:
                 result["data"]["language"] = lang_text
-    except Exception as e:
-        logger.warning("sdoh_patient_fetch_failed: %s", e)
 
     # 2. Check all conditions for SDOH-related codes
-    try:
-        bundle = _fhir_get(
-            fhir_url, fhir_token, "Condition",
-            params={"patient": patient_id, "_count": "100"},
-        )
-        for entry in bundle.get("entry", []):
-            res = entry.get("resource", {})
-            code = res.get("code", {})
-            codings = code.get("coding", [])
-            condition_text = code.get("text") or _coding_display(codings)
+    sdoh_keywords = [
+        "stress", "unemploy", "homeless", "housing", "food",
+        "poverty", "education", "social isolation", "abuse",
+        "neglect", "refugee", "immigration",
+    ]
+    for res in _silent_fhir_get(fhir_url, fhir_token, "Condition",
+                                params={"patient": patient_id, "_count": "100"}):
+        code = res.get("code", {})
+        codings = code.get("coding", [])
+        condition_text = code.get("text") or _coding_display(codings)
 
-            # Check for Z-code equivalent SNOMED codes or text matches
-            is_sdoh = False
-            for c in codings:
-                snomed = c.get("code", "")
-                if snomed in _SDOH_SNOMED_CODES:
-                    is_sdoh = True
-                    break
-            # Also check text-based matching for common SDOH conditions
-            sdoh_keywords = [
-                "stress", "unemploy", "homeless", "housing", "food",
-                "poverty", "education", "social isolation", "abuse",
-                "neglect", "refugee", "immigration",
-            ]
-            if not is_sdoh:
-                lower_text = condition_text.lower()
-                is_sdoh = any(kw in lower_text for kw in sdoh_keywords)
+        is_sdoh = any(c.get("code", "") in _SDOH_SNOMED_CODES for c in codings)
+        if not is_sdoh:
+            lower_text = condition_text.lower()
+            is_sdoh = any(kw in lower_text for kw in sdoh_keywords)
 
-            if is_sdoh:
-                result["data"]["sdoh_conditions"].append({
-                    "condition": condition_text,
-                    "resource_id": res.get("id", ""),
-                    "clinical_status": (
-                        (res.get("clinicalStatus") or {}).get("coding", [{}])[0].get("code", "")
-                    ),
-                })
-                result["data"]["risk_factors"].append(f"SDOH condition: {condition_text}")
-    except Exception as e:
-        logger.warning("sdoh_conditions_fetch_failed: %s", e)
+        if is_sdoh:
+            result["data"]["sdoh_conditions"].append({
+                "condition": condition_text,
+                "resource_id": res.get("id", ""),
+                "clinical_status": (
+                    (res.get("clinicalStatus") or {}).get("coding", [{}])[0].get("code", "")
+                ),
+            })
+            result["data"]["risk_factors"].append(f"SDOH condition: {condition_text}")
 
     # 3. Check insurance coverage
-    try:
-        bundle = _fhir_get(
-            fhir_url, fhir_token, "Coverage",
-            params={"beneficiary": f"Patient/{patient_id}", "_count": "10"},
-        )
-        entries = bundle.get("entry", [])
-        if not entries:
-            result["data"]["coverage"] = []
+    coverage_bundle, coverage_err = _safe_fhir_get(
+        fhir_url, fhir_token, "Coverage",
+        params={"beneficiary": f"Patient/{patient_id}", "_count": "10"},
+    )
+    if coverage_err:
+        logger.warning("sdoh_coverage_fetch_failed")
+        result["data"]["risk_factors"].append("Unable to check coverage status")
+    else:
+        coverage_resources = _bundle_resources(coverage_bundle)
+        if not coverage_resources:
             result["data"]["risk_factors"].append(
                 "No insurance coverage found -- potential uninsured patient"
             )
-        else:
-            for entry in entries:
-                res = entry.get("resource", {})
-                coverage_type = (res.get("type") or {}).get("text") or _coding_display(
-                    (res.get("type") or {}).get("coding", [])
-                )
-                period = res.get("period", {})
-                result["data"]["coverage"].append({
-                    "type": coverage_type,
-                    "status": res.get("status"),
-                    "period_start": period.get("start"),
-                    "period_end": period.get("end"),
-                    "resource_id": res.get("id", ""),
-                })
-    except Exception as e:
-        logger.warning("sdoh_coverage_fetch_failed: %s", e)
-        result["data"]["risk_factors"].append("Unable to check coverage status")
+        for res in coverage_resources:
+            coverage_type = (res.get("type") or {}).get("text") or _coding_display(
+                (res.get("type") or {}).get("coding", [])
+            )
+            period = res.get("period", {})
+            result["data"]["coverage"].append({
+                "type": coverage_type,
+                "status": res.get("status"),
+                "period_start": period.get("start"),
+                "period_end": period.get("end"),
+                "resource_id": res.get("id", ""),
+            })
 
     # Determine clinician review need
     has_coverage_gap = len(result["data"]["coverage"]) == 0
@@ -179,13 +161,13 @@ def get_sdoh_screening(tool_context: ToolContext | None = None) -> dict:
     for sc in result["data"]["sdoh_conditions"]:
         evidence.append(f"Condition/{sc['resource_id']} ({sc['condition']})")
 
-    result["clinician_review"] = {
-        "required": clinician_required,
-        "reason": "Insurance coverage gap detected -- may affect medication access and care continuity" if has_coverage_gap else "",
-        "recommendation": "Verify insurance status; consider Medicaid enrollment or community health resources" if has_coverage_gap else "",
-        "evidence_basis": evidence,
-        "confidence": 0.8,
-    }
+    result["clinician_review"] = _clinician_review(
+        clinician_required,
+        reason="Insurance coverage gap detected -- may affect medication access and care continuity" if has_coverage_gap else "",
+        recommendation="Verify insurance status; consider Medicaid enrollment or community health resources" if has_coverage_gap else "",
+        evidence=evidence,
+        confidence=0.8,
+    )
 
     return result
 
@@ -347,18 +329,18 @@ def find_sdoh_resources(
         "source": source,
         "resource_count": len(resources),
         "resources": resources,
-        "clinician_review": {
-            "required": True,
-            "reason": (
+        "clinician_review": _clinician_review(
+            True,
+            reason=(
                 "SDOH resource referral recommended -- clinician should "
                 "review match and initiate outreach."
             ),
-            "recommendation": (
+            recommendation=(
                 "Record the selected resource on a FHIR CarePlan + Goal "
                 "via write_care_plan so the care team has a trackable "
                 "intervention tied to the patient record."
             ),
-            "evidence_basis": evidence,
-            "confidence": 0.75 if source in ("external", "curated") else 0.6,
-        },
+            evidence=evidence,
+            confidence=0.75 if source in ("external", "curated") else 0.6,
+        ),
     }

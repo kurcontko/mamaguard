@@ -194,7 +194,7 @@ class TestGetActiveMedicationsTool(unittest.TestCase):
 
 
 class TestGetBpTrendTool(unittest.TestCase):
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_returns_readings_and_trend(self, mock_get):
         mock_get.return_value = {
             "resourceType": "Bundle",
@@ -230,7 +230,7 @@ class TestGetBpTrendTool(unittest.TestCase):
         readings = data.get("readings") or data.get("data", {}).get("readings", [])
         self.assertIsInstance(readings, list)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_default_months_back(self, mock_get):
         mock_get.return_value = {"resourceType": "Bundle", "entry": []}
         from mamaguard.mcp_server.server import get_bp_trend
@@ -306,7 +306,7 @@ class TestCreateCommunicationRequestTool(unittest.TestCase):
 
 
 class TestSdohScreeningTool(unittest.TestCase):
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_returns_screening_result(self, mock_get):
         mock_get.return_value = {"resourceType": "Bundle", "entry": []}
         from mamaguard.mcp_server.server import get_sdoh_screening
@@ -321,7 +321,7 @@ class TestSdohScreeningTool(unittest.TestCase):
 
 
 class TestCareGapsTool(unittest.TestCase):
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_returns_care_gaps(self, mock_get):
         mock_get.return_value = {"resourceType": "Bundle", "entry": []}
         from mamaguard.mcp_server.server import get_care_gaps
@@ -689,7 +689,7 @@ class TestMcpProtocolCallTool(unittest.TestCase):
                 tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
                 async with client:
                     await client.initialize()
-                    with patch("mamaguard.shared.tools.maternal._fhir_get") as mock_get:
+                    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock_get:
                         mock_get.return_value = {"resourceType": "Bundle", "entry": []}
                         result = await client.call_tool("get_bp_trend", {
                             "fhir_url": "https://fhir.example.org",
@@ -939,7 +939,7 @@ class TestMcpFhirContextPropagation(unittest.TestCase):
                 tg.start_soon(low_server.run, c2s_recv, s2c_send, init_opts)
                 async with client:
                     await client.initialize()
-                    with patch("mamaguard.shared.tools.sdoh._fhir_get") as mock_get:
+                    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock_get:
                         mock_get.return_value = {"resourceType": "Bundle", "entry": []}
                         await client.call_tool("get_sdoh_screening", {
                             "fhir_url": "https://sdoh-ehr.org/fhir",

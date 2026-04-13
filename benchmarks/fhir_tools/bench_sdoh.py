@@ -41,7 +41,7 @@ def _run_sdoh_screening(patient: dict, conditions: dict, coverage: dict, patient
             return coverage
         return {"resourceType": "Bundle", "entry": []}
 
-    with patch("mamaguard.shared.tools.sdoh._fhir_get") as mock:
+    with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.side_effect = side_effect
         ctx = MockToolContext(patient_id=patient_id)
         return get_sdoh_screening(tool_context=ctx)  # type: ignore[arg-type]

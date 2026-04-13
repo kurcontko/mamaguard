@@ -20,7 +20,7 @@ def _http_status_error(status_code: int, text: str = "") -> httpx.HTTPStatusErro
 
 
 class TestGetSdohScreening(unittest.TestCase):
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_no_coverage_detected(self, mock_fhir):
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
 
@@ -45,7 +45,7 @@ class TestGetSdohScreening(unittest.TestCase):
         self.assertIn("Language barrier", result["data"]["risk_factors"][0])
         self.assertIn("No insurance", result["data"]["risk_factors"][1])
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_with_coverage(self, mock_fhir):
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
 
@@ -76,7 +76,7 @@ class TestGetSdohScreening(unittest.TestCase):
         self.assertEqual(result["data"]["coverage"][0]["type"], "Medicaid")
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_sdoh_condition_detected(self, mock_fhir):
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
 
@@ -103,7 +103,7 @@ class TestGetSdohScreening(unittest.TestCase):
         self.assertEqual(len(result["data"]["sdoh_conditions"]), 1)
         self.assertTrue(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_housing_text_match_condition_detected(self, mock_fhir):
         """A condition with no SDOH SNOMED code but matching keyword text is flagged."""
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
@@ -150,7 +150,7 @@ class TestGetSdohScreening(unittest.TestCase):
         evidence = " ".join(result["clinician_review"]["evidence_basis"])
         self.assertIn("Condition/c-house", evidence)
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_non_sdoh_condition_ignored(self, mock_fhir):
         """A clinical (non-SDOH) condition should not appear in sdoh_conditions."""
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
@@ -190,7 +190,7 @@ class TestGetSdohScreening(unittest.TestCase):
         self.assertEqual(len(result["data"]["sdoh_conditions"]), 0)
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_english_language_no_barrier(self, mock_fhir):
         """English primary language should record language but not flag a barrier."""
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
@@ -218,7 +218,7 @@ class TestGetSdohScreening(unittest.TestCase):
         self.assertEqual(barrier_factors, [])
         self.assertFalse(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_patient_fetch_exception_swallowed(self, mock_fhir):
         """Patient fetch failure is logged but does not abort the screening."""
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
@@ -243,7 +243,7 @@ class TestGetSdohScreening(unittest.TestCase):
         # Coverage path still succeeds
         self.assertEqual(len(result["data"]["coverage"]), 1)
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_coverage_fetch_exception_records_risk_factor(self, mock_fhir):
         """Coverage fetch failure surfaces a 'Unable to check coverage' risk factor."""
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
@@ -265,7 +265,7 @@ class TestGetSdohScreening(unittest.TestCase):
         # No coverage observed -> treat as coverage gap and demand review
         self.assertTrue(result["clinician_review"]["required"])
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_conditions_fetch_exception_swallowed(self, mock_fhir):
         """Conditions fetch failure is swallowed; sdoh_conditions stays empty."""
         from mamaguard.shared.tools.sdoh import get_sdoh_screening

@@ -175,7 +175,7 @@ class TestMaternalPhase(unittest.TestCase):
     DM2 (HbA1c 7.9%), 5 pregnancy losses, uninsured, housing + stress.
     """
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_bp_trend_detects_stage2_htn(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_bp_trend
 
@@ -196,7 +196,7 @@ class TestMaternalPhase(unittest.TestCase):
         self.assertIn("Stage 2", cr["reason"])
         self.assertTrue(cr["evidence_basis"], "Must cite elevated readings")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_glucose_trend_detects_diabetes(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_glucose_trend
 
@@ -215,7 +215,7 @@ class TestMaternalPhase(unittest.TestCase):
         self.assertTrue(cr["required"])
         self.assertIn("6.5", cr["reason"])
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_pregnancy_history_detects_recurrent_loss(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_pregnancy_history
 
@@ -234,7 +234,7 @@ class TestMaternalPhase(unittest.TestCase):
         self.assertIn("5 losses", cr["reason"])
         self.assertGreaterEqual(len(cr["evidence_basis"]), 5)
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_maternal_risk_profile_is_urgent(self, mock_fhir):
         from mamaguard.shared.tools.maternal import get_maternal_risk_profile
 
@@ -263,7 +263,7 @@ class TestMaternalPhase(unittest.TestCase):
             "Evidence basis should aggregate BP + HbA1c + pregnancy evidence",
         )
 
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_sdoh_screening_detects_vulnerabilities(self, mock_fhir):
         from mamaguard.shared.tools.sdoh import get_sdoh_screening
 
@@ -317,7 +317,7 @@ class TestPediatricPhase(unittest.TestCase):
     """
 
     @patch("mamaguard.shared.tools.pediatric._compute_age_months", return_value=2)
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_immunization_gaps_finds_due_vaccines(self, mock_fhir, _mock_age):
         from mamaguard.shared.tools.pediatric import get_immunization_gaps
 
@@ -348,7 +348,7 @@ class TestPediatricPhase(unittest.TestCase):
         self.assertIn("HepB", up_to_date_vaccines, "HepB#1 should be up to date")
 
     @patch("mamaguard.shared.tools.pediatric._compute_age_months", return_value=2)
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_developmental_screening_finds_due_surveillance(self, mock_fhir, _mock_age):
         from mamaguard.shared.tools.pediatric import get_developmental_screening_status
 
@@ -381,7 +381,7 @@ class TestPediatricPhase(unittest.TestCase):
         )
         self.assertTrue(data["has_gaps"])
 
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_care_gaps_returns_valid_shape(self, mock_fhir):
         from mamaguard.shared.tools.pediatric import get_care_gaps
 
@@ -469,9 +469,9 @@ class TestHandoffEndToEnd(unittest.TestCase):
     """
 
     @patch("mamaguard.shared.tools.pediatric._compute_age_months", return_value=2)
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
-    @patch("mamaguard.shared.tools.sdoh._fhir_get")
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_full_handoff_both_phases_produce_valid_output(
         self, mock_ped_fhir, mock_sdoh_fhir, mock_mat_fhir, _mock_age,
     ):
@@ -529,7 +529,7 @@ class TestHandoffEndToEnd(unittest.TestCase):
             self.assertIn("reason", cr, f"{label}: missing reason field")
             self.assertIn("evidence_basis", cr, f"{label}: missing evidence_basis")
 
-    @patch("mamaguard.shared.tools.maternal._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_maternal_evidence_cites_fhir_resources(self, mock_fhir):
         """Maternal evidence_basis must cite specific FHIR resource IDs —
         this is what the orchestrator presents in the Pediatric Transition
@@ -553,7 +553,7 @@ class TestHandoffEndToEnd(unittest.TestCase):
         )
 
     @patch("mamaguard.shared.tools.pediatric._compute_age_months", return_value=2)
-    @patch("mamaguard.shared.tools.pediatric._fhir_get")
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_pediatric_evidence_lists_overdue_series(self, mock_fhir, _mock_age):
         """Pediatric evidence_basis must list the vaccine series that are
         due — this is what appears in the assessment output for the clinician."""
