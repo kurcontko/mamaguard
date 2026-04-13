@@ -39,6 +39,17 @@ def _get_fhir_context(tool_context: ToolContext | None, tool_name: str = ""):
     fhir_token = tool_context.state.get("fhir_token", "")
     patient_id = tool_context.state.get("patient_id", "")
 
+    # Surface SHARP context validation errors first
+    context_errors = tool_context.state.get("fhir_context_errors")
+    if context_errors:
+        return {
+            "status": "error",
+            "error_message": (
+                f"FHIR context failed SHARP validation: {'; '.join(context_errors)}. "
+                "Ensure the caller provides valid FHIR credentials in A2A message metadata."
+            ),
+        }
+
     missing = [
         name for name, val in [
             ("fhir_url", fhir_url),

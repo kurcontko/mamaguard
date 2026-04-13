@@ -8,6 +8,7 @@ session state so tools can use them without credentials appearing in prompts.
 import json
 import logging
 import os
+from urllib.parse import urlparse
 
 from .logging_utils import safe_pretty_json, serialize_for_log, token_fingerprint
 from .smart_tickets import (
@@ -58,6 +59,41 @@ def _coerce_fhir_data(value):
         except json.JSONDecodeError:
             return None
     return None
+
+
+def validate_sharp_context(fhir_url: str, patient_id: str, fhir_token: str) -> list[str]:
+    """
+    Validate SHARP/FHIR context fields.
+
+    Returns a list of error strings (empty if all fields are valid).
+    Rules:
+      - fhir_url must start with https:// or http://localhost
+      - patient_id must be a non-empty string
+      - fhir_token must be a non-empty string
+    """
+    errors: list[str] = []
+
+    if not isinstance(patient_id, str) or not patient_id.strip():
+        errors.append("patient_id must be a non-empty string")
+
+    if not isinstance(fhir_token, str) or not fhir_token.strip():
+        errors.append("fhir_token must be a non-empty string")
+
+    if not isinstance(fhir_url, str) or not fhir_url.strip():
+        errors.append("fhir_url must be a non-empty string")
+    else:
+        parsed = urlparse(fhir_url.strip())
+        is_https = parsed.scheme == "https"
+        is_localhost = parsed.scheme == "http" and (
+            parsed.hostname in ("localhost", "127.0.0.1")
+        )
+        if not (is_https or is_localhost):
+            errors.append(
+                "fhir_url must start with https:// or http://localhost "
+                f"(got {fhir_url!r})"
+            )
+
+    return errors
 
 
 def _extract_metadata_sources(callback_context, llm_request) -> list:
@@ -211,9 +247,25 @@ def extract_fhir_context(callback_context, llm_request):
             break
 
     if fhir_data:
-        callback_context.state["fhir_url"] = fhir_data.get("fhirUrl", "")
-        callback_context.state["fhir_token"] = fhir_data.get("fhirToken", "")
-        callback_context.state["patient_id"] = fhir_data.get("patientId", "")
+        fhir_url = fhir_data.get("fhirUrl", "")
+        fhir_token = fhir_data.get("fhirToken", "")
+        patient_id = fhir_data.get("patientId", "")
+
+        # -- SHARP context validation --------------------------------------
+        validation_errors = validate_sharp_context(
+            fhir_url or "", patient_id or "", fhir_token or "",
+        )
+        if validation_errors:
+            callback_context.state["fhir_context_errors"] = validation_errors
+            for err in validation_errors:
+                logger.warning(
+                    "sharp_context_invalid task_id=%s error=%s",
+                    correlation["task_id"], err,
+                )
+
+        callback_context.state["fhir_url"] = fhir_url
+        callback_context.state["fhir_token"] = fhir_token
+        callback_context.state["patient_id"] = patient_id
 
         logger.info("FHIR_URL_FOUND value=%s", callback_context.state["fhir_url"] or "[EMPTY]")
         logger.info("FHIR_TOKEN_FOUND fingerprint=%s", token_fingerprint(callback_context.state["fhir_token"]))
