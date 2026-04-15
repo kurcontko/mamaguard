@@ -84,6 +84,21 @@ _PRESCRIBING_VERB_PATTERNS: list[re.Pattern[str]] = [
         r"\b(?:give|administer|dose|bolus)\s+\d+\s*(?:mg|mcg|µg|g|mL|units?|IU)\b",
         re.IGNORECASE,
     ),
+    # Bare "initiate" in clinical context (broad catch)
+    re.compile(
+        r"\binitiate\b(?!.*\bclinician\b)",
+        re.IGNORECASE,
+    ),
+    # "begin treatment/therapy with" (broad catch)
+    re.compile(
+        r"\bbegin\s+(?:treatment|therapy)\s+with\b",
+        re.IGNORECASE,
+    ),
+    # "start her/him/them on"
+    re.compile(
+        r"\bstart\s+(?:her|him|them|the patient)\s+on\b",
+        re.IGNORECASE,
+    ),
 ]
 
 # Sentence-level patterns — if any match, the ENTIRE sentence is redacted.

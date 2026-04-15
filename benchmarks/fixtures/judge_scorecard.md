@@ -5,6 +5,11 @@ Model under test: **Nemotron-3-Super-120B** (vLLM, `http://10.10.10.2:30000/v1`,
 Verification date: 2026-04-13. Original baseline: 88.2% (pre-hardening).
 Tier-2b and Tier-3 results pending HAPI FHIR availability (Docker required).
 
+> **Update 2026-04-14 — Tier-2b unblocked, new high scores at temp=0.4:**
+> - Tier-2a: **95.6%** (70/73) — beats all prior runs including Run 4 (94.0%).
+> - Tier-2b: **82.1%** (41/47) — first real number; was 0% (crash) due to a `{language}` template bug in sub-agent prompts.
+> Root-cause write-up and remediation: `benchmarks/fixtures/session_2026_04_14.md`.
+
 ---
 
 ## Overall Summary

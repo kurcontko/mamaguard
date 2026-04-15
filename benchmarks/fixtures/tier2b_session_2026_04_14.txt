@@ -1,0 +1,60 @@
+      Error: TimeoutError: Turn 0 timed out after 120.0s
+  [!] e2e_multi_assess_then_detail: 0% (120006ms)
+      Error: TimeoutError: Turn 0 timed out after 120.0s
+  [!] e2e_multi_sdoh_then_care_plan: 0% (120004ms)
+      Error: TimeoutError: Turn 0 timed out after 120.0s
+  [+] e2e_comprehensive_maria: 93% (2352116ms)
+      Response:   **Talk** — MULTI-DOMAIN URGENT: Maria presents with Stage 2 hypertension (BP 168/108) and diabetes range HbA1c 7.9%, compounded by no active insurance coverage and housing instability. The insurance...
+      Tools: ['create_communication_request', 'find_sdoh_resources', 'get_active_medications', 'get_care_gaps', 'get_developmental_screening_status', 'get_immunization_gaps', 'get_maternal_risk_profile', 'get_patient_summary', 'get_sdoh_screening', 'maternal_risk_agent', 'pediatric_transition_agent', 'sdoh_outreach_agent', 'write_care_plan', 'write_risk_assessment']
+  [+] e2e_edge_no_conditions: 92% (181467ms)
+      Response:   **Talk** — Patient presents with routine maternal risk: blood pressure within normal range (most recent BP 120/78 mmHg), HbA1c 5.0% (non-diabetic range), and an active normal pregnancy with onset ap...
+      Tools: ['get_maternal_risk_profile', 'maternal_risk_agent']
+  [+] e2e_edge_sdoh_only: 88% (2619904ms)
+      Response:   **Talk** — URGENT: Aisha Johnson faces active food insecurity (Z59.4) requiring immediate WIC referral, compounded by housing instability (Z59.1, HIGH) and unemployment (Z56.0, MODERATE). She is pre...
+      Tools: ['find_sdoh_resources', 'get_active_medications', 'get_care_gaps', 'get_developmental_screening_status', 'get_immunization_gaps', 'get_maternal_risk_profile', 'get_patient_summary', 'get_sdoh_screening', 'maternal_risk_agent', 'pediatric_transition_agent', 'sdoh_outreach_agent', 'write_care_plan']
+  [+] e2e_edge_conflicting_bp: 82% (337154ms)
+      Response:   **Talk** — Patient presents with routine maternal risk: chronic hypertension well-controlled on labetalol, currently pregnant (onset Oct 2025) with BP readings all below 140/90 mmHg. No elevated glu...
+      Tools: ['get_active_medications', 'get_maternal_risk_profile', 'maternal_risk_agent']
+  [+] e2e_edge_expired_insurance: 80% (664663ms)
+      Response:   **Talk** — No active SDOH risk factors identified; patient has employer-sponsored insurance (active per screening, ends 2025-12-31) and English proficiency with no language barriers. No care gaps de...
+      Tools: ['find_sdoh_resources', 'get_care_gaps', 'get_patient_summary', 'get_sdoh_screening', 'sdoh_outreach_agent', 'write_care_plan']
+  [+] e2e_edge_postpartum_late: 96% (223215ms)
+      Response:   **Talk** — The patient presents with routine maternal risk: blood pressure is stable and decreasing, HbA1c is within normal range, and she has a single resolved pregnancy with a live birth approxima...
+      Tools: ['get_maternal_risk_profile', 'maternal_risk_agent']
+  [+] e2e_diverse_grandmother_peds: 100% (356697ms)
+      Response:   **Talk** — Unable to assess immunization gaps for the grandchild because the current session is for the grandmother (Margaret Washington, DOB 1958‑02‑14) and no linked pediatric patient identifier o...
+      Tools: ['get_developmental_screening_status', 'get_immunization_gaps', 'get_patient_summary', 'pediatric_transition_agent']
+  [+] e2e_diverse_grandmother_maternal: 100% (320300ms)
+      Response:  **Talk** — Patient presents with MODERATE maternal risk primarily due to diabetes range HbA1c (6.9-7.0%) indicating suboptimal glycemic control. Blood pressure readings are normal and showing a decre...
+      Tools: ['get_maternal_risk_profile', 'maternal_risk_agent']
+  [+] e2e_diverse_grandmother_sdoh: 85% (332001ms)
+      Response:  **Talk** — SDOH screening shows no active risks for Margaret Washington. She has active Medicare Part A+B coverage, English proficiency, and no care gaps. Chronic conditions (Type 2 diabetes, osteoar...
+      Tools: ['get_care_gaps', 'get_patient_summary', 'get_sdoh_screening', 'sdoh_outreach_agent']
+  [+] e2e_diverse_teen_maternal: 85% (235541ms)
+      Response:   **Talk** — The 16‑year‑old patient presents with routine maternal risk. She has an active normal pregnancy (onset 2026‑01‑20) and her blood pressure and glucose/HbA1c readings are within normal limi...
+      Tools: ['get_maternal_risk_profile', 'maternal_risk_agent']
+  [+] e2e_diverse_teen_sdoh: 89% (378730ms)
+      Response:   **Talk** — Jaylen Carter, a 16‑year‑old pregnant patient, presents with three active SDOH risk factors: social isolation, educational disruption, and no insurance coverage identified. The insurance ...
+      Tools: ['get_care_gaps', 'get_patient_summary', 'get_sdoh_screening', 'sdoh_outreach_agent']
+  [+] e2e_diverse_teen_comprehensive: 84% (1632110ms)
+      Response:   **Talk** — The 16-year-old pregnant patient presents with HIGH risk due to zero immunizations (25 overdue vaccines) and no active insurance coverage, which threatens prenatal care continuity. She al...
+      Tools: ['create_communication_request', 'find_sdoh_resources', 'get_care_gaps', 'get_developmental_screening_status', 'get_immunization_gaps', 'get_maternal_risk_profile', 'get_patient_summary', 'get_sdoh_screening', 'maternal_risk_agent', 'pediatric_transition_agent', 'sdoh_outreach_agent', 'write_care_plan']
+  [+] e2e_diverse_well_controlled_maternal: 96% (327195ms)
+      Response:   **Talk** — Carol presents with ROUTINE maternal risk: blood pressure and glucose readings are well-controlled within normal limits, and she has an active pregnancy (onset December 1 2025). All chron...
+      Tools: ['get_maternal_risk_profile', 'get_patient_summary', 'maternal_risk_agent']
+  [+] e2e_diverse_well_controlled_sdoh: 89% (563404ms)
+      Response:   **Talk** — Carol Nguyen presents with a moderate SDOH risk due to Vietnamese language preference requiring interpreter services. She has active employer-sponsored PPO coverage with no gaps. Her chro...
+      Tools: ['find_sdoh_resources', 'get_care_gaps', 'get_patient_summary', 'get_sdoh_screening', 'sdoh_outreach_agent', 'write_care_plan']
+  [+] e2e_diverse_well_controlled_comprehensive: 94% (2173832ms)
+      Response:   **Talk** — Patient presents with routine maternal risk: BP 124/80 mmHg, HbA1c 5.8% at ~16 weeks gestation, but requires clinician review of Labetalol and Metformin for pregnancy safety. Pediatric as...
+      Tools: ['find_sdoh_resources', 'get_active_medications', 'get_care_gaps', 'get_developmental_screening_status', 'get_immunization_gaps', 'get_maternal_risk_profile', 'get_patient_summary', 'get_sdoh_screening', 'maternal_risk_agent', 'pediatric_transition_agent', 'sdoh_outreach_agent', 'write_care_plan']
+
+========================================================================
+  SUMMARY: 41/47 passed, 2 failed, 4 errors
+
+  Category Scores:
+    e2e                       82.1%  (weight: 40%)
+
+  OVERALL SCORE: 82.1%
+========================================================================
+
