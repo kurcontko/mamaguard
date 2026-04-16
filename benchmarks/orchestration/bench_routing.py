@@ -147,11 +147,18 @@ def bench_safety_fhir_hooks():
     from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
     from mamaguard.shared.fhir_hook import extract_fhir_context
 
+    def _has_hook(cb):
+        if cb is extract_fhir_context:
+            return True
+        if isinstance(cb, list) and extract_fhir_context in cb:
+            return True
+        return False
+
     checks = {
-        "orchestrator_hook": root_agent.before_model_callback == extract_fhir_context,
-        "maternal_hook": maternal_risk_agent.before_model_callback == extract_fhir_context,
-        "pediatric_hook": pediatric_transition_agent.before_model_callback == extract_fhir_context,
-        "sdoh_hook": sdoh_outreach_agent.before_model_callback == extract_fhir_context,
+        "orchestrator_hook": _has_hook(root_agent.before_model_callback),
+        "maternal_hook": _has_hook(maternal_risk_agent.before_model_callback),
+        "pediatric_hook": _has_hook(pediatric_transition_agent.before_model_callback),
+        "sdoh_hook": _has_hook(sdoh_outreach_agent.before_model_callback),
     }
     score = sum(checks.values()) / len(checks)
     return BenchmarkResult(

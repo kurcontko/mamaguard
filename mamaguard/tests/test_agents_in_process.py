@@ -142,7 +142,14 @@ class TestOrchestratorRouting(unittest.TestCase):
         self.assertIs(wrapped_by_name["sdoh_outreach_agent"], sdoh_outreach_agent)
 
     def test_orchestrator_has_fhir_hook(self):
-        self.assertEqual(_callback_name(root_agent), "extract_fhir_context")
+        # The orchestrator chains extract_fhir_context with memory injection
+        # (v3 shift #3). Assert the FHIR hook is present without pinning the
+        # exact list shape.
+        names = _callback_name(root_agent)
+        if isinstance(names, list):
+            self.assertIn("extract_fhir_context", names)
+        else:
+            self.assertEqual(names, "extract_fhir_context")
 
     def test_orchestrator_instruction_names_each_specialist(self):
         instruction = root_agent.instruction or ""

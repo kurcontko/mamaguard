@@ -6,13 +6,14 @@ Sub-agent routing will be wired in Phase 2+.
 """
 
 from google.adk.agents import Agent
-from google.adk.tools.agent_tool import AgentTool
 
 from mamaguard.maternal_agent.agent import maternal_risk_agent
+from mamaguard.orchestrator.subagent_tool import SubagentTool
 from mamaguard.pediatric_agent.agent import pediatric_transition_agent
 from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
 from mamaguard.shared.fhir_hook import extract_fhir_context
 from mamaguard.shared.json_formatter import json_output_callback
+from mamaguard.shared.memory import inject_memory_block, persist_memory_note
 from mamaguard.shared.quality_check import quality_check_callback
 from mamaguard.shared.response_filter import response_format_callback
 from mamaguard.shared.safety_filter import safety_after_model_callback
@@ -25,12 +26,13 @@ from mamaguard.shared.tools import find_linked_newborn
 
 
 def _orchestrator_after_model_callback(callback_context, llm_response):
-    """Chain safety filter, response formatter, quality check, timing, then JSON."""
+    """Chain safety, formatting, quality, timing, JSON, then persist memory."""
     safety_after_model_callback(callback_context, llm_response)
     response_format_callback(callback_context, llm_response)
     quality_check_callback(callback_context, llm_response)
     inject_timing_callback(callback_context, llm_response)
     json_output_callback(callback_context, llm_response)
+    persist_memory_note(callback_context, llm_response)
     return None
 
 ORCHESTRATOR_INSTRUCTION = """\
@@ -188,12 +190,12 @@ root_agent = Agent(
     description="Maternal-pediatric care coordination orchestrator. Routes to maternal, pediatric, and SDOH specialist agents.",
     instruction=ORCHESTRATOR_INSTRUCTION,
     tools=[
-        AgentTool(agent=maternal_risk_agent),
-        AgentTool(agent=pediatric_transition_agent),
-        AgentTool(agent=sdoh_outreach_agent),
+        SubagentTool(agent=maternal_risk_agent),
+        SubagentTool(agent=pediatric_transition_agent),
+        SubagentTool(agent=sdoh_outreach_agent),
         find_linked_newborn,
     ],
-    before_model_callback=extract_fhir_context,
+    before_model_callback=[extract_fhir_context, inject_memory_block],
     after_model_callback=_orchestrator_after_model_callback,
     before_tool_callback=before_tool_timing,
     after_tool_callback=after_tool_timing,
