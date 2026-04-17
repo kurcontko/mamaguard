@@ -99,9 +99,13 @@ Influenza). Row count invariant: table_rows >= len(overdue) + len(due). The
 Template Key Findings section must also list every unique series name that
 appears in `overdue` (comma-separated), not a numeric summary.
 
-For catch-up scenarios where len(overdue) >= 3, the Talk section opens with
-"{len(overdue)} overdue immunizations: {series1}, {series2}, {series3}, ..."
-spelling out at least the first five series names by name before any elision.
+For catch-up scenarios where the tool's `overdue` array has 3 or more entries,
+the Talk section opens with a sentence of this shape (substitute the actual
+count and names — DO NOT emit literal placeholders):
+
+    8 overdue immunizations: MMR, Varicella, HepA, PCV13, DTaP, and 3 more.
+
+Spell out at least the first five series names before any "and N more" elision.
 
 **Adult Patient Handling:**
 - If `get_immunization_gaps` returns `data.applicable: false` (patient is >18 years), \
