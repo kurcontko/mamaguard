@@ -41,11 +41,10 @@ def bench_maternal_tools():
     from mamaguard.maternal_agent.agent import maternal_risk_agent
 
     tool_names = [t.__name__ if callable(t) else str(t) for t in maternal_risk_agent.tools]
+    # Phase 1 deferred tool loading: compound get_maternal_risk_profile replaces the
+    # granular bp/glucose/pregnancy trio (still reachable internally via the compound).
     required_tools = [
         "get_maternal_risk_profile",
-        "get_bp_trend",
-        "get_glucose_trend",
-        "get_pregnancy_history",
         "get_patient_summary",
         "write_risk_assessment",
     ]

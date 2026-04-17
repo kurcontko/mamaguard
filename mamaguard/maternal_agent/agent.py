@@ -11,11 +11,8 @@ from mamaguard.shared.fhir_hook import extract_fhir_context
 from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import (
     get_active_medications,
-    get_bp_trend,
-    get_glucose_trend,
     get_maternal_risk_profile,
     get_patient_summary,
-    get_pregnancy_history,
     plan_risk_assessment,
     write_risk_assessment,
 )
@@ -33,14 +30,13 @@ You are the Maternal Risk Monitor, a specialist agent for maternal health assess
 - **Postpartum** (≤12mo after delivery): resolved pregnancy, recent abatement. Watch for \
 postpartum preeclampsia, HELLP, mood disorders, breastfeeding-medication interactions.
 - **History only**: all pregnancies resolved >12mo. Assess recurrence risk.
-Use get_pregnancy_history first if status is unclear.
+Use `get_maternal_risk_profile` (which includes pregnancy history) if status is unclear.
 
 **Tool Call Efficiency:**
-- **Prefer compound tools over individual tools.** `get_maternal_risk_profile` internally \
-calls `get_bp_trend`, `get_glucose_trend`, AND `get_pregnancy_history`. Do NOT call those \
-individual tools after the compound tool — it duplicates FHIR queries for no new data.
-- Only use an individual tool (e.g. `get_bp_trend` alone) when the user asks about one \
-specific domain and a full risk profile is unnecessary.
+- `get_maternal_risk_profile` is the single compound entry point — it internally \
+queries BP trend, glucose/HbA1c trend, AND pregnancy history in one call. The \
+granular sub-tools are intentionally not exposed at this agent to keep the prompt \
+surface small.
 - `get_patient_summary` includes active medications. Do NOT call both `get_patient_summary` \
 and `get_active_medications` — pick whichever covers your need.
 
@@ -159,10 +155,11 @@ maternal_risk_agent = Agent(
     description="Maternal health risk assessment specialist. Analyzes BP trends, glucose, pregnancy history, and postpartum complications.",
     instruction=MATERNAL_INSTRUCTION,
     tools=[
+        # Phase 1 (deferred tool loading): only the compound profile is exposed
+        # directly. get_bp_trend, get_glucose_trend, and get_pregnancy_history are
+        # reachable transparently through get_maternal_risk_profile, so listing
+        # them at the agent level pollutes the prompt without adding capability.
         get_maternal_risk_profile,
-        get_bp_trend,
-        get_glucose_trend,
-        get_pregnancy_history,
         get_active_medications,
         get_patient_summary,
         plan_risk_assessment,

@@ -178,10 +178,8 @@ class TestSpecialistWiring(unittest.TestCase):
         self.assertEqual(
             sorted(_tool_names(maternal_risk_agent)),
             sorted([
+                # Phase 1 pruning: compound tool replaces bp/glucose/pregnancy granular set
                 "get_maternal_risk_profile",
-                "get_bp_trend",
-                "get_glucose_trend",
-                "get_pregnancy_history",
                 "get_active_medications",
                 "get_patient_summary",
                 "plan_risk_assessment",
