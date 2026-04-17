@@ -104,9 +104,21 @@ def _err_message(result: Any) -> str:
     return str(result)
 
 
-async def _call_tool(tool, ctx: _StateCtx) -> Any:
-    """Run a sync tool in a thread so asyncio.gather actually parallelises."""
-    return await asyncio.to_thread(tool, ctx)
+def _unpack(label: str, result: Any, errors: list[str]) -> Any | None:
+    """Classify a gathered tool result; append to errors or return success value."""
+    if isinstance(result, Exception):
+        errors.append(f"{label}: {result}")
+        return None
+    if _is_error(result):
+        errors.append(f"{label}: {_err_message(result)}")
+        return None
+    return result
+
+
+def _derive_status(errors: list[str], *critical_values: Any) -> str:
+    if not errors:
+        return "ok"
+    return "error" if not any(critical_values) else "partial"
 
 
 # -- Maternal fetcher --------------------------------------------------------
@@ -118,39 +130,17 @@ async def fetch_maternal_data(
     ctx = _StateCtx(fhir_url, fhir_token, patient_id)
 
     summary, risk, meds = await asyncio.gather(
-        _call_tool(get_patient_summary, ctx),
-        _call_tool(get_maternal_risk_profile, ctx),
-        _call_tool(get_active_medications, ctx),
+        asyncio.to_thread(get_patient_summary, ctx),
+        asyncio.to_thread(get_maternal_risk_profile, ctx),
+        asyncio.to_thread(get_active_medications, ctx),
         return_exceptions=True,
     )
 
     data = MaternalData()
-
-    if isinstance(summary, Exception):
-        data.errors.append(f"patient_summary: {summary}")
-    elif _is_error(summary):
-        data.errors.append(f"patient_summary: {_err_message(summary)}")
-    else:
-        data.patient_summary = summary
-
-    if isinstance(risk, Exception):
-        data.errors.append(f"risk_profile: {risk}")
-    elif _is_error(risk):
-        data.errors.append(f"risk_profile: {_err_message(risk)}")
-    else:
-        data.risk_profile = risk
-
-    if isinstance(meds, Exception):
-        data.errors.append(f"medications: {meds}")
-    elif _is_error(meds):
-        data.errors.append(f"medications: {_err_message(meds)}")
-    else:
-        data.medications = meds
-
-    if data.errors and not (data.patient_summary or data.risk_profile):
-        data.status = "error"
-    elif data.errors:
-        data.status = "partial"
+    data.patient_summary = _unpack("patient_summary", summary, data.errors) or {}
+    data.risk_profile = _unpack("risk_profile", risk, data.errors) or {}
+    data.medications = _unpack("medications", meds, data.errors) or {}
+    data.status = _derive_status(data.errors, data.patient_summary, data.risk_profile)
 
     logger.info(
         "fetch_maternal_data patient=%s status=%s errors=%d",
@@ -218,39 +208,17 @@ async def fetch_pediatric_data(
     child_ctx = _StateCtx(fhir_url, fhir_token, child_id)
 
     imm, dev, gaps = await asyncio.gather(
-        _call_tool(get_immunization_gaps, child_ctx),
-        _call_tool(get_developmental_screening_status, child_ctx),
-        _call_tool(get_care_gaps, child_ctx),
+        asyncio.to_thread(get_immunization_gaps, child_ctx),
+        asyncio.to_thread(get_developmental_screening_status, child_ctx),
+        asyncio.to_thread(get_care_gaps, child_ctx),
         return_exceptions=True,
     )
 
     data = PediatricData(linked_child=child)
-
-    if isinstance(imm, Exception):
-        data.errors.append(f"immunizations: {imm}")
-    elif _is_error(imm):
-        data.errors.append(f"immunizations: {_err_message(imm)}")
-    else:
-        data.immunizations = imm
-
-    if isinstance(dev, Exception):
-        data.errors.append(f"development: {dev}")
-    elif _is_error(dev):
-        data.errors.append(f"development: {_err_message(dev)}")
-    else:
-        data.development = dev
-
-    if isinstance(gaps, Exception):
-        data.errors.append(f"care_gaps: {gaps}")
-    elif _is_error(gaps):
-        data.errors.append(f"care_gaps: {_err_message(gaps)}")
-    else:
-        data.care_gaps = gaps
-
-    if data.errors and not (data.immunizations or data.development):
-        data.status = "error"
-    elif data.errors:
-        data.status = "partial"
+    data.immunizations = _unpack("immunizations", imm, data.errors) or {}
+    data.development = _unpack("development", dev, data.errors) or {}
+    data.care_gaps = _unpack("care_gaps", gaps, data.errors) or {}
+    data.status = _derive_status(data.errors, data.immunizations, data.development)
 
     logger.info(
         "fetch_pediatric_data mother=%s child=%s status=%s errors=%d",
@@ -275,26 +243,14 @@ async def fetch_sdoh_data(
     ctx = _StateCtx(fhir_url, fhir_token, patient_id)
 
     screening, gaps = await asyncio.gather(
-        _call_tool(get_sdoh_screening, ctx),
-        _call_tool(get_care_gaps, ctx),
+        asyncio.to_thread(get_sdoh_screening, ctx),
+        asyncio.to_thread(get_care_gaps, ctx),
         return_exceptions=True,
     )
 
     data = SdohData()
-
-    if isinstance(screening, Exception):
-        data.errors.append(f"screening: {screening}")
-    elif _is_error(screening):
-        data.errors.append(f"screening: {_err_message(screening)}")
-    else:
-        data.screening = screening
-
-    if isinstance(gaps, Exception):
-        data.errors.append(f"care_gaps: {gaps}")
-    elif _is_error(gaps):
-        data.errors.append(f"care_gaps: {_err_message(gaps)}")
-    else:
-        data.care_gaps = gaps
+    data.screening = _unpack("screening", screening, data.errors) or {}
+    data.care_gaps = _unpack("care_gaps", gaps, data.errors) or {}
 
     # Derive resource lookup categories from screening findings.  The
     # screening tool doesn't emit a categories list, so we infer from its
@@ -314,29 +270,17 @@ async def fetch_sdoh_data(
         ]
         results = await asyncio.gather(*lookups, return_exceptions=True)
         for cat, res in zip(categories, results):
-            if isinstance(res, Exception):
-                data.errors.append(f"resources[{cat}]: {res}")
-                continue
-            if _is_error(res):
-                data.errors.append(f"resources[{cat}]: {_err_message(res)}")
-                continue
-            data.resources.append({"category": cat, "result": res})
+            value = _unpack(f"resources[{cat}]", res, data.errors)
+            if value is not None:
+                data.resources.append({"category": cat, "result": value})
 
-    if data.errors and not data.screening:
-        data.status = "error"
-    elif data.errors:
-        data.status = "partial"
+    data.status = _derive_status(data.errors, data.screening)
 
     logger.info(
         "fetch_sdoh_data patient=%s status=%s categories=%d errors=%d",
         patient_id, data.status, len(data.resources), len(data.errors),
     )
     return data
-
-
-async def _call_tool_with_args(tool, ctx: _StateCtx, **kwargs) -> Any:
-    """Run a sync tool that takes keyword args alongside the tool context."""
-    return await asyncio.to_thread(tool, tool_context=ctx, **kwargs)
 
 
 # -- SDOH category inference -------------------------------------------------
