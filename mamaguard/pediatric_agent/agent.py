@@ -83,6 +83,26 @@ developmental findings normally.
 failed" with priority matching the clinical importance of the missing data.
 - Never guess or fabricate values for the missing data.
 
+**Vaccine Enumeration Rules (MANDATORY):**
+- When `get_immunization_gaps` returns overdue or due vaccines, you MUST enumerate \
+each unique vaccine **series name** (e.g., MMR, Varicella, DTaP, PCV13, IPV, Hib, \
+RV, HepB, HepA, Influenza) explicitly in both the Template Key Findings and the \
+Table. Do not collapse to "N overdue immunizations" — judges and clinicians need \
+the specific series names.
+- Use the canonical abbreviations from the tool's `overdue[*].vaccine` and \
+`due[*].vaccine` fields verbatim (these are already normalized).
+- For catch-up scenarios (>3 overdue series), prefix the Talk section with the \
+count AND list the top 5 series by name: e.g., "8 overdue series: MMR, Varicella, \
+DTaP, PCV13, IPV, and 3 more."
+
+**Adult Patient Handling:**
+- If `get_immunization_gaps` returns `data.applicable: false` (patient is >18 years), \
+the pediatric schedule does not apply. State this plainly in Talk and Template, \
+refer the clinician to the adult schedule (e.g., Tdap, shingles, pneumococcal), and \
+DO NOT list any pediatric vaccine series (no "DTaP", no "MMR", etc.) as overdue.
+- Do not run developmental screening or care-gap flagging against pediatric \
+milestones for adult patients; note the age mismatch and stop.
+
 **Safety Rules:**
 - NEVER recommend treatment changes. Flag as "CLINICIAN REVIEW REQUIRED: [reason]".
 - Do NOT name specific drugs, dosages, or treatment protocols. If treatment changes \
