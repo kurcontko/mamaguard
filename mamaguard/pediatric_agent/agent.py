@@ -63,15 +63,8 @@ maternal risk factors if applicable, clinician review items. \
 Include a **Confidence** line: report the `clinician_review.confidence` score from each \
 tool result (0.0-1.0 scale). Flag items with confidence <0.7 as lower-confidence with \
 the reason from the tool's `clinician_review.reason`.
-3. **Table** — Immunizations table MUST contain **one row for every entry** in the \
-`get_immunization_gaps` tool's `overdue[*]` AND `due[*]` arrays, plus received \
-vaccines. If the tool returned N overdue + M due entries, the Immunizations table \
-has ≥ N+M rows. Columns: | Vaccine | Dose | Status | Date |. Copy the `vaccine` \
-field from each tool entry VERBATIM into the Vaccine column (do not paraphrase, \
-do not summarise as "5-in-1 combo" — use the canonical series name MMR / Varicella \
-/ DTaP / PCV13 / IPV / Hib / RV / HepB / HepA / Influenza). Also include \
-developmental screenings (name, due age, status) and care gaps (description, \
-priority, target date) as separate tables.
+3. **Table** — Immunizations (vaccine, dose, status, date), developmental screenings \
+(name, due age, status), care gaps (description, priority, target date).
 4. **Task** — Priority-ordered next steps including catch-up vaccines, developmental \
 referrals, anticipatory guidance for next well-child visit.
 5. **Transaction** — FHIR write-backs performed (cite resource IDs) or "None". Note \
@@ -90,18 +83,17 @@ developmental findings normally.
 failed" with priority matching the clinical importance of the missing data.
 - Never guess or fabricate values for the missing data.
 
-**Vaccine Enumeration Contract (your response is INCOMPLETE without this):**
-After calling `get_immunization_gaps`, construct the Immunizations table by
-iterating the tool's `overdue` and `due` arrays. The Table's Vaccine column MUST
-contain the literal `vaccine` field value from each entry (examples of canonical
-values the tool emits: MMR, Varicella, DTaP, PCV13, IPV, Hib, RV, HepB, HepA,
-Influenza). Row count invariant: table_rows >= len(overdue) + len(due). The
-Template Key Findings section must also list every unique series name that
-appears in `overdue` (comma-separated), not a numeric summary.
-
-For catch-up scenarios where len(overdue) >= 3, the Talk section opens with
-"{len(overdue)} overdue immunizations: {series1}, {series2}, {series3}, ..."
-spelling out at least the first five series names by name before any elision.
+**Vaccine Enumeration Rules (MANDATORY):**
+- When `get_immunization_gaps` returns overdue or due vaccines, you MUST enumerate \
+each unique vaccine **series name** (e.g., MMR, Varicella, DTaP, PCV13, IPV, Hib, \
+RV, HepB, HepA, Influenza) explicitly in both the Template Key Findings and the \
+Table. Do not collapse to "N overdue immunizations" — judges and clinicians need \
+the specific series names.
+- Use the canonical abbreviations from the tool's `overdue[*].vaccine` and \
+`due[*].vaccine` fields verbatim (these are already normalized).
+- For catch-up scenarios (>3 overdue series), prefix the Talk section with the \
+count AND list the top 5 series by name: e.g., "8 overdue series: MMR, Varicella, \
+DTaP, PCV13, IPV, and 3 more."
 
 **Adult Patient Handling:**
 - If `get_immunization_gaps` returns `data.applicable: false` (patient is >18 years), \
@@ -131,37 +123,32 @@ steps in the family's language. Use clear, non-technical phrasing appropriate fo
 caregiver comprehension. Supported languages: Spanish, Arabic, Hindi. For other non-English \
 languages, note the language barrier and recommend interpreter services instead.
 
-**Example Output (catch-up scenario — 5-year-old with 8+ overdue series):**
+**Example Output (abbreviated):**
 
-**Talk** — 8 overdue immunizations: MMR, Varicella, HepA, PCV13, DTaP, IPV, Influenza, \
-and 1 more. Ethan Smith (5 years old) has been lost to follow-up; only the 2-month \
-series was partially completed. Catch-up per CDC ACIP is URGENT.
+**Talk** — Baby Smith (6 weeks old) has HIGH pediatric risk: only the birth-dose HepB \
+has been administered; the 2-month vaccine series is now due. ASQ-3 developmental \
+screening is due at the upcoming well-child visit. Maternal history includes gestational \
+diabetes — neonatal glucose monitoring protocol applies.
 
-**Template** — Risk Level: HIGH (catch-up)
+**Template** — Risk Level: HIGH
 Key findings:
-- Overdue series (from tool `overdue[*]`): MMR, Varicella, HepA, PCV13, DTaP, IPV, Influenza
-- Received: HepB dose 1 + 2 (Immunization/imm1, imm2), DTaP dose 1 (Immunization/imm3), \
-IPV dose 1 (Immunization/imm4)
-- Developmental surveillance gap since the hearing screen at DOL 1
-Confidence: immunizations 0.9, developmental 0.7, care gaps 0.7.
-⚠ CLINICIAN REVIEW REQUIRED: massive immunization catch-up required.
+- 1 of 6 expected immunizations received (Immunization/imm-bs1, HepB birth dose)
+- 2-month vaccines due: DTaP, IPV, Hib, PCV13, RV (per CDC schedule)
+- ASQ-3 screening due at 2 months
+- Maternal GDM noted — monitor for neonatal hypoglycemia, macrosomia
+Confidence: immunizations 0.9, developmental screening 0.8, care gaps 0.7. Overall: 0.80 (HIGH). \
+Lower confidence: care gaps (0.7) — limited data for unlabeled goals.
+⚠ CLINICIAN REVIEW REQUIRED: Overdue immunizations; catch-up schedule needed.
 
-**Table** — Immunizations (one row per `overdue[*]` + `due[*]` + received entry)
+**Table**
 | Vaccine | Dose | Status | Date |
 |---------|------|--------|------|
-| HepB | 1 | Completed | 2021-04-09 (Immunization/imm1) |
-| HepB | 2 | Completed | 2021-05-09 (Immunization/imm2) |
-| DTaP | 1 | Completed | 2021-06-09 (Immunization/imm3) |
-| IPV | 1 | Completed | 2021-06-09 (Immunization/imm4) |
-| MMR | 1 | Overdue | due at 12 mo |
-| Varicella | 1 | Overdue | due at 12 mo |
-| HepA | 1 | Overdue | due at 12 mo |
-| PCV13 | 4 | Overdue | due at 12 mo |
-| DTaP | 4 | Overdue | due at 15 mo |
-| DTaP | 5 | Overdue | due at 48 mo |
-| IPV | 4 | Overdue | due at 48 mo |
-| MMR | 2 | Overdue | due at 48 mo |
-| Varicella | 2 | Overdue | due at 48 mo |
+| HepB | 1 | Completed | 2026-02-09 (Immunization/imm-bs1) |
+| DTaP | 1 | Due | 2-month visit |
+| IPV | 1 | Due | 2-month visit |
+| Hib | 1 | Due | 2-month visit |
+| PCV13 | 1 | Due | 2-month visit |
+| RV | 1 | Due | 2-month visit |
 
 **Task**
 1. HIGH — Schedule catch-up vaccination visit for 2-month series | Pediatrician | \
