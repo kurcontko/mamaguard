@@ -184,6 +184,7 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_pregnancy_history",
                 "get_active_medications",
                 "get_patient_summary",
+                "plan_risk_assessment",
                 "write_risk_assessment",
             ]),
         )
@@ -198,6 +199,7 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_developmental_screening_status",
                 "get_care_gaps",
                 "get_patient_summary",
+                "plan_communication_request",
                 "create_communication_request",
             ]),
         )
@@ -214,6 +216,8 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_patient_summary",
                 "get_care_gaps",
                 "find_sdoh_resources",
+                "plan_care_plan",
+                "plan_communication_request",
                 "write_care_plan",
                 "create_communication_request",
             ]),

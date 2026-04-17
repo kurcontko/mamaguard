@@ -17,6 +17,8 @@ from mamaguard.shared.tools import (
     get_care_gaps,
     get_patient_summary,
     get_sdoh_screening,
+    plan_care_plan,
+    plan_communication_request,
     write_care_plan,
 )
 
@@ -168,6 +170,8 @@ sdoh_outreach_agent = Agent(
         get_patient_summary,
         get_care_gaps,
         find_sdoh_resources,
+        plan_care_plan,
+        plan_communication_request,
         write_care_plan,
         create_communication_request,
     ],

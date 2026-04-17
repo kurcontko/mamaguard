@@ -62,6 +62,14 @@ from .writeback import (
     write_risk_assessment as _write_risk_assessment,
 )
 
+from .plan_mode import (
+    commit_pending_write as _commit_pending_write,
+    list_pending_writes as _list_pending_writes,
+    plan_care_plan as _plan_care_plan,
+    plan_communication_request as _plan_communication_request,
+    plan_risk_assessment as _plan_risk_assessment,
+)
+
 # Wrap every tool with the AuditEvent decorator.  When the feature flag
 # is off (default), the wrapper is a no-op passthrough.
 get_patient_summary = audited(_get_patient_summary)
@@ -79,6 +87,11 @@ find_sdoh_resources = audited(_find_sdoh_resources)
 write_risk_assessment = audited(_write_risk_assessment)
 create_communication_request = audited(_create_communication_request)
 write_care_plan = audited(_write_care_plan)
+plan_risk_assessment = audited(_plan_risk_assessment)
+plan_communication_request = audited(_plan_communication_request)
+plan_care_plan = audited(_plan_care_plan)
+commit_pending_write = audited(_commit_pending_write)
+list_pending_writes = audited(_list_pending_writes)
 
 __all__ = [
     "get_patient_summary",
@@ -96,4 +109,9 @@ __all__ = [
     "write_risk_assessment",
     "create_communication_request",
     "write_care_plan",
+    "plan_risk_assessment",
+    "plan_communication_request",
+    "plan_care_plan",
+    "commit_pending_write",
+    "list_pending_writes",
 ]

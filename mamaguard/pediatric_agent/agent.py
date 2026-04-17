@@ -15,6 +15,7 @@ from mamaguard.shared.tools import (
     get_developmental_screening_status,
     get_immunization_gaps,
     get_patient_summary,
+    plan_communication_request,
 )
 
 PEDIATRIC_INSTRUCTION = """\
@@ -174,6 +175,7 @@ pediatric_transition_agent = Agent(
         get_developmental_screening_status,
         get_care_gaps,
         get_patient_summary,
+        plan_communication_request,
         create_communication_request,
     ],
     before_model_callback=extract_fhir_context,
