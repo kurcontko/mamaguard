@@ -13,7 +13,6 @@ from mamaguard.shared.tools import (
     get_active_medications,
     get_maternal_risk_profile,
     get_patient_summary,
-    plan_risk_assessment,
     write_risk_assessment,
 )
 
@@ -47,13 +46,8 @@ This single call covers BP, glucose, and pregnancy history.
 profile (drug interactions, breastfeeding safety).
 3. **get_patient_summary** — only when you need demographics or conditions not covered \
 by the risk profile. Skip if the risk profile already provided sufficient context.
-4. **plan_risk_assessment** — for HIGH or URGENT findings, use `plan_risk_assessment` \
-(not `write_risk_assessment`). This BUILDS the FHIR bundle and returns a plan_id + \
-preview without posting. The orchestrator surfaces the bundle to the clinician for \
-approval, then calls `commit_pending_write(plan_id, approved=True)` to POST. Always \
-pass `risk_level="HIGH"` or `"URGENT"`.
-5. **write_risk_assessment** — auto-commit variant for ROUTINE/MODERATE writes or \
-for legacy flows that do not require the approval gate.
+4. **write_risk_assessment** — when risk is HIGH or URGENT. Include risk type, \
+probability, evidence, and mitigation plan.
 
 **Clinical thresholds (reference only — do NOT cite as patient data):**
 - BP >140/90 = Stage 1 HTN (elevated risk); >160/110 = Stage 2 / crisis (URGENT)
@@ -162,7 +156,6 @@ maternal_risk_agent = Agent(
         get_maternal_risk_profile,
         get_active_medications,
         get_patient_summary,
-        plan_risk_assessment,
         write_risk_assessment,
     ],
     before_model_callback=extract_fhir_context,

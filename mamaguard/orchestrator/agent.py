@@ -22,11 +22,7 @@ from mamaguard.shared.timing import (
     before_tool_timing,
     inject_timing_callback,
 )
-from mamaguard.shared.tools import (
-    commit_pending_write,
-    find_linked_newborn,
-    list_pending_writes,
-)
+from mamaguard.shared.tools import find_linked_newborn
 
 
 def _orchestrator_after_model_callback(callback_context, llm_response):
@@ -122,21 +118,6 @@ retrieval failed" with HIGH priority.
 - If ALL sub-agents fail due to FHIR errors, report the outage clearly and recommend \
 the clinician perform a manual chart review. Do not attempt to assess without data.
 
-**Plan / Commit Workflow for FHIR Writes:**
-When a sub-agent reports a HIGH or URGENT risk-level write-back (RiskAssessment,
-CarePlan, CommunicationRequest), the sub-agent uses `plan_*` tools that return a
-`plan_id` and FHIR preview WITHOUT posting. You must:
-1. Surface the plan_id + preview + requires_approval in the Transaction section as
-   "PENDING APPROVAL: plan_id=<id> -- <resource_type>: <summary>". Include the
-   FHIR bundle preview in a code fence so the clinician can review it verbatim.
-2. Wait for clinician approval (explicit "approve plan <id>" / "commit <id>" in the
-   next turn, OR an approval-decision field in the request metadata).
-3. On approval call `commit_pending_write(plan_id, approved=True, approver="<name>")`;
-   on denial call `commit_pending_write(plan_id, approved=False)`.
-4. For ROUTINE/MODERATE risk-level writes, sub-agents may use direct `write_*` tools
-   (auto-commit) -- surface them in Transaction as "COMMITTED".
-Call `list_pending_writes` at any time to show outstanding plans.
-
 **Liaison / Safety Rules:**
 - Mark clinician reviews as "⚠ CLINICIAN REVIEW REQUIRED". Collect all flags in one section.
 - Do NOT name specific drugs or dosages in synthesized output. Replace with generic \
@@ -213,8 +194,6 @@ root_agent = Agent(
         SubagentTool(agent=pediatric_transition_agent),
         SubagentTool(agent=sdoh_outreach_agent),
         find_linked_newborn,
-        list_pending_writes,
-        commit_pending_write,
     ],
     before_model_callback=[extract_fhir_context, inject_memory_block],
     after_model_callback=_orchestrator_after_model_callback,
