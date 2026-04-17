@@ -162,8 +162,9 @@ class _FakeState(dict):
 
 
 class _FakeCallbackContext:
-    def __init__(self, state):
+    def __init__(self, state, invocation_id=""):
         self.state = state
+        self.invocation_id = invocation_id
 
 
 class TestInjectAndPersistCallbacks(unittest.TestCase):
@@ -182,6 +183,8 @@ class TestInjectAndPersistCallbacks(unittest.TestCase):
         memory.inject_memory_block(ctx, req)
         self.assertIn("<patient-memory>", req.config.system_instruction)
         self.assertIn("BP rising", req.config.system_instruction)
+        # Dedupe key encodes both invocation + patient; test context has no
+        # invocation_id so the fallback is just the patient id.
         self.assertEqual(state["_memory_injected_for"], "p1")
 
     @patch("mamaguard.shared.memory.fetch_agent_memory")
@@ -243,6 +246,70 @@ class TestInjectAndPersistCallbacks(unittest.TestCase):
         })
         memory.persist_memory_note(_FakeCallbackContext(state), response)
         mock_write.assert_not_called()
+
+
+class TestMultiTurnLifecycle(unittest.TestCase):
+    """
+    Guard against regressions where memory stops working after the first
+    turn of a session — the original bug was that the dedupe flag was
+    keyed on patient_id alone, which is stable across turns.
+    """
+
+    @patch("mamaguard.shared.memory.fetch_agent_memory")
+    def test_inject_refetches_each_turn(self, mock_fetch):
+        mock_fetch.return_value = [memory.MemoryNote(
+            date="2026-04-01", memory_type="trajectory", content="x",
+        )]
+        state = _FakeState({
+            "fhir_url": "https://f", "fhir_token": "t", "patient_id": "p1",
+        })
+
+        # Turn 1 — fresh invocation_id, fetch is called.
+        memory.inject_memory_block(
+            _FakeCallbackContext(state, invocation_id="inv-1"),
+            _FakeLlmRequest(system_instruction="s"),
+        )
+        # Second LLM hop inside turn 1 — same invocation_id, no refetch.
+        memory.inject_memory_block(
+            _FakeCallbackContext(state, invocation_id="inv-1"),
+            _FakeLlmRequest(system_instruction="s"),
+        )
+        # Turn 2 — new invocation_id, must refetch so end-of-turn-1 notes
+        # are visible to the LLM at start of turn 2.
+        memory.inject_memory_block(
+            _FakeCallbackContext(state, invocation_id="inv-2"),
+            _FakeLlmRequest(system_instruction="s"),
+        )
+        self.assertEqual(mock_fetch.call_count, 2)
+
+    @patch("mamaguard.shared.memory.write_agent_memory")
+    def test_persist_writes_every_turn(self, mock_write):
+        mock_write.return_value = {"status": "success", "resource_id": "r",
+                                    "memory_type": "trajectory"}
+
+        def _terminal_response():
+            part = MagicMock(function_call=None, thought=False,
+                            text="**Talk** — t.\n\n**Template** — Risk: URGENT\n")
+            content = MagicMock(parts=[part])
+            return MagicMock(content=content)
+
+        state = _FakeState({
+            "fhir_url": "https://f", "fhir_token": "t", "patient_id": "p1",
+        })
+
+        memory.persist_memory_note(
+            _FakeCallbackContext(state, invocation_id="inv-1"),
+            _terminal_response(),
+        )
+        memory.persist_memory_note(
+            _FakeCallbackContext(state, invocation_id="inv-1"),
+            _terminal_response(),
+        )
+        memory.persist_memory_note(
+            _FakeCallbackContext(state, invocation_id="inv-2"),
+            _terminal_response(),
+        )
+        self.assertEqual(mock_write.call_count, 2)
 
 
 if __name__ == "__main__":

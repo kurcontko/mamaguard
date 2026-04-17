@@ -307,13 +307,17 @@ def inject_memory_block(callback_context, llm_request) -> None:
     if not (fhir_url and fhir_token and patient_id):
         return None
 
-    # Fetch once per invocation: before_model_callback fires on every LLM hop
-    # but the memory is stable within a turn.
-    if state.get("_memory_injected_for") == patient_id:
+    # Fetch once per turn, not once per session: before_model_callback fires
+    # on every LLM hop within a turn, so we still dedupe — but a new turn
+    # brings a fresh invocation_id and must re-fetch so memory written at
+    # the end of turn N-1 is visible at the start of turn N.
+    invocation_id = _invocation_id(callback_context)
+    inject_key = f"{invocation_id}|{patient_id}" if invocation_id else patient_id
+    if state.get("_memory_injected_for") == inject_key:
         return None
 
     notes = fetch_agent_memory(fhir_url, fhir_token, patient_id)
-    state["_memory_injected_for"] = patient_id
+    state["_memory_injected_for"] = inject_key
     state["_memory_note_count"] = len(notes)
 
     if not notes:
@@ -380,7 +384,13 @@ def persist_memory_note(callback_context, llm_response) -> None:
     if not (fhir_url and fhir_token and patient_id):
         return None
 
-    if state.get("_memory_persisted"):
+    # Dedupe per-turn, not per-session. after_model_callback can fire more
+    # than once within a single turn (e.g. multiple terminal synthesis hops);
+    # we still want one write per turn, but the next turn must be allowed to
+    # write its own note.
+    invocation_id = _invocation_id(callback_context)
+    persist_key = f"{invocation_id}|{patient_id}" if invocation_id else patient_id
+    if state.get("_memory_persisted_for") == persist_key:
         return None
 
     text = _response_text(llm_response)
@@ -388,7 +398,7 @@ def persist_memory_note(callback_context, llm_response) -> None:
     if not note:
         return None
 
-    state["_memory_persisted"] = True
+    state["_memory_persisted_for"] = persist_key
     result = write_agent_memory(
         fhir_url, fhir_token, patient_id,
         content_markdown=note,
@@ -396,6 +406,24 @@ def persist_memory_note(callback_context, llm_response) -> None:
     )
     state["_memory_write_status"] = result.get("status")
     return None
+
+
+def _invocation_id(callback_context: Any) -> str:
+    """
+    Best-effort read of the current ADK invocation_id.
+
+    ADK's callback_context exposes `invocation_id` (stable for the duration
+    of one user turn, distinct across turns). The test fakes don't, so we
+    fall back to an empty string and the caller degrades to per-patient
+    dedupe — still correct for single-turn tests.
+    """
+    invocation_id = getattr(callback_context, "invocation_id", "")
+    if invocation_id:
+        return invocation_id
+    inner = getattr(callback_context, "_invocation_context", None)
+    if inner is not None:
+        return getattr(inner, "invocation_id", "") or ""
+    return ""
 
 
 def _has_pending_tool_calls(llm_response: Any) -> bool:

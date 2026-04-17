@@ -6,9 +6,9 @@ Sub-agent routing will be wired in Phase 2+.
 """
 
 from google.adk.agents import Agent
+from google.adk.tools.agent_tool import AgentTool
 
 from mamaguard.maternal_agent.agent import maternal_risk_agent
-from mamaguard.orchestrator.subagent_tool import SubagentTool
 from mamaguard.pediatric_agent.agent import pediatric_transition_agent
 from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
 from mamaguard.shared.fhir_hook import extract_fhir_context
@@ -26,13 +26,21 @@ from mamaguard.shared.tools import find_linked_newborn
 
 
 def _orchestrator_after_model_callback(callback_context, llm_response):
-    """Chain safety, formatting, quality, timing, JSON, then persist memory."""
+    """
+    Chain safety, formatting, quality, timing, persist memory, then JSON.
+
+    Ordering note: persist_memory_note MUST run before the JSON formatter.
+    The memory extractor keys on the literal `**Template**` marker from the
+    5T markdown; the JSON formatter rewrites the text parts into a JSON
+    blob, which erases those markers and would silently disable memory
+    writes whenever the caller requested output_format=json.
+    """
     safety_after_model_callback(callback_context, llm_response)
     response_format_callback(callback_context, llm_response)
     quality_check_callback(callback_context, llm_response)
     inject_timing_callback(callback_context, llm_response)
-    json_output_callback(callback_context, llm_response)
     persist_memory_note(callback_context, llm_response)
+    json_output_callback(callback_context, llm_response)
     return None
 
 ORCHESTRATOR_INSTRUCTION = """\
@@ -48,8 +56,10 @@ to specialist sub-agents and synthesize their responses.
 - Maternal health → maternal_risk_agent
 - Child/pediatric → pediatric_transition_agent
 - Insurance/social needs → sdoh_outreach_agent
-- "Comprehensive assessment" or "full review" → ALL THREE sequentially \
-(maternal → pediatric → SDOH), then synthesize per merge rules below.
+- "Comprehensive assessment" or "full review" → emit ALL THREE sub-agent \
+tool calls in the **same turn** (parallel dispatch). The runtime awaits them \
+concurrently; you will receive all three results together in the next turn, \
+then synthesize per merge rules below. Do NOT serialize one call per turn.
 - If a sub-agent errors or the domain doesn't apply (e.g., pediatric for an adult \
 with no children), skip it and note why in Talk. Continue with remaining agents.
 - If ALL sub-agents fail, report errors and recommend direct clinician review.
@@ -190,9 +200,9 @@ root_agent = Agent(
     description="Maternal-pediatric care coordination orchestrator. Routes to maternal, pediatric, and SDOH specialist agents.",
     instruction=ORCHESTRATOR_INSTRUCTION,
     tools=[
-        SubagentTool(agent=maternal_risk_agent),
-        SubagentTool(agent=pediatric_transition_agent),
-        SubagentTool(agent=sdoh_outreach_agent),
+        AgentTool(agent=maternal_risk_agent),
+        AgentTool(agent=pediatric_transition_agent),
+        AgentTool(agent=sdoh_outreach_agent),
         find_linked_newborn,
     ],
     before_model_callback=[extract_fhir_context, inject_memory_block],

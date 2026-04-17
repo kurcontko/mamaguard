@@ -341,6 +341,41 @@ class TestOrchestratorJsonWiring(unittest.TestCase):
         # Instruction produces markdown; callback converts it.
         self.assertIn("5T", ORCHESTRATOR_INSTRUCTION)
 
+    def test_comprehensive_prompt_requests_parallel_dispatch(self):
+        """
+        Regression: the design promises parallel sub-agent dispatch for
+        comprehensive assessments. ADK runs concurrent function calls in
+        the same turn in parallel, so the prompt must tell the model to
+        emit all three calls in one turn — the old wording said
+        "sequentially" which forfeited the speedup.
+        """
+        from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
+        lowered = ORCHESTRATOR_INSTRUCTION.lower()
+        self.assertIn("parallel dispatch", lowered)
+        self.assertIn("same turn", lowered)
+        # Old wording must be gone.
+        self.assertNotIn("all three sequentially", lowered)
+
+    def test_persist_memory_runs_before_json_formatter(self):
+        """
+        Regression: json_output_callback rewrites the response text into a
+        JSON blob, erasing the `**Template**` marker that
+        persist_memory_note keys on. persist must run first.
+        """
+        from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
+        import inspect
+
+        source = inspect.getsource(_orchestrator_after_model_callback)
+        persist_pos = source.find("persist_memory_note(")
+        json_pos = source.find("json_output_callback(")
+        self.assertGreaterEqual(persist_pos, 0)
+        self.assertGreaterEqual(json_pos, 0)
+        self.assertLess(
+            persist_pos, json_pos,
+            "persist_memory_note must run before json_output_callback — "
+            "JSON formatting strips the 5T markdown markers.",
+        )
+
 
 # ===========================================================================
 # 7. Confidence extraction
