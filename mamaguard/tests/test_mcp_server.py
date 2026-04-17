@@ -91,6 +91,10 @@ EXPECTED_TOOLS = {
     "write_risk_assessment",
     "create_communication_request",
     "write_care_plan",
+    # Compound fetchers (ported from v2, for marketplace one-shot consumption)
+    "assess_maternal_risk",
+    "assess_pediatric_status",
+    "screen_sdoh",
 }
 
 
@@ -101,7 +105,7 @@ class TestMcpToolRegistration(unittest.TestCase):
         tool_manager = mcp._tool_manager
         return {name for name in tool_manager._tools}
 
-    def test_all_15_tools_registered(self):
+    def test_all_tools_registered(self):
         registered = self._registered_names()
         missing = EXPECTED_TOOLS - registered
         self.assertEqual(missing, set(), f"Missing tools: {missing}")
@@ -110,6 +114,62 @@ class TestMcpToolRegistration(unittest.TestCase):
         registered = self._registered_names()
         extra = registered - EXPECTED_TOOLS
         self.assertEqual(extra, set(), f"Unexpected extra tools: {extra}")
+
+
+class TestCompoundMcpTools(unittest.TestCase):
+    """Compound MCP tools wrap parallel fetchers for marketplace one-shot use."""
+
+    def test_assess_maternal_risk_returns_structured_json(self):
+        from mamaguard.mcp_server import server as srv
+
+        async def fake_fetch(*args, **kwargs):
+            return srv._fetch_maternal_data.__wrapped__ if False else None  # unused
+
+        from mamaguard.shared.fetchers import MaternalData
+        with patch.object(srv, "_fetch_maternal_data") as mock_fetch:
+            async def _ret(*a, **k):
+                return MaternalData(
+                    patient_summary={"status": "success", "name": "Maria"},
+                    risk_profile={"status": "success", "data": {"risk_level": "URGENT"}},
+                    medications={"status": "success"},
+                    status="ok",
+                )
+            mock_fetch.side_effect = _ret
+            result = srv.assess_maternal_risk("https://fhir", "tok", "p1")
+        data = json.loads(result)
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["patient_summary"]["name"], "Maria")
+        self.assertEqual(data["risk_profile"]["data"]["risk_level"], "URGENT")
+
+    def test_assess_pediatric_status_no_linked_child(self):
+        from mamaguard.mcp_server import server as srv
+        from mamaguard.shared.fetchers import PediatricData
+
+        with patch.object(srv, "_fetch_pediatric_data") as mock_fetch:
+            async def _ret(*a, **k):
+                return PediatricData(linked_child=None, status="no_linked_child")
+            mock_fetch.side_effect = _ret
+            result = srv.assess_pediatric_status("https://fhir", "tok", "p1")
+        data = json.loads(result)
+        self.assertEqual(data["status"], "no_linked_child")
+        self.assertIsNone(data["linked_child"])
+
+    def test_screen_sdoh_returns_resources(self):
+        from mamaguard.mcp_server import server as srv
+        from mamaguard.shared.fetchers import SdohData
+
+        with patch.object(srv, "_fetch_sdoh_data") as mock_fetch:
+            async def _ret(*a, **k):
+                return SdohData(
+                    screening={"status": "success"},
+                    resources=[{"category": "housing", "result": {"resources": ["211"]}}],
+                    status="ok",
+                )
+            mock_fetch.side_effect = _ret
+            result = srv.screen_sdoh("https://fhir", "tok", "p1")
+        data = json.loads(result)
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["resources"][0]["category"], "housing")
 
 
 # ---------------------------------------------------------------------------
@@ -474,7 +534,7 @@ class TestMcpProtocolHandshake(unittest.TestCase):
 class TestMcpProtocolListTools(unittest.TestCase):
     """MCP protocol tool listing via the protocol layer."""
 
-    def test_list_tools_returns_all_15(self):
+    def test_list_tools_returns_all_expected(self):
         async def _test():
             low_server, init_opts, c2s_recv, s2c_send, client = (
                 await _create_mcp_client_session()
