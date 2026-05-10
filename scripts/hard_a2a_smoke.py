@@ -152,13 +152,20 @@ def check_agent_card(client: httpx.Client, base_url: str) -> list[Check]:
         "comprehensive-care-plan",
     }
 
+    supported_ifaces = card.get("supportedInterfaces") or []
+    primary_iface = supported_ifaces[0] if supported_ifaces else {}
+    fhir_scopes = {s.get("name") for s in (fhir_ext or {}).get("params", {}).get("scopes", [])}
+
     checks.extend([
         pass_if("name is MamaGuard Care Coordinator", card.get("name") == "MamaGuard Care Coordinator", str(card.get("name"))),
-        pass_if("card URL matches target", card.get("url") == base_url.rstrip("/"), str(card.get("url"))),
-        pass_if("preferred transport is JSONRPC", card.get("preferredTransport") == "JSONRPC", str(card.get("preferredTransport"))),
+        pass_if("supportedInterfaces[0].url matches target", primary_iface.get("url") == base_url.rstrip("/"), str(primary_iface.get("url"))),
+        pass_if("supportedInterfaces[0].protocolBinding is JSONRPC", primary_iface.get("protocolBinding") == "JSONRPC", str(primary_iface.get("protocolBinding"))),
+        pass_if("supportedInterfaces[0].protocolVersion is 1.0", primary_iface.get("protocolVersion") == "1.0", str(primary_iface.get("protocolVersion"))),
+        pass_if("legacy v0.3 fields stripped", not any(k in card for k in ("url", "preferredTransport", "additionalInterfaces")), "still present: " + ", ".join(k for k in ("url", "preferredTransport", "additionalInterfaces") if k in card)),
         pass_if("apiKey security scheme declared", (card.get("securitySchemes") or {}).get("apiKey", {}).get("name") == "X-API-Key", str(card.get("securitySchemes"))[:180]),
         pass_if("FHIR extension declared", fhir_ext is not None, "missing fhir-context extension"),
         pass_if("FHIR extension required", bool(fhir_ext and fhir_ext.get("required") is True), str(fhir_ext)),
+        pass_if("FHIR extension declares Patient.rs scope", "patient/Patient.rs" in fhir_scopes, str(sorted(fhir_scopes))),
         pass_if("exactly four skills", len(skills) == 4, f"{len(skills)} skills"),
         pass_if("expected skill ids present", skill_ids == expected_skills, str(sorted(skill_ids))),
     ])

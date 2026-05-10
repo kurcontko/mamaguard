@@ -98,9 +98,27 @@ class TestAgentCardEndpoint(_AppTestCase):
         card = self.client.get("/.well-known/agent-card.json").json()
         self.assertIn("Liaison", card["description"])
 
-    def test_card_has_url(self):
+    def test_card_has_supported_interfaces(self):
+        """A2A v1: transports live in supportedInterfaces[]; the legacy top-level
+        `url` field has been removed."""
         card = self.client.get("/.well-known/agent-card.json").json()
-        self.assertTrue(card.get("url"), "Agent card must have a non-empty URL")
+        ifaces = card.get("supportedInterfaces")
+        self.assertIsInstance(ifaces, list)
+        self.assertGreater(len(ifaces), 0, "supportedInterfaces must contain at least one entry")
+        primary = ifaces[0]
+        self.assertTrue(primary.get("url"), "primary supportedInterface must have a url")
+        self.assertEqual(primary.get("protocolVersion"), "1.0")
+        self.assertEqual(primary.get("protocolBinding"), "JSONRPC")
+
+    def test_card_drops_v0_3_legacy_fields(self):
+        """A2A v1 spec removes `url`, `preferredTransport`, `additionalInterfaces`,
+        and `capabilities.stateTransitionHistory`. PO's .NET v1 parser rejects
+        cards that still ship them alongside `supportedInterfaces`."""
+        card = self.client.get("/.well-known/agent-card.json").json()
+        self.assertNotIn("url", card)
+        self.assertNotIn("preferredTransport", card)
+        self.assertNotIn("additionalInterfaces", card)
+        self.assertNotIn("stateTransitionHistory", card.get("capabilities", {}))
 
 
 class TestAgentCardSkills(_AppTestCase):
@@ -195,10 +213,6 @@ class TestAgentCardCapabilities(_AppTestCase):
         caps = self._get_card()["capabilities"]
         self.assertTrue(caps.get("streaming"))
 
-    def test_state_transition_history_enabled(self):
-        caps = self._get_card()["capabilities"]
-        self.assertTrue(caps.get("stateTransitionHistory"))
-
     def test_fhir_extension_present(self):
         exts = self._get_card()["capabilities"].get("extensions", [])
         uris = [e["uri"] for e in exts]
@@ -213,6 +227,34 @@ class TestAgentCardCapabilities(_AppTestCase):
         exts = self._get_card()["capabilities"]["extensions"]
         fhir_ext = next(e for e in exts if e["uri"] == FHIR_EXTENSION_URI)
         self.assertTrue(fhir_ext.get("description"))
+
+    def test_fhir_extension_declares_smart_scopes(self):
+        """PO uses extension.params.scopes to drive the SMART consent dialog."""
+        exts = self._get_card()["capabilities"]["extensions"]
+        fhir_ext = next(e for e in exts if e["uri"] == FHIR_EXTENSION_URI)
+        scopes = fhir_ext.get("params", {}).get("scopes", [])
+        names = {s["name"] for s in scopes}
+        self.assertIn("patient/Patient.rs", names)
+        # Reads the agent actually performs
+        for read_scope in (
+            "patient/Observation.rs",
+            "patient/Condition.rs",
+            "patient/MedicationRequest.rs",
+            "patient/Immunization.rs",
+            "patient/Coverage.rs",
+            "patient/RelatedPerson.rs",
+        ):
+            self.assertIn(read_scope, names, f"missing read scope {read_scope}")
+        # Writes performed by commit_pending_write
+        for write_scope in (
+            "patient/RiskAssessment.cu",
+            "patient/CommunicationRequest.cu",
+            "patient/CarePlan.cu",
+            "patient/Goal.cu",
+        ):
+            self.assertIn(write_scope, names, f"missing write scope {write_scope}")
+        patient_scope = next(s for s in scopes if s["name"] == "patient/Patient.rs")
+        self.assertTrue(patient_scope.get("required"), "Patient.rs must be required")
 
     def test_protocol_version(self):
         card = self._get_card()

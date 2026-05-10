@@ -42,6 +42,27 @@ def create_a2a_app(
     """
     Build and return an A2A ASGI application for the given ADK agent.
     """
+    # SMART scopes the agent advertises to Prompt Opinion. Only Patient.rs is
+    # required — every other scope is optional so PO can register and consult
+    # the agent even if the workspace user declines a subset (the FHIR tools
+    # already degrade gracefully on 403). Write scopes (.cu) cover the resources
+    # `commit_pending_write` POSTs after clinician approval.
+    # Spec ref: https://docs.promptopinion.ai/fhir-context/a2a-fhir-context#extension-scopes
+    fhir_smart_scopes = [
+        {"name": "patient/Patient.rs", "required": True},
+        {"name": "patient/Observation.rs"},
+        {"name": "patient/Condition.rs"},
+        {"name": "patient/MedicationRequest.rs"},
+        {"name": "patient/Encounter.rs"},
+        {"name": "patient/Immunization.rs"},
+        {"name": "patient/Coverage.rs"},
+        {"name": "patient/RelatedPerson.rs"},
+        {"name": "patient/RiskAssessment.cu"},
+        {"name": "patient/CommunicationRequest.cu"},
+        {"name": "patient/CarePlan.cu"},
+        {"name": "patient/Goal.cu"},
+    ]
+
     extensions = []
     if fhir_extension_uri:
         extensions = [
@@ -49,6 +70,7 @@ def create_a2a_app(
                 uri=fhir_extension_uri,
                 description="FHIR R4 context -- allows the agent to query the patient's FHIR server.",
                 required=True,
+                params={"scopes": fhir_smart_scopes},
             )
         ]
 
@@ -91,29 +113,38 @@ def create_a2a_app(
 
     app = to_a2a(agent, port=port, agent_card=agent_card)
 
-    # Override the agent-card route with our own that emits A2A v1-spec
-    # `supportedInterfaces`. The a2a-python SDK still emits the v0.3.0 shape
-    # (preferredTransport + additionalInterfaces, no protocolBinding) — but
-    # Prompt Opinion's marketplace parses with the .NET v1 SDK which requires
-    # the consolidated `supportedInterfaces[]` with three required keys per
-    # entry: url, protocolBinding, protocolVersion.
+    # Override the agent-card route with one that emits A2A v1 schema. The
+    # a2a-python SDK still emits the v0.3.0 shape (preferredTransport +
+    # additionalInterfaces, capabilities.stateTransitionHistory, top-level
+    # `url`) — but Prompt Opinion's marketplace parses with the .NET v1 SDK,
+    # which requires the consolidated `supportedInterfaces[]` (each entry:
+    # url, protocolBinding, protocolVersion) and rejects the deprecated
+    # fields. We translate v0.3 -> v1 here so PO can register MamaGuard
+    # without waiting for upstream a2a-python to catch up.
     # Spec ref: https://a2a-protocol.org/latest/specification/ §4.4.6 + §8.5.
-    # PO template: https://github.com/prompt-opinion/po-adk-python (app_factory.py)
+    # Migration ref: https://docs.promptopinion.ai/a2a-v1-migration
     A2A_V1_PROTOCOL_VERSION = "1.0"
     card_payload = agent_card.model_dump(by_alias=True, exclude_none=True, mode="json")
+    primary_url = card_payload["url"]
     primary_iface = {
-        "url": card_payload["url"],
+        "url": primary_url,
         "protocolBinding": card_payload.get("preferredTransport", "JSONRPC"),
         "protocolVersion": A2A_V1_PROTOCOL_VERSION,
     }
     extra_ifaces = []
     for entry in card_payload.get("additionalInterfaces", []):
         extra_ifaces.append({
-            "url": entry.get("url", card_payload["url"]),
+            "url": entry.get("url", primary_url),
             "protocolBinding": entry.get("transport", "JSONRPC"),
             "protocolVersion": A2A_V1_PROTOCOL_VERSION,
         })
     card_payload["supportedInterfaces"] = [primary_iface, *extra_ifaces]
+
+    # Strip fields removed in A2A v1. Keeping them alongside `supportedInterfaces`
+    # makes the .NET v1 parser reject the card.
+    for legacy_field in ("url", "preferredTransport", "additionalInterfaces"):
+        card_payload.pop(legacy_field, None)
+    card_payload.get("capabilities", {}).pop("stateTransitionHistory", None)
 
     async def _agent_card_with_supported_interfaces(_request):
         return JSONResponse(card_payload)
