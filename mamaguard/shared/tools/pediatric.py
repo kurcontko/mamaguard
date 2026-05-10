@@ -193,7 +193,10 @@ def _compute_age_months(birth_date_str: str) -> int | None:
 
 
 @cached_tool
-def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
+def get_immunization_gaps(
+    patient_id: str | None = None,
+    tool_context: ToolContext | None = None,
+) -> dict:
     """
     Check immunization status against CDC recommended schedule.
 
@@ -201,17 +204,24 @@ def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
     the CDC schedule based on the patient's age, and returns a gap analysis
     showing received, due, and overdue vaccines.
 
-    No arguments required -- patient age is computed from FHIR demographics.
+    Args:
+        patient_id: Optional child Patient ID override for mother-to-child
+            handoff. If omitted, uses the current A2A patient context.
     """
+    if tool_context is None and hasattr(patient_id, "state"):
+        tool_context = patient_id  # type: ignore[assignment]
+        patient_id = None
+
     ctx = _get_fhir_context(tool_context, "get_immunization_gaps")
     if isinstance(ctx, dict):
         return ctx
 
-    fhir_url, fhir_token, patient_id = ctx
-    logger.info("tool_get_immunization_gaps patient_id=%s", patient_id)
+    fhir_url, fhir_token, context_patient_id = ctx
+    query_patient_id = (patient_id or context_patient_id).strip()
+    logger.info("tool_get_immunization_gaps patient_id=%s", query_patient_id)
 
     # Get patient DOB
-    patient, err = _safe_fhir_get(fhir_url, fhir_token, f"Patient/{patient_id}")
+    patient, err = _safe_fhir_get(fhir_url, fhir_token, f"Patient/{query_patient_id}")
     if err:
         return err
 
@@ -229,7 +239,7 @@ def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
         age_years = age_months // 12
         return {
             "status": "success",
-            "patient_id": patient_id,
+            "patient_id": query_patient_id,
             "data": {
                 "age_months": age_months,
                 "age_years": age_years,
@@ -258,7 +268,7 @@ def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
     # Get all immunizations
     bundle, err = _safe_fhir_get(
         fhir_url, fhir_token, "Immunization",
-        params={"patient": patient_id, "_count": "100"},
+        params={"patient": query_patient_id, "_count": "100"},
     )
     if err:
         return err
@@ -314,7 +324,7 @@ def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
 
     return {
         "status": "success",
-        "patient_id": patient_id,
+        "patient_id": query_patient_id,
         "data": {
             "age_months": age_months,
             "birth_date": birth_date,
@@ -339,24 +349,34 @@ def get_immunization_gaps(tool_context: ToolContext | None = None) -> dict:
 
 
 @cached_tool
-def get_developmental_screening_status(tool_context: ToolContext | None = None) -> dict:
+def get_developmental_screening_status(
+    patient_id: str | None = None,
+    tool_context: ToolContext | None = None,
+) -> dict:
     """
     Check developmental screening status against AAP Bright Futures schedule.
 
     Compares the patient's age against the recommended screening schedule and
     checks for completed developmental Observations.
 
-    No arguments required -- patient age is computed from FHIR demographics.
+    Args:
+        patient_id: Optional child Patient ID override for mother-to-child
+            handoff. If omitted, uses the current A2A patient context.
     """
+    if tool_context is None and hasattr(patient_id, "state"):
+        tool_context = patient_id  # type: ignore[assignment]
+        patient_id = None
+
     ctx = _get_fhir_context(tool_context, "get_developmental_screening_status")
     if isinstance(ctx, dict):
         return ctx
 
-    fhir_url, fhir_token, patient_id = ctx
-    logger.info("tool_get_developmental_screening_status patient_id=%s", patient_id)
+    fhir_url, fhir_token, context_patient_id = ctx
+    query_patient_id = (patient_id or context_patient_id).strip()
+    logger.info("tool_get_developmental_screening_status patient_id=%s", query_patient_id)
 
     # Get patient DOB
-    patient, err = _safe_fhir_get(fhir_url, fhir_token, f"Patient/{patient_id}")
+    patient, err = _safe_fhir_get(fhir_url, fhir_token, f"Patient/{query_patient_id}")
     if err:
         return err
 
@@ -371,7 +391,7 @@ def get_developmental_screening_status(tool_context: ToolContext | None = None) 
     # Get developmental observations
     completed_screenings = []
     for res in _silent_fhir_get(fhir_url, fhir_token, "Observation",
-                                params={"patient": patient_id, "category": "survey", "_count": "50", "_sort": "-date"}):
+                                params={"patient": query_patient_id, "category": "survey", "_count": "50", "_sort": "-date"}):
         code = res.get("code", {})
         name = code.get("text") or _coding_display(code.get("coding", []))
         completed_screenings.append({
@@ -404,7 +424,7 @@ def get_developmental_screening_status(tool_context: ToolContext | None = None) 
 
     return {
         "status": "success",
-        "patient_id": patient_id,
+        "patient_id": query_patient_id,
         "data": {
             "age_months": age_months,
             "completed": completed_milestones,
@@ -423,27 +443,37 @@ def get_developmental_screening_status(tool_context: ToolContext | None = None) 
 
 
 @cached_tool
-def get_care_gaps(tool_context: ToolContext | None = None) -> dict:
+def get_care_gaps(
+    patient_id: str | None = None,
+    tool_context: ToolContext | None = None,
+) -> dict:
     """
     Identify care gaps -- overdue screenings, missed appointments, unmet goals.
 
     Queries CarePlan, Goal, and Encounter resources to find gaps in preventive care.
 
-    No arguments required.
+    Args:
+        patient_id: Optional child Patient ID override for mother-to-child
+            handoff. If omitted, uses the current A2A patient context.
     """
+    if tool_context is None and hasattr(patient_id, "state"):
+        tool_context = patient_id  # type: ignore[assignment]
+        patient_id = None
+
     ctx = _get_fhir_context(tool_context, "get_care_gaps")
     if isinstance(ctx, dict):
         return ctx
 
-    fhir_url, fhir_token, patient_id = ctx
-    logger.info("tool_get_care_gaps patient_id=%s", patient_id)
+    fhir_url, fhir_token, context_patient_id = ctx
+    query_patient_id = (patient_id or context_patient_id).strip()
+    logger.info("tool_get_care_gaps patient_id=%s", query_patient_id)
 
     gaps = []
 
     # Check active care plans
     active_plans = []
     for res in _silent_fhir_get(fhir_url, fhir_token, "CarePlan",
-                                params={"patient": patient_id, "status": "active", "_count": "20"}):
+                                params={"patient": query_patient_id, "status": "active", "_count": "20"}):
         categories = res.get("category", [])
         cat_text = ""
         for cat in categories:
@@ -460,7 +490,7 @@ def get_care_gaps(tool_context: ToolContext | None = None) -> dict:
     # Check goals
     goals = []
     for res in _silent_fhir_get(fhir_url, fhir_token, "Goal",
-                                params={"patient": patient_id, "_count": "20"}):
+                                params={"patient": query_patient_id, "_count": "20"}):
         description = (res.get("description") or {}).get("text", "")
         status = res.get("lifecycleStatus", "")
         goals.append({
@@ -474,7 +504,7 @@ def get_care_gaps(tool_context: ToolContext | None = None) -> dict:
     # Check recent encounters
     encounters = []
     for res in _silent_fhir_get(fhir_url, fhir_token, "Encounter",
-                                params={"patient": patient_id, "_sort": "-date", "_count": "10"}):
+                                params={"patient": query_patient_id, "_sort": "-date", "_count": "10"}):
         enc_type = ""
         for t in res.get("type", []):
             enc_type = t.get("text") or _coding_display(t.get("coding", []))
@@ -489,7 +519,7 @@ def get_care_gaps(tool_context: ToolContext | None = None) -> dict:
 
     return {
         "status": "success",
-        "patient_id": patient_id,
+        "patient_id": query_patient_id,
         "data": {
             "active_care_plans": active_plans,
             "goals": goals,

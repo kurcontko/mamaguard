@@ -1,5 +1,5 @@
 """
-Tests for SMART Permission Tickets — Phase 2b.
+Tests for SMART Permission Tickets.
 
 Covers:
   - JWT decoding: valid, expired, malformed, missing claims, audience mismatch

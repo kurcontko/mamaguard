@@ -1,20 +1,16 @@
-"""
-Pediatric Transition Agent -- sub-agent for pediatric care management.
-
-Phase 1: placeholder with base FHIR tools.
-Phase 3: will add pediatric-specific tools (get_immunization_gaps, etc.)
-"""
+"""Pediatric Transition Agent -- sub-agent for immunization gaps, developmental screening, and pediatric care gaps."""
 
 from google.adk.agents import Agent
 
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.model_backend import build_agent_model
 from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import (
-    create_communication_request,
     get_care_gaps,
     get_developmental_screening_status,
     get_immunization_gaps,
     get_patient_summary,
+    plan_communication_request,
 )
 
 PEDIATRIC_INSTRUCTION = """\
@@ -31,6 +27,10 @@ You are the Pediatric Transition Agent, a specialist for newborn and child healt
 internally — do NOT call `get_patient_summary` just to get the child's age or DOB.
 - Only call `get_patient_summary` when you need demographics, active conditions, or \
 maternal context not available from the orchestrator handoff.
+- If the orchestrator handoff includes a child Patient ID while the active A2A \
+patient is the mother, pass that child ID as the `patient_id` argument to \
+`get_immunization_gaps`, `get_developmental_screening_status`, and `get_care_gaps`. \
+Do not assess the mother's pediatric schedule.
 
 **Tool Call Sequence:**
 1. **get_immunization_gaps** — start here; calculates patient age internally from FHIR.
@@ -38,8 +38,11 @@ maternal context not available from the orchestrator handoff.
 3. **get_care_gaps** — overdue screenings, missed appointments, unmet care plan goals.
 4. **get_patient_summary** — only if you need demographics/conditions not covered above \
 or maternal context is missing from the orchestrator handoff.
-5. **create_communication_request** — when outreach is needed. Set priority to match \
-clinical urgency.
+5. **plan_communication_request** — when outreach is needed. Set priority to match \
+clinical urgency. Stages a pending CommunicationRequest and returns a `plan_id` \
+(format: `plan-communicationrequest-N-<epoch_ms>`). The orchestrator will surface \
+the plan_id; no FHIR write happens until `commit_pending_write` is invoked after \
+clinician approval.
 
 **Maternal Context (for newborns/infants):**
 Incorporate maternal history from orchestrator handoff when available:
@@ -67,8 +70,10 @@ the reason from the tool's `clinician_review.reason`.
 (name, due age, status), care gaps (description, priority, target date).
 4. **Task** — Priority-ordered next steps including catch-up vaccines, developmental \
 referrals, anticipatory guidance for next well-child visit.
-5. **Transaction** — FHIR write-backs performed (cite resource IDs) or "None". Note \
-any write-backs requiring clinician approval.
+5. **Transaction** — Pending writes from `plan_communication_request` cited as \
+`plan_id=plan-communicationrequest-N-<epoch_ms>` with status "PENDING APPROVAL". \
+Nothing is POSTed to FHIR until `commit_pending_write` is invoked by the orchestrator \
+after clinician approval. "None" if no plans staged.
 
 **FHIR Error Recovery:**
 If a tool returns `status: "error"` (FHIR server unreachable, HTTP error, missing context):
@@ -158,15 +163,16 @@ Within 2 weeks
 3. MODERATE — Anticipatory guidance: safe sleep, feeding, growth milestones | \
 Care team | Next visit
 
-**Transaction** — CommunicationRequest/comm-001 created (pediatric_transition_agent, \
-catch-up vaccine outreach). Requires clinician approval.
+**Transaction** — PENDING APPROVAL: plan_id=plan-communicationrequest-1-1731612345678 \
+(catch-up vaccine outreach, pediatric_transition_agent). Awaiting clinician approval \
+via commit_pending_write.
 
 AI-generated analysis. Not for clinical use.
 """
 
 pediatric_transition_agent = Agent(
     name="pediatric_transition_agent",
-    model="gemini-2.5-flash",
+    model=build_agent_model(),
     description="Pediatric care transition specialist. Manages immunizations, developmental milestones, and care gaps.",
     instruction=PEDIATRIC_INSTRUCTION,
     tools=[
@@ -174,7 +180,7 @@ pediatric_transition_agent = Agent(
         get_developmental_screening_status,
         get_care_gaps,
         get_patient_summary,
-        create_communication_request,
+        plan_communication_request,
     ],
     before_model_callback=extract_fhir_context,
     after_model_callback=safety_after_model_callback,

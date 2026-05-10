@@ -416,7 +416,7 @@ class TestCreateCommunicationRequest(unittest.TestCase):
 
 
 class TestWriteCarePlan(unittest.TestCase):
-    """SDOH write_care_plan -- linked Goal + CarePlan (Phase 2c)."""
+    """SDOH write_care_plan -- linked Goal + CarePlan."""
 
     @patch("mamaguard.shared.tools.writeback._fhir_post")
     def test_successful_create_goal_then_care_plan(self, mock_post):

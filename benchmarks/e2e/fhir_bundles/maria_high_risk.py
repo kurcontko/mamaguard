@@ -18,6 +18,7 @@ from benchmarks.e2e.fhir_bundles._helpers import (
     hba1c_observation,
     medication_request,
     patient,
+    related_child,
     transaction_bundle,
 )
 
@@ -83,6 +84,17 @@ _resources = [
                        "Take 1 tablet twice daily with meals", "2024-09-01"),
     medication_request("bench-m-med3", PATIENT_ID, "Prenatal vitamins",
                        "Take 1 tablet daily", "2025-01-15"),
+
+    # Mother-to-child handoff: Maria's newborn Lucas.
+    related_child(
+        "bench-m-related-lucas",
+        PATIENT_ID,
+        "bench-baby-santos-001",
+        "Lucas",
+        "Santos",
+        "2026-02-09",
+        gender="male",
+    ),
 
     # No Coverage resource — uninsured
 ]

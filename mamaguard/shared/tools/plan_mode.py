@@ -19,8 +19,6 @@ This turns the Liaison pattern from "the agent says it consulted a
 clinician" into "the FHIR bundle was shown, reviewed, and approved".
 """
 
-from __future__ import annotations
-
 import logging
 import time
 from datetime import datetime, timezone

@@ -118,6 +118,38 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertGreaterEqual(len(result["data"]["up_to_date"]), 1)
         # No overdue -> liaison does NOT demand clinician review
         self.assertFalse(result["clinician_review"]["required"])
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_patient_id_override_queries_child(self, mock_fhir):
+        """Mother-to-child handoff can query a child while session context is mom."""
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        paths = []
+        params_seen = []
+
+        def side_effect(fhir_url, token, path, params=None):
+            paths.append(path)
+            params_seen.append(params)
+            if path.startswith("Patient/"):
+                return PATIENT_NEWBORN
+            if path == "Immunization":
+                return {
+                    "resourceType": "Bundle",
+                    "entry": [
+                        {"resource": {"vaccineCode": {"text": "HepB"}, "occurrenceDateTime": "2026-04-12", "status": "completed", "id": "imm-hepb1"}},
+                    ],
+                }
+            return {"resourceType": "Bundle", "entry": []}
+
+        mock_fhir.side_effect = side_effect
+        result = get_immunization_gaps(
+            patient_id="child-3",
+            tool_context=MockToolContext(patient_id="mother-1"),
+        )
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["patient_id"], "child-3")
+        self.assertIn("Patient/child-3", paths)
+        self.assertIn({"patient": "child-3", "_count": "100"}, params_seen)
         self.assertEqual(result["clinician_review"]["reason"], "")
 
     @patch("mamaguard.shared.tools.fhir_base._fhir_get")

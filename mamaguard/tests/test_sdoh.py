@@ -299,7 +299,7 @@ class TestGetSdohScreening(unittest.TestCase):
 
 
 class TestFindSdohResources(unittest.TestCase):
-    """Actionable SDOH resource lookup (Phase 2c)."""
+    """Actionable SDOH resource lookup."""
 
     def setUp(self):
         # Ensure no stale env var leaks the external path into tests

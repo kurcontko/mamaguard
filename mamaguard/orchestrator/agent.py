@@ -1,9 +1,4 @@
-"""
-MamaGuard Orchestrator -- routes to sub-agents via AgentTool.
-
-Phase 1: minimal orchestrator that calls get_patient_summary directly.
-Sub-agent routing will be wired in Phase 2+.
-"""
+"""MamaGuard Orchestrator -- routes queries to maternal, pediatric, and SDOH specialist sub-agents via AgentTool."""
 
 from google.adk.agents import Agent
 from google.adk.tools.agent_tool import AgentTool
@@ -14,6 +9,7 @@ from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
 from mamaguard.shared.fhir_hook import extract_fhir_context
 from mamaguard.shared.json_formatter import json_output_callback
 from mamaguard.shared.memory import inject_memory_block, persist_memory_note
+from mamaguard.shared.model_backend import build_agent_model
 from mamaguard.shared.quality_check import quality_check_callback
 from mamaguard.shared.response_filter import response_format_callback
 from mamaguard.shared.safety_filter import safety_after_model_callback
@@ -22,7 +18,7 @@ from mamaguard.shared.timing import (
     before_tool_timing,
     inject_timing_callback,
 )
-from mamaguard.shared.tools import find_linked_newborn
+from mamaguard.shared.tools import commit_pending_write, find_linked_newborn
 
 
 def _orchestrator_after_model_callback(callback_context, llm_response):
@@ -56,22 +52,51 @@ to specialist sub-agents and synthesize their responses.
 - Maternal health → maternal_risk_agent
 - Child/pediatric → pediatric_transition_agent
 - Insurance/social needs → sdoh_outreach_agent
-- "Comprehensive assessment" or "full review" → emit ALL THREE sub-agent \
-tool calls in the **same turn** (parallel dispatch). The runtime awaits them \
-concurrently; you will receive all three results together in the next turn, \
-then synthesize per merge rules below. Do NOT serialize one call per turn.
+- "Comprehensive assessment" or "full review" → **first turn**, emit THREE tool \
+calls in parallel: `find_linked_newborn`, `maternal_risk_agent`, `sdoh_outreach_agent`. \
+**Second turn**: if `find_linked_newborn` returned at least one child, dispatch \
+`pediatric_transition_agent`. Sub-agents only accept a single `request` string \
+argument — never invent structured args like `child_patient_id=...`. Embed the child \
+ID and any maternal context inside the `request` string itself. Example: \
+`pediatric_transition_agent(request="Assess pediatric risk for child Patient/<child-id> \
+linked to mother bench-maria-001. Maternal context: Stage 2 HTN, T2DM HbA1c 7.9% — \
+monitor neonatal hypoglycemia and BP. Use this child ID for all FHIR queries.")`. \
+Synthesize per merge rules below after both turns complete.
 - If a sub-agent errors or the domain doesn't apply (e.g., pediatric for an adult \
 with no children), skip it and note why in Talk. Continue with remaining agents.
 - If ALL sub-agents fail, report errors and recommend direct clinician review.
 - If unsure, start with maternal_risk_agent (most common entry point).
 
+**Approval / Liaison Flow:**
+- Sub-agents NEVER POST to FHIR directly. They call `plan_*` tools that stage a \
+proposed write in session state and return a `plan_id`. The orchestrator surfaces those \
+plan_ids in its Transaction section so a clinician can review before commit.
+- If the user message is an approval intent ("approve plan plan-X-Y-Z", \
+"yes commit that", "approve all", "commit", "approved by Dr. Kim"), call \
+`commit_pending_write(plan_id=<the_id>, approved=True)` for the referenced plan. The \
+tool POSTs the resource to FHIR and returns the assigned resource ID. After commit, \
+respond with a short confirmation Transaction listing the resource that was created \
+(e.g. "COMMITTED: plan_id=plan-careplanbundle-1-... → CarePlan/cp-001, Goal/goal-001").
+- If the user denies or edits ("don't commit", "reject"), call \
+`commit_pending_write(plan_id=<id>, approved=False)`. Confirm in the response that \
+no FHIR write occurred.
+- If the user asks "approve all", iterate through every pending plan_id from the prior \
+turn. Do not invent plan_ids — only commit ones the user has been shown.
+
 **Pediatric Transition — Mother-to-Child Handoff:**
-1. Call **find_linked_newborn** with mother's Patient ID to discover linked children.
+1. Call **find_linked_newborn** with mother's Patient ID to discover linked children. \
+For comprehensive assessments this is mandatory and runs in parallel with the maternal \
+and SDOH sub-agents on the first turn (see Routing Rules above).
 2. If found: include child's ID, name, birth date. List maternal risk factors relevant \
-to pediatric assessment (GDM → neonatal hypoglycemia, preeclampsia → infant BP, etc.).
-3. If not found: instruct clinician to switch patient context and provide the \
-child's Patient ID so the pediatric agent can be invoked.
-4. When child ID is known, route to pediatric_transition_agent with maternal context.
+to pediatric assessment (GDM → neonatal hypoglycemia, preeclampsia → infant BP, etc.). \
+On the second turn, dispatch `pediatric_transition_agent(request="...")` with the \
+child's Patient ID embedded in the request string (sub-agents take only `request`). \
+The sub-agent's prompt instructs it to use that child ID for FHIR queries instead of \
+the mother's.
+3. If not found: in Talk, note "Pediatric: skipped — no linked child" and instruct the \
+clinician to switch patient context if needed.
+4. Only mark pediatric as "skipped" after find_linked_newborn has actually returned \
+zero linked newborns. Do not pre-emptively skip it.
 
 **Multi-Agent 5T Synthesis:**
 When merging responses from multiple sub-agents:
@@ -97,8 +122,12 @@ No duplicate rows. Preserve all columns.
 re-sort by priority (URGENT > HIGH > MODERATE > ROUTINE). Preserve responsible party \
 and timeframe. Note cross-domain dependencies.
 
-5. **Transaction** — List every FHIR write-back from all sub-agents with resource ID \
-and creating agent. "None" only if no agent performed any write-back.
+5. **Transaction** — List every PENDING APPROVAL plan_id surfaced by sub-agents. \
+Format: "PENDING APPROVAL: plan_id=<id> (<creating_agent>, <one-line summary>)". \
+**Do not claim a resource was created** — sub-agents stage writes via `plan_*` tools \
+and nothing is POSTed to FHIR until `commit_pending_write` is invoked after clinician \
+approval. After a successful commit (subsequent turn), emit \
+"COMMITTED: plan_id=<id> → <ResourceType>/<id>". "None" only if no plans were staged.
 
 **Cross-Domain Risk Elevation:**
 - SDOH insurance gap + chronic medications → elevate to at least HIGH; add coverage \
@@ -148,21 +177,24 @@ or "the patient should take [drug]." Defer all treatment decisions to the clinic
 
 **Talk** — MULTI-DOMAIN URGENT: Maria (8 weeks postpartum) presents with Stage 2 \
 hypertension (BP 162/104, escalating) and HbA1c 7.2%, compounded by no active insurance \
-and housing instability. The insurance gap is critical — she is on chronic medications \
-that require uninterrupted coverage. Pediatric domain skipped: no linked newborn found. \
-Assessed: Maternal (URGENT), SDOH (URGENT).
+and housing instability. Her newborn Lucas (12 weeks) is overdue for the entire 2-month \
+vaccine series. The insurance gap is critical — she is on chronic medications and Lucas \
+needs ongoing pediatric coverage. Assessed: Maternal (URGENT), Pediatric (HIGH), \
+SDOH (URGENT).
 
-**Template** — Combined Risk Level: URGENT (elevated: insurance gap + chronic meds)
+**Template** — Combined Risk Level: URGENT (elevated: insurance gap + chronic meds + \
+infant care continuity)
 Maternal: BP 162/104 (Observation/bp-m5), HbA1c 7.2% (Observation/hba1c-m1), \
 postpartum ≤12mo.
 SDOH: Housing instability (Condition/sdoh-housing-1), no active Coverage, Spanish \
 interpreter needed.
-Pediatric: Skipped — no linked newborn found via find_linked_newborn.
-Overall confidence: 0.75 (MODERATE). Maternal 0.88 (BP 0.9, glucose 0.85, pregnancy 0.9). \
-SDOH 0.75 (screening 0.8, resources 0.75, care gaps 0.7). \
+Pediatric: Lucas (Patient/baby-001), 12 weeks. Overdue: DTaP, IPV, Hib, PCV13, RV, HepB \
+dose 2. Maternal HTN history → monitor infant BP at next visit.
+Overall confidence: 0.75 (MODERATE). Maternal 0.88, Pediatric 0.80, SDOH 0.75. \
 Lower confidence: SDOH care gaps (0.7) — limited appointment data.
 ⚠ CLINICIAN REVIEW REQUIRED: Stage 2 HTN with escalating trend; insurance gap risking \
-medication discontinuation. Medication management requires clinician review.
+medication discontinuation; pediatric vaccine catch-up urgent. Medication management \
+requires clinician review.
 
 **Table**
 *Maternal*
@@ -187,16 +219,20 @@ navigator | Within 48h
 5. MODERATE — Spanish interpreter for upcoming visits | Scheduling | Next visit
 3 additional tasks available on request.
 
-**Transaction** — RiskAssessment/ra-001 (maternal_risk_agent). Goal/goal-001 + \
-CarePlan/cp-001 (sdoh_outreach_agent). CommunicationRequest/comm-002 \
-(sdoh_outreach_agent). All require clinician approval.
+**Transaction** —
+PENDING APPROVAL: plan_id=plan-riskassessment-1-1731612345678 (maternal_risk_agent, \
+postpartum-hypertensive-crisis); plan_id=plan-careplanbundle-2-1731612345679 \
+(sdoh_outreach_agent, housing referral); plan_id=plan-communicationrequest-3-1731612345680 \
+(sdoh_outreach_agent, Medicaid re-enrollment outreach); \
+plan_id=plan-communicationrequest-4-1731612345681 (pediatric_transition_agent, \
+catch-up vaccine outreach). All awaiting clinician approval via commit_pending_write.
 
 AI-generated analysis of synthetic data. Not for clinical use.
 """
 
 root_agent = Agent(
     name="mamaguard_orchestrator",
-    model="gemini-2.5-flash",
+    model=build_agent_model(),
     description="Maternal-pediatric care coordination orchestrator. Routes to maternal, pediatric, and SDOH specialist agents.",
     instruction=ORCHESTRATOR_INSTRUCTION,
     tools=[
@@ -204,6 +240,7 @@ root_agent = Agent(
         AgentTool(agent=pediatric_transition_agent),
         AgentTool(agent=sdoh_outreach_agent),
         find_linked_newborn,
+        commit_pending_write,
     ],
     before_model_callback=[extract_fhir_context, inject_memory_block],
     after_model_callback=_orchestrator_after_model_callback,

@@ -439,7 +439,7 @@ def create_communication_request(
 
 
 # ---------------------------------------------------------------------------
-# Tool 13: find_sdoh_resources (Phase 2c actionable SDOH)
+# Tool 13: find_sdoh_resources
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
@@ -476,7 +476,7 @@ def find_sdoh_resources(
 
 
 # ---------------------------------------------------------------------------
-# Tool 14: write_care_plan (Phase 2c actionable SDOH)
+# Tool 14: write_care_plan
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
