@@ -1,133 +1,88 @@
-# MamaGuard: Maternal-Pediatric Care Coordinator
+# MamaGuard: FHIR-Native Maternal-Child Care Continuity Agent
 
 ## What it does
 
-MamaGuard is a multi-agent AI care coordination system that analyzes FHIR patient records to support maternal and pediatric health. It coordinates three specialist agents through a single A2A interface:
+MamaGuard helps clinicians manage maternal-child care when the real risk is not one lab, one visit, or one missing referral, but the combination of all of them over time.
 
-- **Maternal Risk Monitor** — Analyzes BP trends, glucose control, pregnancy history, and postpartum complications. Flags hypertensive crisis (>160/110 mmHg), uncontrolled diabetes (HbA1c >6.5%), and recurrent pregnancy loss.
+Our demo centers on Maria, a postpartum patient in Prompt Opinion. In a fresh session, MamaGuard retrieves a prior clinician decision from FHIR `DocumentReference`, recalls that metformin was previously declined because of GI intolerance, reads today's maternal and SDOH context from the chart, synthesizes an urgent postpartum risk story, creates a pending outreach plan, and waits for clinician approval before any care-coordination write-back is committed.
 
-- **Pediatric Transition Agent** — Tracks immunization schedules against CDC recommendations, monitors developmental milestones per AAP Bright Futures, and identifies care gaps.
+The product claim is simple:
 
-- **SDOH & Outreach Agent** — Screens for insurance coverage gaps, language barriers, food insecurity, and housing instability. Looks up concrete community resources (findhelp.org / 211 directory with curated national fallback), writes FHIR Goal + CarePlan pairs so the care team has trackable interventions, and generates CommunicationRequest resources for outreach.
+- **Continuity inside FHIR**: prior decisions, trajectory notes, and in-flight plans live in the same FHIR boundary as the rest of the chart.
+- **Compound maternal + SDOH reasoning**: MamaGuard combines BP trend, HbA1c, pregnancy history, language, housing, and insurance context into one clinician-facing synthesis that rules do not produce well.
+- **Clinician-approved action**: Goal, CarePlan, and CommunicationRequest stay pending until the clinician approves in Prompt Opinion.
+- **Optional mother-to-child handoff**: if a linked newborn is present, MamaGuard can continue into pediatric follow-up without forcing a manual patient switch.
 
-## How it works
+## Why it matters
 
-MamaGuard ships two interoperable artifacts — an **A2A agent** (BYO Agent on Prompt Opinion) and a **standalone MCP server** — both backed by the same 15 FHIR tools on Google Cloud Run.
+Without MamaGuard, continuity depends on fragmented chart review: prior decisions are easy to miss, declined recommendations get repeated, outreach is tracked outside the chart, and urgent postpartum risk can be diluted across separate notes, labs, and social-history fields.
 
-**A2A Agent path (primary):**
-1. Clinician launches MamaGuard from the PO launchpad and selects a patient
-2. PO sends FHIR context (server URL, bearer token, patient ID) via A2A metadata
-3. The orchestrator routes to specialist sub-agents based on the query
-4. Each agent queries the FHIR server using 15 specialized tools
-5. All output follows the **5T framework** (Talk, Template, Table, Task, Transaction) for structured clinical reporting
-6. Results include structured risk assessments with the **Liaison Agent pattern** — AI recommends, clinician decides
-7. When clinician review is needed, the agent pauses (INPUT_REQUIRED state)
-8. Write-back tools create RiskAssessment, CommunicationRequest, Goal, and CarePlan resources on the FHIR server
-9. Every tool invocation emits a **FHIR AuditEvent** for HIPAA compliance trail (feature-flagged)
+With MamaGuard, a fresh session can recover what already happened, explain why today's combined maternal + SDOH picture is urgent, and turn that into tracked, clinician-approved follow-up in the same workflow.
 
-**Mother-to-child handoff:**
-The orchestrator calls `find_linked_newborn` to discover children linked to a maternal patient via FHIR RelatedPerson resources. This enables seamless single-session maternal-to-pediatric transitions — the agent automatically finds the linked child, carries maternal risk factors (GDM, preeclampsia, preterm delivery) into the pediatric context, and routes to the pediatric agent without requiring the clinician to manually switch patients.
+## Where GenAI matters
 
-**MCP Server path (dual submission):**
-Any MCP-compatible client (Claude Desktop, Cursor, other PO agents) can connect to MamaGuard's MCP server and invoke the same 15 FHIR tools directly. SHARP context is accepted via MCP client metadata, maintaining the same credential isolation model.
+This is not just rules automation.
 
-## Why it matters — Impact Hypothesis
+Rules can say:
 
-| Metric | Current Baseline | Target with MamaGuard |
-|--------|-----------------|----------------------|
-| Postpartum follow-up completion | 60% attend (40% never return) | 85%+ via proactive gap detection |
-| Postpartum hypertensive crisis detection | Median 5 days to detect | Same-day flagging via automated BP trend analysis |
-| Childhood immunization adherence | 70.4% full series on time | 90%+ via automated gap detection |
-| Clinician chart-review time | 15-20 min manual review | <2 min AI-synthesized risk summary |
-| SDOH screening completion | <25% of eligible patients | 80%+ via automated Z-code + Coverage analysis |
+- BP is elevated
+- HbA1c is abnormal
+- Coverage is missing
+- Language support is needed
 
-**Cost impact:** Preventable maternal morbidity costs $32.3B/year in the US. Each avoided severe maternal morbidity event saves ~$115K in acute care costs.
+MamaGuard goes further:
 
-## Where GenAI goes beyond rules
+- It remembers the prior clinician decision and avoids repeating a declined recommendation.
+- It explains why Stage 2 postpartum hypertension plus diabetes-range HbA1c plus coverage instability plus language barriers should change the urgency and outreach plan.
+- It turns structured FHIR data into a concise 5T clinical summary: Talk, Template, Table, Task, Transaction.
+- It pauses for clinician review before action, then commits the approved plan back to FHIR.
 
-MamaGuard's AI factor is **compound clinical reasoning across heterogeneous data**:
+That combination of continuity, synthesis, and approval-gated action is the AI factor.
 
-1. **Cross-resource synthesis** — A rule engine flags BP >140/90. MamaGuard looks at 6 pregnancies with 5 losses, uncontrolled HTN across 8 years, concurrent diabetes, and one postpartum visit — then explains *why this combination* is dangerous.
+## How the demo works
 
-2. **Contextual medication safety** — HCTZ is acceptable for HTN, but in a postpartum patient with diabetes who may be breastfeeding, the recommendation shifts to labetalol. This requires patient-specific clinical context.
+1. A clinician launches MamaGuard from the Prompt Opinion marketplace and opens Maria's chart.
+2. In a **fresh session**, MamaGuard recalls a prior decision from FHIR memory and cites it directly in the response.
+3. It synthesizes Maria's urgent postpartum maternal risk together with SDOH amplifiers.
+4. It generates a **pending** Goal + CarePlan + CommunicationRequest bundle for outreach.
+5. The clinician approves the plan, and MamaGuard commits the write-back to FHIR.
+6. If time permits, MamaGuard discovers Maria's linked newborn and continues into pediatric follow-up.
 
-3. **SDOH-clinical integration** — Connecting a Medicaid gap + French language preference + food insecurity + postpartum BP crisis into a unified outreach plan with culturally appropriate referrals. The agent finds concrete community resources (211, WIC, SNAP, housing programs) and writes trackable FHIR CarePlan + Goal pairs.
+## Proof
 
-4. **Natural language care plans** — Converting structured FHIR data into prioritized, evidence-cited care summaries using the 5T framework (Talk, Template, Table, Task, Transaction).
+We keep the submission proof to three headline numbers:
 
-5. **Compound clinical reasoning** — Demonstrated with side-by-side benchmarks (93.1% Tier-2b end-to-end, 45/47 cases passed): a rule engine produces 5 flat flags; MamaGuard synthesizes URGENT compound risk across BP + HbA1c + pregnancy loss + housing + Medicaid gap, citing 7 FHIR evidence refs and 5 cross-factor clinical-SDOH interactions the rule engine cannot produce.
+- **93.1% Tier-2b end-to-end** on the April 17, 2026 submission run (**45/47 passed**).
+- **+30%** average lift over a naive LLM on our AI-factor benchmark.
+- **100% clinician-review flagging** on URGENT/HIGH cases in safety verification.
 
-## Technical Architecture
+What these numbers mean:
 
-```
-Prompt Opinion ──┬── BYO Agent → A2A JSON-RPC ─┐
-                 └── MCP Client → MCP Server ──┤
-                                               ▼
-                                    MamaGuard (Cloud Run)
-                                    ├── Orchestrator (gemini-2.5-flash)
-                                    │   ├── find_linked_newborn (mother→child)
-                                    │   ├── Maternal Risk Monitor (7 tools)
-                                    │   ├── Pediatric Transition Agent (5 tools)
-                                    │   └── SDOH & Outreach Agent (6 tools)
-                                    └── Shared FHIR Tool Layer (15 tools)
-                                        ├── FHIR R4 Server (SMART/HAPI)
-                                        └── External SDOH directory (findhelp.org / 211)
-```
+- The end-to-end score shows the full system working with real HAPI FHIR, real tool calls, and an independent judge.
+- The AI-factor comparison shows MamaGuard's advantage is not "has more tooling"; it is better compound reasoning, better safety behavior, and better structured actionability on the same patient data.
+- The clinician-review result shows the most important safety behavior is reliable: urgent cases are escalated to a human.
 
-**Key technologies:**
-- Google ADK + A2A SDK (agent framework)
-- MCP (Model Context Protocol — standalone tool server, dual submission path)
-- FHIR R4 (healthcare data standard)
-- SHARP extension (FHIR context in A2A metadata + MCP client metadata)
-- SMART Permission Tickets (Josh Mandel March 2026 draft — JWT-based scope enforcement)
-- Liaison Agent pattern (human-in-the-loop for clinical decisions)
-- 5T structured output (Talk, Template, Table, Task, Transaction)
-- Bidirectional FHIR (reads patient data AND writes RiskAssessment, CommunicationRequest, Goal, CarePlan)
-- FHIR AuditEvent generation (HIPAA compliance trail, feature-flagged)
+## Technical credibility
+
+MamaGuard is intentionally technical where it helps impact and feasibility:
+
+- **Prompt Opinion launch** as a BYO Agent for the primary clinician experience.
+- **A2A + MCP dual artifact** backed by the same FHIR tool layer.
+- **FHIR-native memory** via `DocumentReference`, not a sidecar memory store.
+- **Approval gate** for care-coordination write-back.
+- **FHIR write-back** of RiskAssessment, Goal, CarePlan, and CommunicationRequest.
+- **FHIR AuditEvent** support for traceability.
+
+We do not rely on architecture complexity as the story. The story is that continuity, synthesis, and clinician-approved action all happen inside standards-based clinical infrastructure.
 
 ## Built With
 
 - Python 3.11
-- Google ADK (google-adk >= 1.25.0)
-- A2A SDK (a2a-sdk >= 0.3.0)
-- MCP SDK (mcp[server] >= 1.0.0)
-- PyJWT (SMART Permission Tickets)
-- Gemini 2.5 Flash (production) / Nemotron-3-Super-120B (eval agent) / DeepSeek v3.2 (eval judge)
-- FHIR R4 (SMART sandbox + HAPI)
-- 4-tier benchmark pipeline (1009 tests, 73 benchmark cases, 5-run stability tracking)
+- Google ADK
+- A2A SDK
+- MCP SDK
+- FHIR R4
+- Prompt Opinion
 - Google Cloud Run
-- Prompt Opinion Platform
-- Docker
-- httpx
-- uvicorn
-
-## Safety and Evaluation
-
-MamaGuard includes a **4-tier benchmark suite** with **1161 unit tests** and **106 benchmark cases** (59 Tier-1 + 47 Tier-2b end-to-end):
-
-| Metric | Result |
-|--------|--------|
-| **Tier-2b end-to-end (47 cases)** | **93.1% overall, 45/47 passed** — real HAPI FHIR + Gemma-26B agent + DeepSeek judge |
-| Tier-1 deterministic (59 cases) | **100% pass rate** — FHIR tools, clinical reasoning, orchestration |
-| Unit tests | **1161 / 1161 passing** (0 errors) |
-| Safety — defers to clinician | **100%** across all runs |
-| Safety — explains FHIR errors | **100%** across all runs |
-
-**How we evaluated:** 4-tier evaluation pipeline — Tier-1 deterministic checks (mocked FHIR, no LLM), Tier-2a LLM reasoning eval (simulated tool output), Tier-2b end-to-end against real HAPI FHIR, and Tier-3 MedAgentBench cases. Tier-2b runs use the full agent tree (orchestrator + 3 specialists via SubagentTool isolation + FHIR-native memory via DocumentReference) with an independent **DeepSeek v3.2 judge** scoring clinical accuracy, safety, and completeness. Score progression across v3 architecture development: 88.2% (baseline) → 90.0% (Phase 2+4 committed, 2026-04-16) → **93.1% (Phase 1 pruning + vaccine normalization + adult short-circuit, 2026-04-17)**.
-
-- **Liaison pattern** — Every FHIR-reading tool returns a `clinician_review` object. All URGENT findings pause the agent (INPUT_REQUIRED) for clinician approval. AI never prescribes treatments, names drugs, or provides dosages. Verified: clinician deferral at **100%** across all runs.
-- **No fabrication** — Every numeric value in the output must originate from a tool result. Reference-only thresholds in the agent prompt are labeled as such and may not be cited as patient data.
-- **FHIR AuditEvent** — When enabled, every tool invocation emits a FHIR R4 AuditEvent recording what data was accessed, by which agent, with what outcome (HIPAA compliance trail).
-- **AI Factor benchmark** — Side-by-side comparison of a naive LLM (no tools, no agents) vs. MamaGuard on identical patient data scored by an independent judge. Result: **+30% average score lift**, with the largest gain in safety (+37%) from the liaison pattern.
-- **Equity evaluation** — Benchmark cases include Fatima (Arabic, uninsured), Priya (Hindi, GDM), Maria (French, SDOH), and James (insured) to test for language-barrier handling and insurance disparity detection. Agents provide patient summaries in the patient's primary language (Spanish, Arabic, Hindi) when detected from FHIR Patient.communication.
-
-## Demo
-
-The demo shows Maria (Patient/bench-maria-001), a 50-year-old Black, French-speaking woman with:
-- 6 pregnancies (5 losses), emergency delivery
-- Uncontrolled HTN (BP consistently >140/90, spike to 170/98 postpartum)
-- DM2 with HbA1c trending 6.8 → 7.4 → 7.9 (diabetes range, worsening)
-- Only ONE postnatal visit, no insurance on record
-- Linked newborn: Lucas (Patient/bench-baby-santos-001)
-
-MamaGuard identifies: URGENT risk (Stage 2 HTN + recurrent pregnancy loss + no coverage), generates a prioritized care plan with 5T structured output, flags clinician review, creates outreach resources, and discovers the linked newborn for seamless pediatric handoff.
+- Gemini 2.5 Flash
+- DeepSeek v3.2 judge

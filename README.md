@@ -12,7 +12,7 @@ Built for the [Agents Assemble](https://agents-assemble.devpost.com/) hackathon.
 ```bash
 git clone <repo-url> && cd mamaguard
 make setup                  # install deps (~15s)
-make test                   # 1122 unit tests (<3s)
+make test                   # 1170 unit tests (<3s)
 make tier1                  # 59 deterministic benchmark cases, 100% pass rate
 # To run the agent locally (needs GOOGLE_API_KEY in mamaguard/.env):
 cp mamaguard/.env.example mamaguard/.env   # then add your key
@@ -169,10 +169,10 @@ HAPI_FHIR_URL=http://localhost:8090/fhir python3 -m benchmarks.runner --e2e
 ## Testing
 
 ```bash
-# Unit tests (894 tests)
+# Unit tests (1170 tests)
 python3 -m pytest mamaguard/tests/ -v
 
-# Tier-1 deterministic benchmarks (57 cases)
+# Tier-1 deterministic benchmarks (59 cases)
 python3 -m benchmarks.runner
 
 # Pre-deploy check (unit tests + benchmarks, exit 1 if score < 95%)
@@ -183,8 +183,8 @@ python3 -m benchmarks.runner
 ```
 
 **Test coverage:**
-- 894 unit tests across 20 test modules
-- 57/57 Tier-1 benchmark cases at 100.0%
+- 1170 unit tests across 31 test modules
+- 59/59 Tier-1 benchmark cases at 100.0%
 - Agent routing, tool invocation, error paths, FHIR base utilities, FHIR writeback, SMART tickets, middleware, golden-file contract tests, LLM-as-judge care plan checkers, FHIR hook, logging utilities, mother-child handoff, MCP protocol integration, SDOH resource classification, A2A app factory and agent card endpoint, benchmark harness infrastructure, post-processing safety filter
 
 ---
@@ -226,7 +226,7 @@ mamaguard/
 |   +-- smart_tickets.py         # SMART Permission Tickets (Mandel spec)
 |   +-- sdoh_resources.py        # Offline SDOH resource map
 +-- marketplace/                 # Marketplace submission configs (both tracks)
-+-- tests/                       # 894 unit tests
++-- tests/                       # 1170 unit tests
 +-- app.py                       # A2A entry point
 +-- Dockerfile                   # Cloud Run deployment
 +-- docker-compose.yml           # Local dev stack (MamaGuard + HAPI FHIR)

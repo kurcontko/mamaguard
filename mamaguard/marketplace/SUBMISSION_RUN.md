@@ -106,7 +106,7 @@ and exits on any preflight failure.
 
 ## Target
 
-We already have 90.0% on v3/Gemma (2026-04-16, 44/47). v1 scored 88.3% on
+We already have 93.1% on v3/Gemma (2026-04-17, 45/47). v1 scored 88.3% on
 Nemotron (2026-04-15). The submission target is therefore **≥90.0% on Nemotron**
 — matching Gemma would validate that v3 architectural changes (SubagentTool
 isolation, FHIR memory, plan/commit, vaccine normalization) carry across

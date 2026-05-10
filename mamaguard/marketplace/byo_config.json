@@ -1,9 +1,9 @@
 {
   "name": "MamaGuard: Maternal-Pediatric Care Coordinator",
   "scope": "patient",
-  "model": "gemini-2.5-flash",
+  "model": "google/gemini-3-flash-preview",
   "fhir_context_enabled": true,
-  "external_agent_url": "https://mamaguard-xxxxx.run.app",
+  "external_agent_url": "https://ca-mamaguard.gentleisland-cc083285.eastus.azurecontainerapps.io",
   "guardrails": [],
   "response_format": "5T",
   "skills": [

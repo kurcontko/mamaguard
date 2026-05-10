@@ -20,15 +20,16 @@ Deadline: **May 11, 2026 @ 11:00pm EDT**.
 - [ ] `make smoke-mcp` passes (MCP server smoke test)
 - [ ] `scripts/pre_deploy_check.sh` passes
 
-## 3. Deploy A2A Agent to Cloud Run
+## 3. Deploy A2A Agent (Azure App Service / Container Apps — production target)
 
-- [ ] Build Docker image (`mamaguard/Dockerfile`)
-- [ ] Push image to Google Container Registry / Artifact Registry
-- [ ] Deploy to Cloud Run with env vars (API keys, FHIR config)
-- [ ] Verify health: `curl https://<CLOUD_RUN_URL>/.well-known/agent-card.json` returns 200
-- [ ] Verify A2A endpoint responds to test query
+- [ ] Build Docker image (`mamaguard/Dockerfile`) and push to Azure Container Registry
+- [ ] Deploy to Azure App Service or Container Apps with env vars (`MAMAGUARD_API_KEY`, `GOOGLE_API_KEY`, `MAMAGUARD_URL`, optional `PO_PLATFORM_BASE_URL`)
+- [ ] Verify health: `curl https://<AZURE_URL>/.well-known/agent-card.json` returns 200 with `protocolVersion`, `version: 1.0.0`, 4 skills with `examples`
+- [ ] Verify auth: POST to `/` without `X-API-Key` returns 401; with valid key passes through
 
-See: [`scripts/deploy.sh`](../../scripts/deploy.sh)
+> Cloud Run alternative: `scripts/deploy.sh` exists for `gcloud`-based deploys.
+> Production for the hackathon submission runs on Azure, so use that as the
+> canonical path. Keep the GCP script only as fallback.
 
 ## 4. Deploy MCP Server (Superpower Track)
 
@@ -70,7 +71,7 @@ See: [`README.md`](README.md), [`po_integration.md`](po_integration.md)
 ## 7. Record Demo Video (< 3 minutes)
 
 - [ ] Pre-seed memory note: `uv run python scripts/demo_memory_recall.py --seed-only`
-- [ ] Follow script in [`demo_script.md`](demo_script.md)
+- [ ] Follow script in [`demo_script_v4_azure.md`](demo_script_v4_azure.md) (patient-first, Azure deployment)
 - [ ] Pre-copy all inputs (no typing during recording)
 - [ ] Scene 1: Intro + architecture (0:00-0:15)
 - [ ] Scene 2: Launch from Marketplace (0:15-0:30)

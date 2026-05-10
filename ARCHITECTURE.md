@@ -849,7 +849,7 @@ Returns patient + ALL linked resources in one call.
 | Task | Details | Status |
 |------|---------|--------|
 | End-to-end testing in PO | Full flow with Maria in Prompt Opinion UI | [ ] |
-| Write integration tests | 894 unit tests, 57/57 Tier-1 benchmarks at 100.0%, mypy clean | [x] |
+| Write integration tests | 1170 unit tests, 57/57 Tier-1 benchmarks at 100.0%, mypy clean | [x] |
 | Handle edge cases | Missing data, FHIR errors, timeout handling — error-path tests for all tools | [x] |
 | Optimize agent instructions | Liaison pattern enforced on all 3 sub-agents, 5T alignment | [x] |
 | Deploy final to Cloud Run | Dockerfile + Procfile + `scripts/deploy.sh` ready; awaiting deploy | [~] |
@@ -942,7 +942,7 @@ Returns patient + ALL linked resources in one call.
 - [ ] Agent deployed to public HTTPS URL (Cloud Run)
 - [x] Agent card served correctly (verified via `test_app_factory.py` — 41 tests)
 - [x] A2A FHIR context handling working (SHARP header patterns via ADK tools — 66 fhir_hook tests)
-- [x] 15 FHIR tools functional (ADK in-process + MCP server — 894 unit tests)
+- [x] 15 FHIR tools functional (ADK in-process + MCP server — 1170 unit tests)
 - [x] 4 A2A skills working (orchestrator + 3 sub-agents — 28 in-process agent tests)
 - [x] Liaison Agent pattern demonstrated (INPUT_REQUIRED — all 3 sub-agents enforce)
 - [x] FHIR write-back (RiskAssessment + CommunicationRequest + Goal/CarePlan — error-path tests)
