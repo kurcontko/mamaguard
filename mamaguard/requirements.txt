@@ -1,7 +1,12 @@
-google-adk>=1.25.0
-a2a-sdk[http-server]>=0.3.0
-httpx>=0.28.0
-python-dotenv>=1.0.0
-uvicorn>=0.41.0
-mcp[server]>=1.0.0
-PyJWT>=2.8.0
+google-adk==1.29.0
+litellm==1.83.14
+a2a-sdk[http-server]==0.3.26
+httpx==0.28.1
+python-dotenv==1.2.2
+uvicorn==0.44.0
+# Pinned: middleware.py relies on Starlette's _CachedRequest._body replay
+# semantics in ApiKeyMiddleware for FHIR metadata bridging. Upgrade only
+# after re-running mamaguard/tests/test_middleware.py end to end.
+starlette==0.52.1
+mcp==1.27.0
+PyJWT==2.12.1
