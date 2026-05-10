@@ -99,13 +99,13 @@ echo ""
 echo "--- Test: Auth Enforcement ---"
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/" \
     -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"message/send","id":"1","params":{"message":{"role":"user","parts":[{"text":"hello"}]}}}')
+    -d '{"jsonrpc":"2.0","method":"message/send","id":"1","params":{"message":{"messageId":"msg-1","role":"user","parts":[{"text":"hello"}]}}}')
 assert_status "POST without API key rejected" "401" "$HTTP_CODE"
 
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/" \
     -H "Content-Type: application/json" \
     -H "X-API-Key: wrong-key-999" \
-    -d '{"jsonrpc":"2.0","method":"message/send","id":"2","params":{"message":{"role":"user","parts":[{"text":"hello"}]}}}')
+    -d '{"jsonrpc":"2.0","method":"message/send","id":"2","params":{"message":{"messageId":"msg-2","role":"user","parts":[{"text":"hello"}]}}}')
 assert_status "POST with invalid API key rejected" "403" "$HTTP_CODE"
 
 # 3. A2A endpoint accepts valid API key
@@ -114,7 +114,7 @@ echo "--- Test: A2A Endpoint ---"
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/" \
     -H "Content-Type: application/json" \
     -H "X-API-Key: $API_KEY" \
-    -d '{"jsonrpc":"2.0","method":"message/send","id":"3","params":{"message":{"role":"user","parts":[{"text":"hello"}]}}}')
+    -d '{"jsonrpc":"2.0","method":"message/send","id":"3","params":{"message":{"messageId":"msg-3","role":"user","parts":[{"text":"hello"}]}}}')
 # Accept 200 or 500 (500 is OK for now — means auth passed but no GOOGLE_API_KEY configured)
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "500" ]; then
     green "PASS: POST with valid API key accepted (HTTP $HTTP_CODE)"

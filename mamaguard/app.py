@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from a2a.types import AgentSkill
+from a2a.types import AgentProvider, AgentSkill
 
 from mamaguard import MAMAGUARD_VERSION
 from mamaguard.shared.app_factory import create_a2a_app
@@ -40,6 +40,14 @@ a2a_app = create_a2a_app(
     url=os.getenv("MAMAGUARD_URL", os.getenv("BASE_URL", "http://localhost:8001")),
     port=8001,
     fhir_extension_uri=f"{os.getenv('PO_PLATFORM_BASE_URL', 'https://app.promptopinion.ai')}/schemas/a2a/v1/fhir-context",
+    provider=AgentProvider(
+        organization="MamaGuard",
+        url=os.getenv("MAMAGUARD_REPO_URL", "https://github.com/qrc/medical-hackathon-v3"),
+    ),
+    documentation_url=os.getenv(
+        "MAMAGUARD_DOCS_URL",
+        "https://github.com/qrc/medical-hackathon-v3/blob/main/README.md",
+    ),
     skills=[
         AgentSkill(
             id="maternal-risk-assessment",
@@ -53,10 +61,16 @@ a2a_app = create_a2a_app(
                 "Table, Task, Transaction) with FHIR-cited evidence and writes "
                 "RiskAssessment back to the patient record. Operates as a Liaison "
                 "Agent — flags critical findings for clinician review, never "
-                "prescribes or recommends specific medications. "
-                "Example: 'Assess maternal risk for this patient'"
+                "prescribes or recommends specific medications."
             ),
             tags=["maternal", "risk", "pregnancy", "fhir"],
+            examples=[
+                "Assess maternal risk for this patient",
+                "What are the BP and HbA1c trends and what do they mean clinically?",
+                "Check this patient's pregnancy history and flag any complications",
+            ],
+            input_modes=["text/plain"],
+            output_modes=["text/plain"],
         ),
         AgentSkill(
             id="pediatric-care-transition",
@@ -69,10 +83,16 @@ a2a_app = create_a2a_app(
                 "preeclampsia, and adjusts milestones for prematurity. Returns "
                 "structured 5T output (Talk, Template, Table, Task, Transaction) "
                 "and creates CommunicationRequest for follow-up. Operates as a "
-                "Liaison Agent — flags all clinical decisions for clinician review. "
-                "Example: 'Check immunization status and developmental milestones'"
+                "Liaison Agent — flags all clinical decisions for clinician review."
             ),
             tags=["pediatric", "immunization", "screening", "newborn"],
+            examples=[
+                "Find linked children and check their immunization status",
+                "Check immunization status and developmental milestones",
+                "Are there pediatric care gaps inherited from the mother's history?",
+            ],
+            input_modes=["text/plain"],
+            output_modes=["text/plain"],
         ),
         AgentSkill(
             id="sdoh-screening-outreach",
@@ -86,16 +106,22 @@ a2a_app = create_a2a_app(
                 "plus CommunicationRequest for outreach. Returns structured 5T "
                 "output (Talk, Template, Table, Task, Transaction) prioritized by "
                 "domain severity. Operates as a Liaison Agent — coordinates "
-                "referrals while keeping clinicians in the loop. "
-                "Example: 'Screen for social determinants and find resources'"
+                "referrals while keeping clinicians in the loop."
             ),
             tags=["sdoh", "social-determinants", "outreach", "care-plan"],
+            examples=[
+                "Screen for social determinants, find resources, and create a care plan",
+                "Does this patient have insurance and language barriers?",
+                "Match this patient to community resources and write a CarePlan",
+            ],
+            input_modes=["text/plain"],
+            output_modes=["text/plain"],
         ),
         AgentSkill(
             id="comprehensive-care-plan",
             name="Comprehensive Care Plan",
             description=(
-                "Runs all three specialist agents sequentially — maternal risk "
+                "Runs all three specialist agents in parallel — maternal risk "
                 "(7 tools), pediatric transition (5 tools), SDOH screening "
                 "(6 tools) — then synthesizes findings into a unified 5T care "
                 "coordination plan (Talk, Template, Table, Task, Transaction). "
@@ -103,10 +129,16 @@ a2a_app = create_a2a_app(
                 "medications escalate risk; maternal complications elevate pediatric "
                 "monitoring. Highest risk from any domain wins. Operates as a "
                 "Liaison Agent — all critical decisions flagged for clinician "
-                "review. Best for full patient assessments. "
-                "Example: 'Run a comprehensive assessment for this patient'"
+                "review. Best for full patient assessments."
             ),
             tags=["care-plan", "coordination", "summary"],
+            examples=[
+                "Run a comprehensive assessment for this patient",
+                "Give me the full picture across maternal, pediatric, and SDOH",
+                "What is the current plan for this patient and what should I know about her history?",
+            ],
+            input_modes=["text/plain"],
+            output_modes=["text/plain"],
         ),
     ],
 )

@@ -26,7 +26,7 @@ from .logging_utils import redact_headers, redact_payload, safe_pretty_json, tok
 
 logger = logging.getLogger(__name__)
 
-LOG_FULL_PAYLOAD = os.getenv("LOG_FULL_PAYLOAD", "true").lower() == "true"
+LOG_FULL_PAYLOAD = os.getenv("LOG_FULL_PAYLOAD", "false").lower() == "true"
 
 # A2A extension negotiation header (per A2A protocol spec).
 A2A_EXTENSIONS_HEADER = "X-A2A-Extensions"
@@ -112,6 +112,14 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 if fhir_key and fhir_data and not params.get("metadata"):
                     params["metadata"] = {fhir_key: fhir_data}
                     body_bytes = json.dumps(parsed, ensure_ascii=False).encode("utf-8")
+                    # Writing to request._body is how Starlette's _CachedRequest
+                    # exposes the body to downstream: BaseHTTPMiddleware wraps the
+                    # request so wrapped_receive replays from _body once the body
+                    # has been consumed here via `await request.body()`. Swapping
+                    # in a custom receive does NOT work — call_next uses the
+                    # closure-bound wrapped_receive, not request.receive. Pinning
+                    # starlette in requirements.txt guards against this contract
+                    # shifting under us.
                     request._body = body_bytes  # type: ignore[attr-defined]
 
                     logger.info(

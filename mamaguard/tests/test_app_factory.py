@@ -252,7 +252,13 @@ class TestAuthOnRealApp(_AppTestCase):
                     "jsonrpc": "2.0",
                     "method": "message/send",
                     "id": "auth-test-1",
-                    "params": {"message": {"role": "user", "parts": [{"text": "hello"}]}},
+                    "params": {
+                        "message": {
+                            "messageId": "auth-test-msg-1",
+                            "role": "user",
+                            "parts": [{"text": "hello"}],
+                        }
+                    },
                 },
             )
         self.assertEqual(resp.status_code, 401)
@@ -265,7 +271,13 @@ class TestAuthOnRealApp(_AppTestCase):
                     "jsonrpc": "2.0",
                     "method": "message/send",
                     "id": "auth-test-2",
-                    "params": {"message": {"role": "user", "parts": [{"text": "hello"}]}},
+                    "params": {
+                        "message": {
+                            "messageId": "auth-test-msg-2",
+                            "role": "user",
+                            "parts": [{"text": "hello"}],
+                        }
+                    },
                 },
                 headers={"X-API-Key": "wrong-key"},
             )
@@ -280,7 +292,13 @@ class TestAuthOnRealApp(_AppTestCase):
                     "jsonrpc": "2.0",
                     "method": "message/send",
                     "id": "auth-test-3",
-                    "params": {"message": {"role": "user", "parts": [{"text": "hello"}]}},
+                    "params": {
+                        "message": {
+                            "messageId": "auth-test-msg-3",
+                            "role": "user",
+                            "parts": [{"text": "hello"}],
+                        }
+                    },
                 },
                 headers={"X-API-Key": "test-factory-key"},
             )

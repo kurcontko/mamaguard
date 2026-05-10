@@ -103,6 +103,7 @@ def build_payload(message: str, fhir_url: str, patient_id: str, req_id: str) -> 
         "id": req_id,
         "params": {
             "message": {
+                "messageId": f"msg-{req_id}",
                 "role": "user",
                 "parts": [{"text": message}],
             },
