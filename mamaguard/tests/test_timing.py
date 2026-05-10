@@ -112,6 +112,14 @@ class TestBeforeToolTiming(unittest.TestCase):
         result = before_tool_timing(tool, {}, ctx)
         self.assertIsNone(result)
 
+    def test_accepts_adk_keyword_arguments(self):
+        """ADK invokes tool callbacks with ``tool_context=`` as a keyword."""
+        ctx = _make_context()
+        tool = _make_tool("maternal_risk_agent")
+        result = before_tool_timing(tool=tool, args={}, tool_context=ctx)
+        self.assertIsNone(result)
+        self.assertIn("maternal_risk_agent", ctx.state[_STATE_KEY_STARTS])
+
 
 # ---------------------------------------------------------------------------
 # after_tool_timing
@@ -167,6 +175,20 @@ class TestAfterToolTiming(unittest.TestCase):
         after_tool_timing(tool, {}, ctx, {"status": "ok"})
         starts = ctx.state.get(_STATE_KEY_STARTS, {})
         self.assertNotIn("maternal_risk_agent", starts)
+
+    def test_accepts_adk_keyword_arguments(self):
+        """ADK invokes tool callbacks with ``tool_context=`` as a keyword."""
+        ctx = _make_context()
+        tool = _make_tool("maternal_risk_agent")
+        before_tool_timing(tool=tool, args={}, tool_context=ctx)
+        result = after_tool_timing(
+            tool=tool,
+            args={},
+            tool_context=ctx,
+            tool_response={"status": "ok"},
+        )
+        self.assertIsNone(result)
+        self.assertEqual(ctx.state[_STATE_KEY_TIMINGS][0]["agent"], "maternal_risk_agent")
 
 
 # ---------------------------------------------------------------------------

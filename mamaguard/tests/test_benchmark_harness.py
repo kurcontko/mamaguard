@@ -39,6 +39,7 @@ from benchmarks.runner import (
     print_report,
     run_suites,
 )
+from benchmarks.llm_eval.client import LLMConfig
 
 
 # ---------------------------------------------------------------------------
@@ -892,6 +893,55 @@ class TestBuildGenerationConfig(unittest.TestCase):
 
     def test_unknown_backend_returns_none(self):
         self.assertIsNone(build_generation_config("something_else"))
+
+
+class TestLLMConfig(unittest.TestCase):
+    def test_judge_deepseek_thinking_env(self):
+        old = {}
+        keys = (
+            "BENCH_API_BASE",
+            "BENCH_MODEL",
+            "BENCH_API_KEY",
+            "JUDGE_API_BASE",
+            "JUDGE_MODEL",
+            "JUDGE_API_KEY",
+            "JUDGE_MAX_TOKENS",
+            "JUDGE_TEMPERATURE",
+            "JUDGE_TIMEOUT",
+            "JUDGE_REASONING_EFFORT",
+            "JUDGE_THINKING",
+        )
+        for key in keys:
+            old[key] = os.environ.get(key)
+        try:
+            os.environ["BENCH_API_BASE"] = "http://localhost:30000/v1"
+            os.environ["BENCH_MODEL"] = "qwen3.6"
+            os.environ["BENCH_API_KEY"] = "EMPTY"
+            os.environ["JUDGE_API_BASE"] = "https://api.deepseek.com"
+            os.environ["JUDGE_MODEL"] = "deepseek-v4-pro"
+            os.environ["JUDGE_API_KEY"] = "deepseek-key"
+            os.environ["JUDGE_MAX_TOKENS"] = "8192"
+            os.environ["JUDGE_TEMPERATURE"] = "0"
+            os.environ["JUDGE_TIMEOUT"] = "180"
+            os.environ["JUDGE_REASONING_EFFORT"] = "high"
+            os.environ["JUDGE_THINKING"] = "enabled"
+
+            cfg = LLMConfig.judge_from_env()
+
+            self.assertEqual(cfg.api_base, "https://api.deepseek.com")
+            self.assertEqual(cfg.model, "deepseek-v4-pro")
+            self.assertEqual(cfg.api_key, "deepseek-key")
+            self.assertEqual(cfg.max_tokens, 8192)
+            self.assertEqual(cfg.temperature, 0.0)
+            self.assertEqual(cfg.timeout, 180)
+            self.assertEqual(cfg.reasoning_effort, "high")
+            self.assertEqual(cfg.thinking, "enabled")
+        finally:
+            for key, val in old.items():
+                if val is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = val
 
 
 _has_litellm = importlib.util.find_spec("litellm") is not None
