@@ -500,6 +500,19 @@ def _maybe_denormalize_json_body(body: bytes) -> bytes:
     return json.dumps(parsed, ensure_ascii=False).encode("utf-8")
 
 
+# Earlier revision tried to rewrite ``TASK_STATE_COMPLETED`` to
+# ``TASK_STATE_INPUT_REQUIRED`` when an artifact contained "PENDING APPROVAL",
+# so the same PO chat thread could issue the approval. PO's BYO consultation
+# tool rejected those responses with "the server responded by indicating
+# input is required, however they did not specify what is required" because
+# the A2A v1 spec also requires ``status.message`` to describe what is
+# needed. Rather than synthesize a clinician-facing prompt the BYO would
+# treat as the final response (hiding the 5T artifact), we keep state as
+# ``TASK_STATE_COMPLETED`` and rely on
+# ``_strip_taskid_on_approval`` (inbound) plus the process-level plan store
+# to allow follow-up approval messages to commit successfully.
+
+
 def _wrap_jsonrpc_task_result(parsed) -> bool:
     """If ``parsed`` is a JSON-RPC response whose ``result`` is a Task object
     (``kind == "KIND_TASK"`` after denormalization), wrap it as
@@ -602,11 +615,67 @@ class JsonRpcMethodAliasMiddleware(BaseHTTPMiddleware):
             if method_changed or enums_changed:
                 request.scope[_SCOPE_A2A_OUTBOUND_ENUM_STYLE] = _A2A_V1_ENUM_STYLE
 
-            if method_changed or enums_changed:
+            taskid_stripped = _strip_taskid_on_approval(parsed)
+            if taskid_stripped:
+                logger.info(
+                    "jsonrpc_taskid_stripped_for_approval path=%s",
+                    request.url.path,
+                )
+
+            if method_changed or enums_changed or taskid_stripped:
                 body_bytes = json.dumps(parsed, ensure_ascii=False).encode("utf-8")
                 request._body = body_bytes  # type: ignore[attr-defined]
 
         return await call_next(request)
+
+
+_APPROVAL_INTENT_RE = re.compile(
+    r"\b(?:approve|approved|reject|deny|commit|approve\s+all)\b",
+    re.IGNORECASE,
+)
+
+
+def _strip_taskid_on_approval(parsed: dict) -> bool:
+    """When the inbound user message is an approval intent, remove any
+    ``taskId`` from the JSON-RPC params and from the inner message.
+
+    Without this, PO threads the approval reply into the original Scene 3
+    task — which ADK's A2A executor has already marked completed — and the
+    SDK rejects with "Task X is in terminal state: completed". Stripping the
+    task id makes the SDK create a fresh task; the orchestrator finds the
+    plan in the process-level store (see plan_mode._PROCESS_PLAN_STORE) and
+    commits it normally.
+
+    Returns True iff anything was actually stripped.
+    """
+    params = parsed.get("params")
+    if not isinstance(params, dict):
+        return False
+
+    message = params.get("message")
+    if not isinstance(message, dict):
+        return False
+
+    parts = message.get("parts")
+    if not isinstance(parts, list):
+        return False
+
+    text = ""
+    for part in parts:
+        if isinstance(part, dict) and isinstance(part.get("text"), str):
+            text += part["text"] + "\n"
+
+    if not _APPROVAL_INTENT_RE.search(text):
+        return False
+
+    changed = False
+    if "taskId" in params:
+        params.pop("taskId", None)
+        changed = True
+    if "taskId" in message:
+        message.pop("taskId", None)
+        changed = True
+    return changed
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):

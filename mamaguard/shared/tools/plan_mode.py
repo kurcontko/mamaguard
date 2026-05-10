@@ -41,15 +41,27 @@ _APPROVAL_REQUIRED_LEVELS = {"HIGH", "URGENT"}
 
 
 # ---------------------------------------------------------------------------
-# Plan store -- lives in tool_context.state so it survives across tool calls
-# within a single session but does not persist across sessions.
+# Plan store -- process-level so plans survive across sessions and PO chat
+# threads. This is what makes Scene 5 (clinician approval) work even when the
+# clinician opens a brand-new conversation to issue the approval: the
+# orchestrator's ``commit_pending_write`` can find the plan by id regardless
+# of which session staged it.
+#
+# Tradeoffs:
+#   - Plans don't survive a container restart (in-memory only). Production
+#     deployments should persist plans as FHIR resources with status=draft
+#     instead, scoped to the originating workspace.
+#   - Plan ids are timestamp + random, so collisions across users are vanishingly
+#     unlikely; but a malicious actor with a guessed plan_id could commit
+#     someone else's plan. Acceptable for single-tenant demo; real deployments
+#     need per-workspace scoping in the store key.
 # ---------------------------------------------------------------------------
+
+_PROCESS_PLAN_STORE: dict[str, dict] = {}
 
 
 def _store(tool_context: ToolContext | None) -> dict[str, dict]:
-    if tool_context is None or not hasattr(tool_context, "state"):
-        return {}
-    return tool_context.state.setdefault(_PENDING_WRITES_KEY, {})
+    return _PROCESS_PLAN_STORE
 
 
 def _new_plan_id(store: dict, resource_type: str) -> str:
