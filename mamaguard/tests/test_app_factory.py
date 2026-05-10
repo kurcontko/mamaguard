@@ -209,9 +209,13 @@ class TestAgentCardCapabilities(_AppTestCase):
     def _get_card(self):
         return self.client.get("/.well-known/agent-card.json").json()
 
-    def test_streaming_enabled(self):
+    def test_streaming_disabled(self):
+        # Working agent precedent on the PO marketplace (e.g. Homeward) declares
+        # streaming=False so PO's BYO consultation tool uses non-streaming
+        # SendMessage instead of SSE. Forum threads confirm SSE handling is
+        # brittle in PO's parser. See po_debug_session_2026-05-11.md.
         caps = self._get_card()["capabilities"]
-        self.assertTrue(caps.get("streaming"))
+        self.assertFalse(caps.get("streaming"))
 
     def test_fhir_extension_present(self):
         exts = self._get_card()["capabilities"].get("extensions", [])
@@ -258,7 +262,7 @@ class TestAgentCardCapabilities(_AppTestCase):
 
     def test_protocol_version(self):
         card = self._get_card()
-        self.assertTrue(card.get("protocolVersion"), "Missing protocolVersion")
+        self.assertEqual(card.get("protocolVersion"), "1.0")
 
     def test_input_output_modes(self):
         card = self._get_card()

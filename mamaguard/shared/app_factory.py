@@ -22,7 +22,12 @@ from google.adk.a2a.utils.agent_to_a2a import to_a2a
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from .middleware import ApiKeyMiddleware
+from .middleware import (
+    A2aV1OutboundMiddleware,
+    ApiKeyMiddleware,
+    FhirHeaderMiddleware,
+    JsonRpcMethodAliasMiddleware,
+)
 
 
 def create_a2a_app(
@@ -98,7 +103,12 @@ def create_a2a_app(
         default_input_modes=["text/plain"],
         default_output_modes=["text/plain"],
         capabilities=AgentCapabilities(
-            streaming=True,
+            # Working-precedent agents on PO marketplace (e.g. Homeward) set
+            # streaming=False so PO's BYO consultation uses non-streaming
+            # SendMessage instead of SendStreamingMessage. SSE handling in PO's
+            # parser appears unreliable per the Devpost forum
+            # (see po_debug_session_2026-05-11.md).
+            streaming=False,
             push_notifications=False,
             state_transition_history=True,
             extensions=extensions,
@@ -125,6 +135,7 @@ def create_a2a_app(
     # Migration ref: https://docs.promptopinion.ai/a2a-v1-migration
     A2A_V1_PROTOCOL_VERSION = "1.0"
     card_payload = agent_card.model_dump(by_alias=True, exclude_none=True, mode="json")
+    card_payload["protocolVersion"] = A2A_V1_PROTOCOL_VERSION
     primary_url = card_payload["url"]
     primary_iface = {
         "url": primary_url,
@@ -163,5 +174,24 @@ def create_a2a_app(
     )
     if require_api_key and not auth_disabled:
         app.add_middleware(ApiKeyMiddleware)
+
+    # FHIR header bridge runs regardless of auth — PO forwards FHIR context as
+    # HTTP headers and the existing fhir_hook only reads JSON-RPC metadata.
+    # Mounted AFTER JsonRpcMethodAliasMiddleware below so the alias runs first
+    # (Starlette executes middleware LIFO). The order is:
+    #   1. JsonRpcMethodAliasMiddleware  (SendStreamingMessage → message/stream)
+    #   2. FhirHeaderMiddleware          (x-fhir-* headers → params.metadata)
+    #   3. ApiKeyMiddleware (if enabled) (X-API-Key check + payload logging)
+    app.add_middleware(FhirHeaderMiddleware)
+
+    # Method-aliasing runs regardless of auth: PO's v1 verbs need rewriting
+    # before the SDK dispatches. Add LAST so it runs FIRST (Starlette is LIFO).
+    app.add_middleware(JsonRpcMethodAliasMiddleware)
+
+    # A2A v1 outbound formatting: must run OUTERMOST so it sees the final
+    # response after the SDK has produced it. Added last → runs first for
+    # inbound (passthrough), wraps the response on outbound when the request
+    # arrived using PO's v1 wire format.
+    app.add_middleware(A2aV1OutboundMiddleware)
 
     return app
