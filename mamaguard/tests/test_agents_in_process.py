@@ -182,7 +182,7 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_maternal_risk_profile",
                 "get_active_medications",
                 "get_patient_summary",
-                "write_risk_assessment",
+                "plan_risk_assessment",
             ]),
         )
         self.assertEqual(_callback_name(maternal_risk_agent), "extract_fhir_context")
@@ -196,7 +196,7 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_developmental_screening_status",
                 "get_care_gaps",
                 "get_patient_summary",
-                "create_communication_request",
+                "plan_communication_request",
             ]),
         )
         self.assertEqual(
@@ -212,8 +212,8 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_patient_summary",
                 "get_care_gaps",
                 "find_sdoh_resources",
-                "write_care_plan",
-                "create_communication_request",
+                "plan_care_plan",
+                "plan_communication_request",
             ]),
         )
         self.assertEqual(_callback_name(sdoh_outreach_agent), "extract_fhir_context")

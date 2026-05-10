@@ -346,15 +346,16 @@ class TestOrchestratorJsonWiring(unittest.TestCase):
         Regression: the design promises parallel sub-agent dispatch for
         comprehensive assessments. ADK runs concurrent function calls in
         the same turn in parallel, so the prompt must tell the model to
-        emit all three calls in one turn — the old wording said
+        emit fan-out calls in one turn — the old wording said
         "sequentially" which forfeited the speedup.
         """
         from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
         lowered = ORCHESTRATOR_INSTRUCTION.lower()
-        self.assertIn("parallel dispatch", lowered)
-        self.assertIn("same turn", lowered)
+        self.assertIn("in parallel", lowered)
+        self.assertIn("first turn", lowered)
         # Old wording must be gone.
         self.assertNotIn("all three sequentially", lowered)
+        self.assertNotIn("sequential", lowered)
 
     def test_persist_memory_runs_before_json_formatter(self):
         """
