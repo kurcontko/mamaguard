@@ -30,7 +30,7 @@ class FhirContext:
         }
 
     @classmethod
-    def from_sharp(cls, sharp_context: dict) -> "FhirContext":
+    def from_sharp(cls, sharp_context: dict) -> FhirContext:
         """
         Build a FhirContext from a SHARP extension context dict.
 

@@ -16,7 +16,7 @@ externally comparable methodology.
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from benchmarks.base import BenchmarkCase, BenchmarkResult, BenchmarkSuite, Verdict
 from benchmarks.e2e.runner_harness import MamaGuardHarness

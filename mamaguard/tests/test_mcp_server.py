@@ -3,7 +3,7 @@ Tests for the MamaGuard MCP server.
 
 Covers:
 1. FhirContext adapter (context.py)
-2. MCP tool registration (all 15 tools visible)
+2. MCP tool registration (all 19 tools visible)
 3. Tool invocation — happy path with mocked FHIR responses
 4. Error propagation — missing credentials surfaced cleanly
 5. SHARP context constructor (from_sharp)
@@ -20,10 +20,9 @@ from unittest.mock import MagicMock, patch
 
 import anyio
 from anyio import create_memory_object_stream
-from mcp.shared.message import SessionMessage
 from mcp.client.session import ClientSession
+from mcp.shared.message import SessionMessage
 from mcp.types import Implementation
-
 
 # ---------------------------------------------------------------------------
 # FhirContext tests
@@ -86,11 +85,16 @@ EXPECTED_TOOLS = {
     "get_immunization_gaps",
     "get_developmental_screening_status",
     "get_care_gaps",
+    "get_current_plan",
     "get_sdoh_screening",
     "find_sdoh_resources",
     "write_risk_assessment",
     "create_communication_request",
     "write_care_plan",
+    # Compound fetchers (ported from v2, for marketplace one-shot consumption)
+    "assess_maternal_risk",
+    "assess_pediatric_status",
+    "screen_sdoh",
 }
 
 
@@ -101,7 +105,7 @@ class TestMcpToolRegistration(unittest.TestCase):
         tool_manager = mcp._tool_manager
         return {name for name in tool_manager._tools}
 
-    def test_all_15_tools_registered(self):
+    def test_all_tools_registered(self):
         registered = self._registered_names()
         missing = EXPECTED_TOOLS - registered
         self.assertEqual(missing, set(), f"Missing tools: {missing}")
@@ -110,6 +114,62 @@ class TestMcpToolRegistration(unittest.TestCase):
         registered = self._registered_names()
         extra = registered - EXPECTED_TOOLS
         self.assertEqual(extra, set(), f"Unexpected extra tools: {extra}")
+
+
+class TestCompoundMcpTools(unittest.TestCase):
+    """Compound MCP tools wrap parallel fetchers for marketplace one-shot use."""
+
+    def test_assess_maternal_risk_returns_structured_json(self):
+        from mamaguard.mcp_server import server as srv
+
+        async def fake_fetch(*args, **kwargs):
+            return srv._fetch_maternal_data.__wrapped__ if False else None  # unused
+
+        from mamaguard.shared.fetchers import MaternalData
+        with patch.object(srv, "_fetch_maternal_data") as mock_fetch:
+            async def _ret(*a, **k):
+                return MaternalData(
+                    patient_summary={"status": "success", "name": "Maria"},
+                    risk_profile={"status": "success", "data": {"risk_level": "URGENT"}},
+                    medications={"status": "success"},
+                    status="ok",
+                )
+            mock_fetch.side_effect = _ret
+            result = srv.assess_maternal_risk("https://fhir", "tok", "p1")
+        data = json.loads(result)
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["patient_summary"]["name"], "Maria")
+        self.assertEqual(data["risk_profile"]["data"]["risk_level"], "URGENT")
+
+    def test_assess_pediatric_status_no_linked_child(self):
+        from mamaguard.mcp_server import server as srv
+        from mamaguard.shared.fetchers import PediatricData
+
+        with patch.object(srv, "_fetch_pediatric_data") as mock_fetch:
+            async def _ret(*a, **k):
+                return PediatricData(linked_child=None, status="no_linked_child")
+            mock_fetch.side_effect = _ret
+            result = srv.assess_pediatric_status("https://fhir", "tok", "p1")
+        data = json.loads(result)
+        self.assertEqual(data["status"], "no_linked_child")
+        self.assertIsNone(data["linked_child"])
+
+    def test_screen_sdoh_returns_resources(self):
+        from mamaguard.mcp_server import server as srv
+        from mamaguard.shared.fetchers import SdohData
+
+        with patch.object(srv, "_fetch_sdoh_data") as mock_fetch:
+            async def _ret(*a, **k):
+                return SdohData(
+                    screening={"status": "success"},
+                    resources=[{"category": "housing", "result": {"resources": ["211"]}}],
+                    status="ok",
+                )
+            mock_fetch.side_effect = _ret
+            result = srv.screen_sdoh("https://fhir", "tok", "p1")
+        data = json.loads(result)
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["resources"][0]["category"], "housing")
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +251,47 @@ class TestGetActiveMedicationsTool(unittest.TestCase):
         self.assertEqual(data["status"], "success")
         self.assertEqual(data["count"], 1)
         self.assertEqual(data["medications"][0]["medication"], "Labetalol 200mg")
+
+
+class TestGetCurrentPlanTool(unittest.TestCase):
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_returns_current_plan(self, mock_get):
+        mock_get.side_effect = [
+            {
+                "resourceType": "Bundle",
+                "entry": [
+                    {
+                        "resource": {
+                            "resourceType": "CarePlan",
+                            "id": "cp-1",
+                            "status": "active",
+                            "intent": "plan",
+                            "title": "Postpartum follow-up",
+                        }
+                    }
+                ],
+            },
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+        ]
+        from mamaguard.mcp_server.server import get_current_plan
+
+        result = get_current_plan(
+            fhir_url="https://fhir.example.org",
+            fhir_token="tok",
+            patient_id="p1",
+        )
+        data = json.loads(result)
+        self.assertEqual(data["status"], "success")
+        self.assertTrue(data["data"]["current_plan_present"])
+        self.assertEqual(data["data"]["care_plans"][0]["resource_id"], "cp-1")
 
 
 class TestGetBpTrendTool(unittest.TestCase):
@@ -336,8 +437,9 @@ class TestCareGapsTool(unittest.TestCase):
 
 class TestFindSdohResourcesTool(unittest.TestCase):
     def test_z590_housing_offline(self):
-        from mamaguard.mcp_server.server import find_sdoh_resources
         import os as _os
+
+        from mamaguard.mcp_server.server import find_sdoh_resources
         _os.environ.pop("MAMAGUARD_SDOH_API_URL", None)
         result = find_sdoh_resources(
             fhir_url="https://fhir.example.org",
@@ -474,7 +576,7 @@ class TestMcpProtocolHandshake(unittest.TestCase):
 class TestMcpProtocolListTools(unittest.TestCase):
     """MCP protocol tool listing via the protocol layer."""
 
-    def test_list_tools_returns_all_15(self):
+    def test_list_tools_returns_all_expected(self):
         async def _test():
             low_server, init_opts, c2s_recv, s2c_send, client = (
                 await _create_mcp_client_session()
@@ -560,7 +662,7 @@ class TestMcpProtocolListTools(unittest.TestCase):
         require the three SHARP params (plus optional defaults)."""
         read_tools = {
             "get_patient_summary", "get_active_medications",
-            "get_pregnancy_history", "get_maternal_risk_profile",
+            "get_current_plan", "get_pregnancy_history", "get_maternal_risk_profile",
             "get_sdoh_screening",
         }
         async def _test():
@@ -966,8 +1068,9 @@ class TestSseAppExport(unittest.TestCase):
     """Verify that the module-level sse_app is a valid Starlette ASGI app."""
 
     def test_sse_app_is_starlette_instance(self):
-        from mamaguard.mcp_server.server import sse_app
         from starlette.applications import Starlette
+
+        from mamaguard.mcp_server.server import sse_app
         self.assertIsInstance(sse_app, Starlette)
 
     def test_sse_app_is_callable(self):

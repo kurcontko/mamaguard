@@ -327,8 +327,9 @@ def bench_error_missing_context():
 
 @suite.case("error_fhir_server_down", "Graceful error when FHIR server unreachable", "clinical_reasoning")
 def bench_error_server_down():
-    from mamaguard.shared.tools.maternal import get_bp_trend
     import httpx
+
+    from mamaguard.shared.tools.maternal import get_bp_trend
 
     with patch("mamaguard.shared.tools.fhir_base._fhir_get") as mock:
         mock.side_effect = httpx.ConnectError("Connection refused")

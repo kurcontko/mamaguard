@@ -1,7 +1,7 @@
 # MamaGuard: AI-Powered Maternal-Pediatric Care Coordination
 
 > **80% of pregnancy-related deaths are preventable. 40% of new mothers never return for postpartum care.**
-> MamaGuard closes the coordination gap with three specialist AI agents, 15 FHIR tools, and the clinician always in control.
+> MamaGuard closes the coordination gap with three specialist AI agents, 16 shared FHIR tools, approval-gated write planning, and the clinician always in control.
 
 Built for the [Agents Assemble](https://agents-assemble.devpost.com/) hackathon. Dual-track submission: **A2A Agent** + **MCP Server** (Superpower), published on the [Prompt Opinion Marketplace](https://promptopinion.ai).
 
@@ -12,7 +12,7 @@ Built for the [Agents Assemble](https://agents-assemble.devpost.com/) hackathon.
 ```bash
 git clone <repo-url> && cd mamaguard
 make setup                  # install deps (~15s)
-make test                   # 1122 unit tests (<3s)
+make test                   # 1191 unit tests (<3s)
 make tier1                  # 59 deterministic benchmark cases, 100% pass rate
 # To run the agent locally (needs GOOGLE_API_KEY in mamaguard/.env):
 cp mamaguard/.env.example mamaguard/.env   # then add your key
@@ -169,10 +169,10 @@ HAPI_FHIR_URL=http://localhost:8090/fhir python3 -m benchmarks.runner --e2e
 ## Testing
 
 ```bash
-# Unit tests (894 tests)
+# Unit tests (1191 tests)
 python3 -m pytest mamaguard/tests/ -v
 
-# Tier-1 deterministic benchmarks (57 cases)
+# Tier-1 deterministic benchmarks (59 cases)
 python3 -m benchmarks.runner
 
 # Pre-deploy check (unit tests + benchmarks, exit 1 if score < 95%)
@@ -183,8 +183,8 @@ python3 -m benchmarks.runner
 ```
 
 **Test coverage:**
-- 894 unit tests across 20 test modules
-- 57/57 Tier-1 benchmark cases at 100.0%
+- 1191 unit tests across 32 test modules
+- 59/59 Tier-1 benchmark cases at 100.0%
 - Agent routing, tool invocation, error paths, FHIR base utilities, FHIR writeback, SMART tickets, middleware, golden-file contract tests, LLM-as-judge care plan checkers, FHIR hook, logging utilities, mother-child handoff, MCP protocol integration, SDOH resource classification, A2A app factory and agent card endpoint, benchmark harness infrastructure, post-processing safety filter
 
 ---
@@ -211,22 +211,23 @@ mamaguard/
 +-- pediatric_agent/agent.py     # Pediatric Transition Agent
 +-- sdoh_agent/agent.py          # SDOH & Outreach Agent
 +-- mcp_server/                  # Standalone MCP server (Superpower track)
-|   +-- server.py                # FastMCP, 15 tools, stdio + SSE
+|   +-- server.py                # FastMCP, 19 tools, stdio + SSE
 |   +-- context.py               # FhirContext adapter (SHARP -> state)
 +-- shared/
-|   +-- tools/                   # 15 FHIR tools (single source of truth)
-|   |   +-- fhir_base.py         # Patient summary, active medications, linked newborn
+|   +-- tools/                   # 21 shared tool functions (single source of truth)
+|   |   +-- fhir_base.py         # Patient summary, active medications, current plan, linked newborn
 |   |   +-- maternal.py          # BP trend, glucose, pregnancy history
 |   |   +-- pediatric.py         # Immunizations, developmental screening
 |   |   +-- sdoh.py              # SDOH screening, resource lookup
-|   |   +-- writeback.py         # RiskAssessment, CommunicationRequest, CarePlan
+|   |   +-- writeback.py         # Direct RiskAssessment, CommunicationRequest, CarePlan writes
+|   |   +-- plan_mode.py         # Approval-gated plan/commit write flow
 |   +-- app_factory.py           # A2A app + AgentCard creation
 |   +-- middleware.py             # API key auth + FHIR metadata bridging
 |   +-- fhir_hook.py             # before_model_callback -- credential extraction
 |   +-- smart_tickets.py         # SMART Permission Tickets (Mandel spec)
 |   +-- sdoh_resources.py        # Offline SDOH resource map
 +-- marketplace/                 # Marketplace submission configs (both tracks)
-+-- tests/                       # 894 unit tests
++-- tests/                       # 1191 unit tests
 +-- app.py                       # A2A entry point
 +-- Dockerfile                   # Cloud Run deployment
 +-- docker-compose.yml           # Local dev stack (MamaGuard + HAPI FHIR)
@@ -265,7 +266,7 @@ scripts/
 - **Liaison Agent pattern** -- AI recommends, clinician decides. No autonomous clinical action.
 - **Credentials never in prompt** -- FHIR tokens extracted via `before_model_callback`, stored in session state, never visible to the LLM.
 - **API key authentication** -- X-API-Key header enforcement on all endpoints except agent card discovery.
-- **SMART Permission Tickets** -- Scope-limited tool authorization (feature-flagged). Each of 15 tools mapped to required SMART v2 scopes.
+- **SMART Permission Tickets** -- Scope-limited tool authorization (feature-flagged). Each FHIR-facing tool is mapped to required SMART v2 scopes.
 - **FHIR AuditEvent** -- When enabled (`MAMAGUARD_AUDIT_EVENTS=true`), every tool invocation emits a FHIR R4 AuditEvent (HIPAA compliance trail).
 - **Minimum Necessary** -- Each tool queries only the FHIR resources it needs.
 - **Synthetic data only** -- SMART R4 Synthea records. No real PHI.

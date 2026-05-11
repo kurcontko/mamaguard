@@ -1,22 +1,15 @@
-"""
-Maternal Risk Monitor -- sub-agent for maternal health assessment.
-
-Phase 1: uses base FHIR tools (get_patient_summary, get_active_medications).
-Phase 2: will add maternal-specific tools (get_bp_trend, get_pregnancy_history, etc.)
-"""
+"""Maternal Risk Monitor -- sub-agent for maternal health assessment (BP, glucose, pregnancy history, postpartum complications)."""
 
 from google.adk.agents import Agent
 
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.model_backend import build_agent_model
 from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import (
     get_active_medications,
-    get_bp_trend,
-    get_glucose_trend,
     get_maternal_risk_profile,
     get_patient_summary,
-    get_pregnancy_history,
-    write_risk_assessment,
+    plan_risk_assessment,
 )
 
 MATERNAL_INSTRUCTION = """\
@@ -32,14 +25,13 @@ You are the Maternal Risk Monitor, a specialist agent for maternal health assess
 - **Postpartum** (≤12mo after delivery): resolved pregnancy, recent abatement. Watch for \
 postpartum preeclampsia, HELLP, mood disorders, breastfeeding-medication interactions.
 - **History only**: all pregnancies resolved >12mo. Assess recurrence risk.
-Use get_pregnancy_history first if status is unclear.
+Use `get_maternal_risk_profile` (which includes pregnancy history) if status is unclear.
 
 **Tool Call Efficiency:**
-- **Prefer compound tools over individual tools.** `get_maternal_risk_profile` internally \
-calls `get_bp_trend`, `get_glucose_trend`, AND `get_pregnancy_history`. Do NOT call those \
-individual tools after the compound tool — it duplicates FHIR queries for no new data.
-- Only use an individual tool (e.g. `get_bp_trend` alone) when the user asks about one \
-specific domain and a full risk profile is unnecessary.
+- `get_maternal_risk_profile` is the single compound entry point — it internally \
+queries BP trend, glucose/HbA1c trend, AND pregnancy history in one call. The \
+granular sub-tools are intentionally not exposed at this agent to keep the prompt \
+surface small.
 - `get_patient_summary` includes active medications. Do NOT call both `get_patient_summary` \
 and `get_active_medications` — pick whichever covers your need.
 
@@ -50,8 +42,12 @@ This single call covers BP, glucose, and pregnancy history.
 profile (drug interactions, breastfeeding safety).
 3. **get_patient_summary** — only when you need demographics or conditions not covered \
 by the risk profile. Skip if the risk profile already provided sufficient context.
-4. **write_risk_assessment** — when risk is HIGH or URGENT. Include risk type, \
-probability, evidence, and mitigation plan.
+4. **plan_risk_assessment** — when risk is HIGH or URGENT. Include risk type, \
+probability, evidence, and mitigation plan. This stages a pending FHIR write and \
+returns a `plan_id` (format: `plan-riskassessment-N-<epoch_ms>`). The orchestrator \
+will surface that plan_id and a clinician must approve via `commit_pending_write` \
+before the resource is actually POSTed to FHIR. Cite the plan_id in your Transaction \
+section as `plan_id=<id>` so it can be referenced for approval.
 
 **Clinical thresholds (reference only — do NOT cite as patient data):**
 - BP >140/90 = Stage 1 HTN (elevated risk); >160/110 = Stage 2 / crisis (URGENT)
@@ -68,8 +64,10 @@ the reason from the tool's `clinician_review.reason`.
 3. **Table** — Medications, BP readings, glucose/HbA1c, pregnancy history (dates/trends).
 4. **Task** — Priority-ordered next steps (description, priority, responsible party, \
 timeframe). URGENT first.
-5. **Transaction** — FHIR write-backs performed (cite resource IDs) or "None". Note \
-any write-backs requiring clinician approval.
+5. **Transaction** — Pending writes from `plan_risk_assessment` cited as \
+`plan_id=plan-riskassessment-N-<epoch_ms>` with status "PENDING APPROVAL". Do not \
+claim a resource was created; nothing is POSTed to FHIR until `commit_pending_write` \
+is invoked by the orchestrator after clinician approval. "None" if no plan was staged.
 
 **FHIR Error Recovery:**
 If a tool returns `status: "error"` (FHIR server unreachable, HTTP error, missing context):
@@ -141,25 +139,26 @@ Clinician | Within 24h
 2. HIGH — Repeat HbA1c in 3 months; assess glycemic control | Lab / Clinician | 3 months
 3. MODERATE — Postpartum follow-up visit | OB team | 2 weeks
 
-**Transaction** — RiskAssessment/ra-001 created (maternal_risk_agent). \
-Requires clinician approval.
+**Transaction** — PENDING APPROVAL: plan_id=plan-riskassessment-1-1731612345678 \
+(maternal_risk_agent). Awaiting clinician approval via commit_pending_write.
 
 AI-generated analysis. Not for clinical use.
 """
 
 maternal_risk_agent = Agent(
     name="maternal_risk_agent",
-    model="gemini-2.5-flash",
+    model=build_agent_model(),
     description="Maternal health risk assessment specialist. Analyzes BP trends, glucose, pregnancy history, and postpartum complications.",
     instruction=MATERNAL_INSTRUCTION,
     tools=[
+        # Only the compound profile is exposed directly. get_bp_trend, get_glucose_trend,
+        # and get_pregnancy_history are reachable transparently through
+        # get_maternal_risk_profile, so listing them at the agent level pollutes the
+        # prompt without adding capability.
         get_maternal_risk_profile,
-        get_bp_trend,
-        get_glucose_trend,
-        get_pregnancy_history,
         get_active_medications,
         get_patient_summary,
-        write_risk_assessment,
+        plan_risk_assessment,
     ],
     before_model_callback=extract_fhir_context,
     after_model_callback=safety_after_model_callback,

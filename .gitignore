@@ -16,3 +16,13 @@ build/
 node_modules/
 .idea/
 .vscode/
+
+# Local assistant/project-state artifacts
+.codex
+.codex/
+.serena/
+
+# Local demo-prep screenshots
+Screenshot*.png
+photos/
+draft/

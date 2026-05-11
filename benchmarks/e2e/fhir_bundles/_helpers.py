@@ -254,3 +254,34 @@ def coverage(
         "payor": [{"display": cov_type}],
         "period": period,
     }
+
+
+def related_child(
+    id: str,
+    mother_patient_id: str,
+    child_patient_id: str,
+    given: str,
+    family: str,
+    birth_date: str,
+    gender: str = "unknown",
+) -> dict:
+    """RelatedPerson link used by MamaGuard's mother-to-child handoff tool."""
+    return {
+        "resourceType": "RelatedPerson",
+        "id": id,
+        "patient": {"reference": f"Patient/{mother_patient_id}"},
+        "relationship": [{
+            "coding": [{
+                "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                "code": "CHILD",
+                "display": "child",
+            }],
+        }],
+        "identifier": [{
+            "system": "urn:mamaguard:linked-patient-id",
+            "value": child_patient_id,
+        }],
+        "name": [{"use": "official", "given": [given], "family": family}],
+        "birthDate": birth_date,
+        "gender": gender,
+    }

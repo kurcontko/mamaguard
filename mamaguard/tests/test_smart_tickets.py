@@ -1,5 +1,5 @@
 """
-Tests for SMART Permission Tickets — Phase 2b.
+Tests for SMART Permission Tickets.
 
 Covers:
   - JWT decoding: valid, expired, malformed, missing claims, audience mismatch
@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 import jwt
 
+from mamaguard.shared.fhir_hook import _extract_smart_ticket
 from mamaguard.shared.smart_tickets import (
     TOOL_SCOPES,
     PermissionTicket,
@@ -26,8 +27,6 @@ from mamaguard.shared.smart_tickets import (
     decode_permission_ticket,
     enforce_smart_ticket,
 )
-from mamaguard.shared.fhir_hook import _extract_smart_ticket
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -115,12 +114,14 @@ class TestDecodePermissionTicket(unittest.TestCase):
 
     def test_missing_exp_claim(self):
         # Manually craft a JWT without exp by using PyJWS directly
-        import json as _json, base64
+        import base64
+        import json as _json
         header = base64.urlsafe_b64encode(_json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).rstrip(b"=")
         payload = base64.urlsafe_b64encode(
             _json.dumps({"sub": _PATIENT, "scope": "patient/Observation.rs"}).encode()
         ).rstrip(b"=")
-        import hmac, hashlib
+        import hashlib
+        import hmac
         sig_input = header + b"." + payload
         sig = base64.urlsafe_b64encode(
             hmac.new(_SECRET.encode(), sig_input, hashlib.sha256).digest()
@@ -338,20 +339,22 @@ class TestToolScopeMapping(unittest.TestCase):
     def test_all_tools_mapped(self):
         expected_tools = {
             "get_patient_summary", "get_active_medications",
-            "find_linked_newborn",
+            "get_current_plan", "find_linked_newborn",
             "get_bp_trend", "get_glucose_trend",
             "get_pregnancy_history", "get_maternal_risk_profile",
             "get_immunization_gaps", "get_developmental_screening_status",
             "get_care_gaps", "get_sdoh_screening", "find_sdoh_resources",
             "write_risk_assessment", "create_communication_request",
-            "write_care_plan",
+            "write_care_plan", "plan_risk_assessment",
+            "plan_communication_request", "plan_care_plan",
+            "commit_pending_write", "list_pending_writes",
         }
         self.assertEqual(set(TOOL_SCOPES.keys()), expected_tools)
 
     def test_read_tools_use_rs_scopes(self):
         read_tools = [
             "get_patient_summary", "get_active_medications",
-            "find_linked_newborn",
+            "get_current_plan", "find_linked_newborn",
             "get_bp_trend", "get_glucose_trend",
             "get_pregnancy_history", "get_maternal_risk_profile",
             "get_immunization_gaps", "get_developmental_screening_status",
@@ -367,7 +370,9 @@ class TestToolScopeMapping(unittest.TestCase):
     def test_write_tools_use_c_scopes(self):
         write_tools = [
             "write_risk_assessment", "create_communication_request",
-            "write_care_plan",
+            "write_care_plan", "plan_risk_assessment",
+            "plan_communication_request", "plan_care_plan",
+            "commit_pending_write",
         ]
         for tool in write_tools:
             for scope in TOOL_SCOPES[tool]:

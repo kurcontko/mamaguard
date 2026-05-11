@@ -1,4 +1,4 @@
-.PHONY: setup test mypy lint tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp smoke smoke-mcp profile-startup clean
+.PHONY: setup test mypy lint fmt ruff tier1 tier2a tier2a-compare tier2b tier3 bench-all hapi hapi-load serve serve-mcp smoke smoke-hard demo-content-gate smoke-mcp profile-startup clean
 
 # --- Setup ---
 setup:
@@ -14,7 +14,13 @@ test-verbose:
 mypy:
 	uv run mypy mamaguard/
 
-lint: mypy test
+ruff:
+	uv run ruff check mamaguard benchmarks
+
+fmt:
+	uv run ruff format mamaguard benchmarks
+
+lint: ruff mypy test
 
 # --- Benchmarks ---
 tier1:
@@ -67,6 +73,12 @@ smoke:
 
 smoke-verbose:
 	uv run python scripts/smoke_test.py --verbose
+
+smoke-hard:
+	uv run python scripts/hard_a2a_smoke.py
+
+demo-content-gate:
+	uv run python scripts/demo_content_gate.py
 
 smoke-mcp:
 	uv run python scripts/smoke_test_mcp.py

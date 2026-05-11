@@ -20,7 +20,6 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-
 from typing import Any
 
 import jwt
@@ -79,6 +78,13 @@ TOOL_SCOPES: dict[str, list[str]] = {
     "get_active_medications": [
         "patient/MedicationRequest.rs",
     ],
+    "get_current_plan": [
+        "patient/CarePlan.rs",
+        "patient/Goal.rs",
+        "patient/CommunicationRequest.rs",
+        "patient/ServiceRequest.rs",
+        "patient/RiskAssessment.rs",
+    ],
     "find_linked_newborn": [
         "patient/RelatedPerson.rs",
         "patient/Patient.rs",
@@ -128,6 +134,24 @@ TOOL_SCOPES: dict[str, list[str]] = {
         "patient/Goal.c",
         "patient/CarePlan.c",
     ],
+    # Plan/commit split. plan_* stages proposed resources; commit writes them.
+    "plan_risk_assessment": [
+        "patient/RiskAssessment.c",
+    ],
+    "plan_communication_request": [
+        "patient/CommunicationRequest.c",
+    ],
+    "plan_care_plan": [
+        "patient/Goal.c",
+        "patient/CarePlan.c",
+    ],
+    "commit_pending_write": [
+        "patient/RiskAssessment.c",
+        "patient/CommunicationRequest.c",
+        "patient/Goal.c",
+        "patient/CarePlan.c",
+    ],
+    "list_pending_writes": [],
 }
 
 
@@ -167,16 +191,16 @@ def decode_permission_ticket(
 
     try:
         claims = jwt.decode(token, key, **decode_opts)
-    except jwt.ExpiredSignatureError:
-        raise TicketError("Permission ticket has expired")
-    except jwt.InvalidAudienceError:
-        raise TicketError("Permission ticket audience mismatch")
+    except jwt.ExpiredSignatureError as exc:
+        raise TicketError("Permission ticket has expired") from exc
+    except jwt.InvalidAudienceError as exc:
+        raise TicketError("Permission ticket audience mismatch") from exc
     except jwt.DecodeError as exc:
-        raise TicketError(f"Permission ticket decode failed: {exc}")
+        raise TicketError(f"Permission ticket decode failed: {exc}") from exc
     except jwt.MissingRequiredClaimError as exc:
-        raise TicketError(f"Permission ticket missing required claim: {exc}")
+        raise TicketError(f"Permission ticket missing required claim: {exc}") from exc
     except jwt.InvalidTokenError as exc:
-        raise TicketError(f"Permission ticket invalid: {exc}")
+        raise TicketError(f"Permission ticket invalid: {exc}") from exc
 
     scope_str = claims.get("scope", "")
     scopes = frozenset(s for s in scope_str.split() if s)

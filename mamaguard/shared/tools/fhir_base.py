@@ -115,6 +115,17 @@ def _coding_display(codings: list) -> str:
     return "Unknown"
 
 
+def _codeable_text(codeable: dict | None) -> str:
+    """Return display text for a FHIR CodeableConcept-like dict."""
+    if not isinstance(codeable, dict):
+        return ""
+    text = codeable.get("text")
+    if text:
+        return text
+    display = _coding_display(codeable.get("coding", []))
+    return "" if display == "Unknown" else display
+
+
 def _safe_fhir_get(fhir_url: str, token: str, path: str, params: dict | None = None):
     """FHIR GET with error handling. Returns (data, None) or (None, error_dict)."""
     try:
@@ -153,6 +164,47 @@ def _clinician_review(
         "evidence_basis": evidence or [],
         "confidence": confidence,
     }
+
+
+def _search_patient_resources(
+    fhir_url: str,
+    token: str,
+    resource_type: str,
+    patient_id: str,
+    count: int = 50,
+) -> tuple[list[dict], list[str]]:
+    """
+    Search a patient-scoped FHIR resource using both common patient parameters.
+
+    FHIR resources are inconsistent: some expose `patient`, some expose
+    `subject`, and HAPI deployments vary in which aliases are indexed. Trying
+    both keeps the planning view portable without hard-coding server behavior.
+    """
+    resources: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    errors: list[str] = []
+    successes = 0
+
+    queries = (
+        {"patient": patient_id, "_count": str(count)},
+        {"subject": f"Patient/{patient_id}", "_count": str(count)},
+    )
+    for params in queries:
+        bundle, err = _safe_fhir_get(fhir_url, token, resource_type, params=params)
+        if err:
+            errors.append(
+                f"{resource_type} via {next(iter(params))}: {err.get('error_message', '')}"
+            )
+            continue
+        successes += 1
+        for res in _bundle_resources(bundle):
+            key = (res.get("resourceType", resource_type), res.get("id", ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            resources.append(res)
+
+    return resources, [] if successes else errors
 
 
 # -- Tool: patient summary ---------------------------------------------------
@@ -316,6 +368,227 @@ def get_active_medications(tool_context: ToolContext) -> dict:
         "patient_id": patient_id,
         "count": len(medications),
         "medications": medications,
+    }
+
+
+# -- Tool: current plan ------------------------------------------------------
+
+_CURRENT_CAREPLAN_STATUSES = {"draft", "active", "on-hold", "unknown"}
+_CURRENT_GOAL_STATUSES = {"proposed", "planned", "accepted", "active", "on-hold"}
+_CURRENT_REQUEST_STATUSES = {"draft", "active", "on-hold"}
+_CURRENT_RISK_STATUSES = {"registered", "preliminary", "final", "amended", "corrected"}
+
+
+def get_current_plan(tool_context: ToolContext) -> dict:
+    """
+    Fetch the patient's current structured plan from FHIR.
+
+    Returns active/draft CarePlans, open Goals, active outreach/referral
+    requests, and recent RiskAssessments. Pending in-memory plan approvals are
+    separate; callers should also use list_pending_writes when available.
+    """
+    ctx = _get_fhir_context(tool_context, "get_current_plan")
+    if isinstance(ctx, dict):
+        return ctx
+
+    fhir_url, fhir_token, patient_id = ctx
+    logger.info("tool_get_current_plan patient_id=%s", patient_id)
+
+    query_errors: list[str] = []
+
+    care_plan_resources, errors = _search_patient_resources(
+        fhir_url, fhir_token, "CarePlan", patient_id,
+    )
+    query_errors.extend(errors)
+    goal_resources, errors = _search_patient_resources(
+        fhir_url, fhir_token, "Goal", patient_id,
+    )
+    query_errors.extend(errors)
+    communication_resources, errors = _search_patient_resources(
+        fhir_url, fhir_token, "CommunicationRequest", patient_id,
+    )
+    query_errors.extend(errors)
+    service_resources, errors = _search_patient_resources(
+        fhir_url, fhir_token, "ServiceRequest", patient_id,
+    )
+    query_errors.extend(errors)
+    risk_resources, errors = _search_patient_resources(
+        fhir_url, fhir_token, "RiskAssessment", patient_id,
+    )
+    query_errors.extend(errors)
+
+    care_plans = [
+        _summarize_care_plan(res)
+        for res in care_plan_resources
+        if res.get("status") in _CURRENT_CAREPLAN_STATUSES
+    ][:10]
+    goals = [
+        _summarize_goal(res)
+        for res in goal_resources
+        if res.get("lifecycleStatus") in _CURRENT_GOAL_STATUSES
+    ][:10]
+    communications = [
+        _summarize_communication_request(res)
+        for res in communication_resources
+        if res.get("status") in _CURRENT_REQUEST_STATUSES
+    ][:10]
+    service_requests = [
+        _summarize_service_request(res)
+        for res in service_resources
+        if res.get("status") in _CURRENT_REQUEST_STATUSES
+    ][:10]
+    risk_assessments = [
+        _summarize_risk_assessment(res)
+        for res in risk_resources
+        if res.get("status") in _CURRENT_RISK_STATUSES
+    ][:10]
+
+    total = (
+        len(care_plans) + len(goals) + len(communications)
+        + len(service_requests) + len(risk_assessments)
+    )
+    return {
+        "status": "success",
+        "patient_id": patient_id,
+        "data": {
+            "current_plan_present": total > 0,
+            "care_plans": care_plans,
+            "goals": goals,
+            "communication_requests": communications,
+            "service_requests": service_requests,
+            "risk_assessments": risk_assessments,
+            "counts": {
+                "care_plans": len(care_plans),
+                "goals": len(goals),
+                "communication_requests": len(communications),
+                "service_requests": len(service_requests),
+                "risk_assessments": len(risk_assessments),
+                "total_current_items": total,
+            },
+            "query_errors": query_errors,
+        },
+        "clinician_review": _clinician_review(
+            total == 0,
+            reason="No active FHIR CarePlan/Goal/Request/RiskAssessment found" if total == 0 else "",
+            recommendation=(
+                "If clinical planning has occurred outside FHIR, reconcile it into "
+                "CarePlan, Goal, CommunicationRequest, ServiceRequest, or RiskAssessment."
+                if total == 0 else "Structured plan resources found in FHIR"
+            ),
+            evidence=[],
+            confidence=0.75 if not query_errors else 0.6,
+        ),
+    }
+
+
+def _summarize_care_plan(res: dict) -> dict:
+    categories = [
+        text for text in (_codeable_text(cat) for cat in res.get("category", [])) if text
+    ]
+    activities = []
+    for activity in res.get("activity", [])[:5]:
+        detail = activity.get("detail") or {}
+        desc = detail.get("description") or (activity.get("reference") or {}).get("display")
+        if desc:
+            activities.append({
+                "description": desc,
+                "status": detail.get("status", ""),
+            })
+    return {
+        "resource_id": res.get("id", ""),
+        "title": res.get("title") or res.get("description") or (categories[0] if categories else "Unnamed plan"),
+        "status": res.get("status", ""),
+        "intent": res.get("intent", ""),
+        "category": categories,
+        "description": res.get("description", ""),
+        "created": res.get("created", ""),
+        "period_start": (res.get("period") or {}).get("start", ""),
+        "period_end": (res.get("period") or {}).get("end", ""),
+        "goals": [g.get("reference", "") for g in res.get("goal", []) if g.get("reference")],
+        "activities": activities,
+    }
+
+
+def _summarize_goal(res: dict) -> dict:
+    target_dates = []
+    for target in res.get("target", []):
+        due = target.get("dueDate") or (target.get("dueDuration") or {}).get("value")
+        if due:
+            target_dates.append(str(due))
+    return {
+        "resource_id": res.get("id", ""),
+        "description": _codeable_text(res.get("description")) or "Unnamed goal",
+        "lifecycle_status": res.get("lifecycleStatus", ""),
+        "achievement_status": _codeable_text(res.get("achievementStatus")),
+        "start": res.get("startDate") or (res.get("startCodeableConcept") or {}).get("text", ""),
+        "target_due": target_dates,
+        "addresses": [
+            a.get("reference") or a.get("display") or ""
+            for a in res.get("addresses", [])
+            if a.get("reference") or a.get("display")
+        ],
+    }
+
+
+def _summarize_communication_request(res: dict) -> dict:
+    payloads = []
+    for payload in res.get("payload", []):
+        payloads.append(
+            payload.get("contentString")
+            or (payload.get("contentReference") or {}).get("display")
+            or (payload.get("contentAttachment") or {}).get("title")
+            or ""
+        )
+    return {
+        "resource_id": res.get("id", ""),
+        "status": res.get("status", ""),
+        "priority": res.get("priority", ""),
+        "authored_on": res.get("authoredOn", ""),
+        "medium": [
+            text for text in (_codeable_text(m) for m in res.get("medium", [])) if text
+        ],
+        "payload": [p for p in payloads if p],
+    }
+
+
+def _summarize_service_request(res: dict) -> dict:
+    return {
+        "resource_id": res.get("id", ""),
+        "status": res.get("status", ""),
+        "intent": res.get("intent", ""),
+        "priority": res.get("priority", ""),
+        "code": _codeable_text(res.get("code")) or "Unnamed request",
+        "authored_on": res.get("authoredOn", ""),
+        "occurrence": res.get("occurrenceDateTime") or (res.get("occurrencePeriod") or {}).get("start", ""),
+        "performer": [
+            p.get("display") or p.get("reference") or ""
+            for p in res.get("performer", [])
+            if p.get("display") or p.get("reference")
+        ],
+    }
+
+
+def _summarize_risk_assessment(res: dict) -> dict:
+    predictions = []
+    for pred in res.get("prediction", [])[:5]:
+        probability = pred.get("probabilityDecimal")
+        if probability is None:
+            probability = (pred.get("probabilityRange") or {}).get("high", {}).get("value")
+        predictions.append({
+            "outcome": _codeable_text(pred.get("outcome")) or "Unnamed risk",
+            "probability": probability,
+        })
+    return {
+        "resource_id": res.get("id", ""),
+        "status": res.get("status", ""),
+        "occurrence": res.get("occurrenceDateTime") or (res.get("occurrencePeriod") or {}).get("start", ""),
+        "predictions": predictions,
+        "basis": [
+            b.get("reference") or b.get("display") or ""
+            for b in res.get("basis", [])
+            if b.get("reference") or b.get("display")
+        ],
+        "mitigation": res.get("mitigation", ""),
     }
 
 

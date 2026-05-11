@@ -22,12 +22,17 @@ without contaminating the production module-level root_agent.
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from google.adk.agents import Agent
 from google.adk.tools.agent_tool import AgentTool
 from google.genai import types as genai_types
 
+from mamaguard.maternal_agent.agent import MATERNAL_INSTRUCTION
+from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
+from mamaguard.pediatric_agent.agent import PEDIATRIC_INSTRUCTION
+from mamaguard.sdoh_agent.agent import SDOH_INSTRUCTION
 from mamaguard.shared.fhir_hook import extract_fhir_context
 from mamaguard.shared.tools import (
     create_communication_request,
@@ -45,10 +50,6 @@ from mamaguard.shared.tools import (
     write_care_plan,
     write_risk_assessment,
 )
-from mamaguard.maternal_agent.agent import MATERNAL_INSTRUCTION
-from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
-from mamaguard.pediatric_agent.agent import PEDIATRIC_INSTRUCTION
-from mamaguard.sdoh_agent.agent import SDOH_INSTRUCTION
 
 
 def build_model(backend: str = "gemini") -> Any:
@@ -101,11 +102,14 @@ def build_generation_config(backend: str) -> genai_types.GenerateContentConfig |
     temperature = float(os.environ.get("BENCH_TEMPERATURE", "1.0"))
     top_p_raw = os.environ.get("BENCH_TOP_P", "0.95")
     top_p = float(top_p_raw) if top_p_raw else None
+    top_k_raw = os.environ.get("BENCH_TOP_K", "")
+    top_k = int(top_k_raw) if top_k_raw else None
     max_output_tokens = int(os.environ.get("BENCH_MAX_TOKENS", "4096"))
 
     return genai_types.GenerateContentConfig(
         temperature=temperature,
         top_p=top_p,
+        top_k=top_k,
         max_output_tokens=max_output_tokens,
     )
 

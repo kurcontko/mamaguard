@@ -1,7 +1,7 @@
 """Unit tests for FHIR write-back tools."""
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import httpx
 
@@ -416,7 +416,7 @@ class TestCreateCommunicationRequest(unittest.TestCase):
 
 
 class TestWriteCarePlan(unittest.TestCase):
-    """SDOH write_care_plan -- linked Goal + CarePlan (Phase 2c)."""
+    """SDOH write_care_plan -- linked Goal + CarePlan."""
 
     @patch("mamaguard.shared.tools.writeback._fhir_post")
     def test_successful_create_goal_then_care_plan(self, mock_post):

@@ -24,7 +24,6 @@ from benchmarks.llm_eval.judge import (
     score_care_plan_synthesis,
 )
 
-
 FIXTURE_PATH = (
     pathlib.Path(__file__).resolve().parents[2]
     / "benchmarks"

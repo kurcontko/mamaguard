@@ -20,15 +20,16 @@ Deadline: **May 11, 2026 @ 11:00pm EDT**.
 - [ ] `make smoke-mcp` passes (MCP server smoke test)
 - [ ] `scripts/pre_deploy_check.sh` passes
 
-## 3. Deploy A2A Agent to Cloud Run
+## 3. Deploy A2A Agent (Azure App Service / Container Apps — production target)
 
-- [ ] Build Docker image (`mamaguard/Dockerfile`)
-- [ ] Push image to Google Container Registry / Artifact Registry
-- [ ] Deploy to Cloud Run with env vars (API keys, FHIR config)
-- [ ] Verify health: `curl https://<CLOUD_RUN_URL>/.well-known/agent-card.json` returns 200
-- [ ] Verify A2A endpoint responds to test query
+- [ ] Build Docker image (`mamaguard/Dockerfile`) and push to Azure Container Registry
+- [ ] Deploy to Azure App Service or Container Apps with env vars (`MAMAGUARD_API_KEY`, `GOOGLE_API_KEY`, `MAMAGUARD_URL`, optional `PO_PLATFORM_BASE_URL`)
+- [ ] Verify health: `curl https://<AZURE_URL>/.well-known/agent-card.json` returns 200 with `protocolVersion`, `version: 1.0.0`, 4 skills with `examples`
+- [ ] Verify auth: POST to `/` without `X-API-Key` returns 401; with valid key passes through
 
-See: [`scripts/deploy.sh`](../../scripts/deploy.sh)
+> Cloud Run alternative: `scripts/deploy.sh` exists for `gcloud`-based deploys.
+> Production for the hackathon submission runs on Azure, so use that as the
+> canonical path. Keep the GCP script only as fallback.
 
 ## 4. Deploy MCP Server (Superpower Track)
 
@@ -69,15 +70,21 @@ See: [`README.md`](README.md), [`po_integration.md`](po_integration.md)
 
 ## 7. Record Demo Video (< 3 minutes)
 
-- [ ] Follow script in [`demo_script.md`](demo_script.md)
-- [ ] Pre-copy all 3 inputs (no typing during recording)
+- [ ] Pre-seed memory note: `uv run python scripts/demo_memory_recall.py --seed-only`
+- [ ] Follow script in [`demo_script_v4_azure.md`](demo_script_v4_azure.md) (patient-first, Azure deployment)
+- [ ] Pre-copy all inputs (no typing during recording)
 - [ ] Scene 1: Intro + architecture (0:00-0:15)
 - [ ] Scene 2: Launch from Marketplace (0:15-0:30)
 - [ ] Scene 3: Maternal risk assessment (0:30-1:15)
-- [ ] Scene 4: SDOH screening (1:15-1:55)
-- [ ] Scene 5: Comprehensive assessment (1:55-2:40)
-- [ ] Scene 6: Close (2:40-3:00)
+- [ ] Scene 3.5: **Longitudinal memory recall** (insert, ~30s) — the
+      differentiator no competitor has. See the v3 ADDENDUM in demo_script.md.
+- [ ] Scene 4: SDOH screening (1:15-1:50)
+- [ ] Scene 4.5: **Plan/commit approval gate** (insert, ~25s) — Liaison
+      pattern turned into demonstrable FHIR write approval flow.
+- [ ] Scene 5: Mother-to-child handoff (if time permits; cuttable)
+- [ ] Close (~15s)
 - [ ] Upload video (YouTube/Loom/Vimeo unlisted link)
+- [ ] Cleanup seeded memory after recording: `uv run python scripts/demo_memory_recall.py --cleanup`
 
 ## 8. Devpost Submission
 
@@ -105,3 +112,7 @@ See: [`README.md`](README.md), [`po_integration.md`](po_integration.md)
 | Eval summary | [`../../benchmarks/fixtures/eval_summary.md`](../../benchmarks/fixtures/eval_summary.md) | Benchmark results for Devpost |
 | Judge scorecard | [`../../benchmarks/fixtures/judge_scorecard.md`](../../benchmarks/fixtures/judge_scorecard.md) | Detailed scoring breakdown |
 | Deploy script | [`../../scripts/deploy.sh`](../../scripts/deploy.sh) | Cloud Run deployment |
+| Memory recall demo | [`demo_memory_recall.md`](demo_memory_recall.md) | v3 differentiator talking points |
+| Memory recall script | [`../../scripts/demo_memory_recall.py`](../../scripts/demo_memory_recall.py) | Seed / preview / cleanup prior-visit note |
+| Submission run harness | [`../../scripts/run_submission_benchmark.sh`](../../scripts/run_submission_benchmark.sh) | Nemotron Tier-2b at T-7 |
+| Submission run runbook | [`SUBMISSION_RUN.md`](SUBMISSION_RUN.md) | Nemotron restart + run procedure |

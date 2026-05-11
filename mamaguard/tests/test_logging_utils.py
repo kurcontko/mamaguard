@@ -106,7 +106,7 @@ class TestAnsiColorFormatter(unittest.TestCase):
         fmt = _AnsiColorFormatter("%(levelname)s %(nope)s")
         record = self._make_record(logging.ERROR)
         original = record.levelname
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError):
             fmt.format(record)
         self.assertEqual(record.levelname, original)
 

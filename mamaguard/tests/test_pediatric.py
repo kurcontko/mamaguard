@@ -118,6 +118,38 @@ class TestGetImmunizationGaps(unittest.TestCase):
         self.assertGreaterEqual(len(result["data"]["up_to_date"]), 1)
         # No overdue -> liaison does NOT demand clinician review
         self.assertFalse(result["clinician_review"]["required"])
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_patient_id_override_queries_child(self, mock_fhir):
+        """Mother-to-child handoff can query a child while session context is mom."""
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        paths = []
+        params_seen = []
+
+        def side_effect(fhir_url, token, path, params=None):
+            paths.append(path)
+            params_seen.append(params)
+            if path.startswith("Patient/"):
+                return PATIENT_NEWBORN
+            if path == "Immunization":
+                return {
+                    "resourceType": "Bundle",
+                    "entry": [
+                        {"resource": {"vaccineCode": {"text": "HepB"}, "occurrenceDateTime": "2026-04-12", "status": "completed", "id": "imm-hepb1"}},
+                    ],
+                }
+            return {"resourceType": "Bundle", "entry": []}
+
+        mock_fhir.side_effect = side_effect
+        result = get_immunization_gaps(
+            patient_id="child-3",
+            tool_context=MockToolContext(patient_id="mother-1"),
+        )
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["patient_id"], "child-3")
+        self.assertIn("Patient/child-3", paths)
+        self.assertIn({"patient": "child-3", "_count": "100"}, params_seen)
         self.assertEqual(result["clinician_review"]["reason"], "")
 
     @patch("mamaguard.shared.tools.fhir_base._fhir_get")
@@ -184,6 +216,71 @@ class TestGetImmunizationGaps(unittest.TestCase):
         result = get_immunization_gaps(tool_context=ctx)
         self.assertEqual(result["status"], "error")
         self.assertIn("FHIR context", result["error_message"])
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_adult_patient_not_applicable(self, mock_fhir):
+        """Patient >18 years old: pediatric schedule does not apply; no child vaccines listed."""
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        adult = {"resourceType": "Patient", "id": "gma-1", "birthDate": "1957-04-09"}
+        mock_fhir.return_value = adult
+        result = get_immunization_gaps(tool_context=MockToolContext(patient_id="gma-1"))
+        self.assertEqual(result["status"], "success")
+        self.assertFalse(result["data"]["applicable"])
+        self.assertFalse(result["data"]["has_gaps"])
+        self.assertEqual(result["data"]["overdue"], [])
+        self.assertEqual(result["data"]["due"], [])
+        # Reason must mention adult schedule so agent doesn't list DTaP/MMR
+        self.assertIn("adult", result["data"]["reason"].lower())
+        self.assertFalse(result["clinician_review"]["required"])
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_catchup_enumerates_all_overdue_series(self, mock_fhir):
+        """5-year-old with only 4 early vaccines: MMR, Varicella, HepA, PCV13 all overdue by series name."""
+        from mamaguard.shared.tools.pediatric import get_immunization_gaps
+
+        def side_effect(fhir_url, token, path, params=None):
+            if path.startswith("Patient/"):
+                return PATIENT_5YR
+            if path == "Immunization":
+                return {
+                    "resourceType": "Bundle",
+                    "entry": [
+                        {"resource": {"vaccineCode": {"text": "HepB"}, "occurrenceDateTime": "2021-04-09", "status": "completed", "id": "i1"}},
+                        {"resource": {"vaccineCode": {"text": "HepB"}, "occurrenceDateTime": "2021-05-09", "status": "completed", "id": "i2"}},
+                        {"resource": {"vaccineCode": {"text": "DTaP"}, "occurrenceDateTime": "2021-06-09", "status": "completed", "id": "i3"}},
+                        {"resource": {"vaccineCode": {"text": "IPV"}, "occurrenceDateTime": "2021-06-09", "status": "completed", "id": "i4"}},
+                    ],
+                }
+            return {"resourceType": "Bundle", "entry": []}
+
+        mock_fhir.side_effect = side_effect
+        result = get_immunization_gaps(tool_context=MockToolContext(patient_id="child-4"))
+        overdue_series = {o["vaccine"] for o in result["data"]["overdue"]}
+        # All these series MUST surface — the agent echoes tool output.
+        for series in ("MMR", "Varicella", "PCV13", "HepA"):
+            self.assertIn(series, overdue_series, f"missing {series} from overdue list: {overdue_series}")
+
+    def test_normalize_vaccine_cvx_code(self):
+        """CVX code mapping: combo vaccine 120 satisfies DTaP, HepB, IPV, and Hib simultaneously."""
+        from mamaguard.shared.tools.pediatric import _normalize_vaccine
+
+        vc = {"coding": [{"system": "http://hl7.org/fhir/sid/cvx", "code": "120"}]}
+        self.assertEqual(_normalize_vaccine(vc), {"DTaP", "HepB", "IPV", "Hib"})
+
+    def test_normalize_vaccine_mmrv_display(self):
+        """MMRV display text satisfies both MMR and Varicella."""
+        from mamaguard.shared.tools.pediatric import _normalize_vaccine
+
+        vc = {"coding": [{"display": "MMRV vaccine"}]}
+        self.assertEqual(_normalize_vaccine(vc), {"MMR", "Varicella"})
+
+    def test_normalize_vaccine_verbose_display(self):
+        """Verbose server display ('Varicella virus vaccine') still resolves to Varicella."""
+        from mamaguard.shared.tools.pediatric import _normalize_vaccine
+
+        vc = {"text": "Varicella virus vaccine live"}
+        self.assertIn("Varicella", _normalize_vaccine(vc))
 
 
 class TestGetDevelopmentalScreeningStatus(unittest.TestCase):

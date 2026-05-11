@@ -5,4 +5,4 @@ from importlib.metadata import version as _pkg_version
 try:
     MAMAGUARD_VERSION = _pkg_version("mamaguard")
 except Exception:
-    MAMAGUARD_VERSION = "0.1.0"
+    MAMAGUARD_VERSION = "1.0.0"

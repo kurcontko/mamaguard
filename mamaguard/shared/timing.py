@@ -36,23 +36,23 @@ _STATE_KEY_TIMINGS = "_agent_timings"
 def before_tool_timing(
     tool: Any,
     args: dict[str, Any],
-    context: Any,
+    tool_context: Any,
 ) -> dict | None:
     """Record start time when an AgentTool (sub-agent) is called."""
     tool_name = getattr(tool, "name", "")
     if tool_name not in _AGENT_LABELS:
         return None
 
-    starts = context.state.get(_STATE_KEY_STARTS) or {}
+    starts = tool_context.state.get(_STATE_KEY_STARTS) or {}
     starts[tool_name] = time.perf_counter()
-    context.state[_STATE_KEY_STARTS] = starts
+    tool_context.state[_STATE_KEY_STARTS] = starts
     return None
 
 
 def after_tool_timing(
     tool: Any,
     args: dict[str, Any],
-    context: Any,
+    tool_context: Any,
     tool_response: dict,
 ) -> dict | None:
     """Record elapsed time after a sub-agent call completes."""
@@ -60,22 +60,22 @@ def after_tool_timing(
     if tool_name not in _AGENT_LABELS:
         return None
 
-    starts = context.state.get(_STATE_KEY_STARTS) or {}
+    starts = tool_context.state.get(_STATE_KEY_STARTS) or {}
     start = starts.pop(tool_name, None)
-    context.state[_STATE_KEY_STARTS] = starts
+    tool_context.state[_STATE_KEY_STARTS] = starts
 
     if start is None:
         return None
 
     elapsed_s = time.perf_counter() - start
 
-    timings = context.state.get(_STATE_KEY_TIMINGS) or []
+    timings = tool_context.state.get(_STATE_KEY_TIMINGS) or []
     timings.append({
         "agent": tool_name,
         "label": _AGENT_LABELS[tool_name],
         "elapsed_s": round(elapsed_s, 1),
     })
-    context.state[_STATE_KEY_TIMINGS] = timings
+    tool_context.state[_STATE_KEY_TIMINGS] = timings
 
     logger.info("%s completed in %.1fs", _AGENT_LABELS[tool_name], elapsed_s)
     return None

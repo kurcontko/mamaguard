@@ -1,0 +1,101 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:ca736267-0af3-42dd-bfad-fc059ffb7ae8",
+      "resource": {
+        "resourceType": "Patient",
+        "name": [
+          {
+            "use": "official",
+            "given": [
+              "Lucas"
+            ],
+            "family": "Santos"
+          }
+        ],
+        "birthDate": "2026-02-09",
+        "gender": "male"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:7bd86b2c-ef0e-4d5c-877e-7c3494ba0cc5",
+      "resource": {
+        "resourceType": "Immunization",
+        "status": "completed",
+        "vaccineCode": {
+          "text": "HepB"
+        },
+        "patient": {
+          "reference": "urn:uuid:ca736267-0af3-42dd-bfad-fc059ffb7ae8"
+        },
+        "occurrenceDateTime": "2026-02-09"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Immunization"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:a842ef39-6269-43ed-9e6b-c926d7f8af89",
+      "resource": {
+        "resourceType": "Observation",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "survey"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Newborn metabolic screen"
+        },
+        "subject": {
+          "reference": "urn:uuid:ca736267-0af3-42dd-bfad-fc059ffb7ae8"
+        },
+        "effectiveDateTime": "2026-02-10"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:7c254cdd-946b-4511-97ae-38bc6f3557d1",
+      "resource": {
+        "resourceType": "Observation",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "survey"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Hearing screen"
+        },
+        "subject": {
+          "reference": "urn:uuid:ca736267-0af3-42dd-bfad-fc059ffb7ae8"
+        },
+        "effectiveDateTime": "2026-02-10"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation"
+      }
+    }
+  ]
+}

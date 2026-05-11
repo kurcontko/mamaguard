@@ -12,7 +12,6 @@ Covers:
 
 from __future__ import annotations
 
-import logging
 import unittest
 from types import SimpleNamespace
 
@@ -28,7 +27,6 @@ from mamaguard.shared.quality_check import (
     quality_check_callback,
     run_quality_checks,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -337,6 +335,7 @@ class TestOrchestratorWiring(unittest.TestCase):
     def test_orchestrator_callback_calls_quality_check(self):
         """The orchestrator after_model_callback chain includes quality_check_callback."""
         import inspect
+
         from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
         source = inspect.getsource(_orchestrator_after_model_callback)
         self.assertIn("quality_check_callback", source)

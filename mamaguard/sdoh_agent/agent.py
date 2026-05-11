@@ -10,14 +10,15 @@ decisions are flagged for clinician review.
 from google.adk.agents import Agent
 
 from mamaguard.shared.fhir_hook import extract_fhir_context
+from mamaguard.shared.model_backend import build_agent_model
 from mamaguard.shared.safety_filter import safety_after_model_callback
 from mamaguard.shared.tools import (
-    create_communication_request,
     find_sdoh_resources,
     get_care_gaps,
     get_patient_summary,
     get_sdoh_screening,
-    write_care_plan,
+    plan_care_plan,
+    plan_communication_request,
 )
 
 SDOH_INSTRUCTION = """\
@@ -42,9 +43,12 @@ lookup.
 2. **get_care_gaps** — unmet goals, missed appointments, overdue screenings.
 3. **find_sdoh_resources** — for each identified risk category + ZIP. Always call this.
 4. **get_patient_summary** — only if you need address/ZIP or demographics not in screening.
-5. **write_care_plan** — persist Goal + CarePlan for each matched resource. Include Z-code.
-6. **create_communication_request** — for outreach (interpreter, Medicaid re-enrollment, \
-appointment scheduling).
+5. **plan_care_plan** — stage a Goal + CarePlan for each matched resource. Include Z-code. \
+Returns a `plan_id` (format: `plan-careplanbundle-N-<epoch_ms>`). Nothing is POSTed to \
+FHIR until the orchestrator calls `commit_pending_write` after clinician approval.
+6. **plan_communication_request** — stage outreach (interpreter, Medicaid re-enrollment, \
+appointment scheduling). Returns `plan_id` (format: \
+`plan-communicationrequest-N-<epoch_ms>`). Pending until approved.
 
 **Domain Priority Order:**
 1. Housing (Z59.0-Z59.1): URGENT if unsheltered/unsafe
@@ -76,8 +80,11 @@ the reason from the tool's `clinician_review.reason`.
 expiration, days remaining), matched community resources, care gaps with likely barrier.
 4. **Task** — Priority-ordered next steps following domain priority above. Include \
 specific resource referrals and outreach actions.
-5. **Transaction** — FHIR write-backs performed (cite resource IDs) or "None". Note \
-any write-backs requiring clinician approval.
+5. **Transaction** — Pending writes from `plan_care_plan` and \
+`plan_communication_request` cited as `plan_id=plan-careplanbundle-N-<epoch_ms>` and \
+`plan_id=plan-communicationrequest-N-<epoch_ms>` with status "PENDING APPROVAL". \
+Do not claim resources were created; nothing is POSTed until the orchestrator calls \
+`commit_pending_write` after clinician approval. "None" if no plans staged.
 
 **FHIR Error Recovery:**
 If a tool returns `status: "error"` (FHIR server unreachable, HTTP error, missing context):
@@ -102,7 +109,7 @@ may be needed, state ONLY: "Treatment decisions require clinician review."
 a tool result. Do not interpolate, round, or infer values.
 - If data is unavailable, say so. Do not call tools not in your tool list.
 - Cite specific data points (dates, values, resource IDs) as evidence.
-- Always follow: screen → find_sdoh_resources → write_care_plan.
+- Always follow: screen → find_sdoh_resources → plan_care_plan.
 - Do not skip find_sdoh_resources — it always returns usable results.
 - Flag missing insurance as HIGH for patients on chronic medications.
 - Always include: "AI-generated analysis. Not for clinical use."
@@ -151,8 +158,10 @@ medications | Benefits navigator | Within 48h
 3. MODERATE — Arrange Spanish interpreter for upcoming appointments | Scheduling | \
 Next visit
 
-**Transaction** — Goal/goal-001 + CarePlan/cp-001 created (sdoh_outreach_agent, \
-housing referral). CommunicationRequest/comm-002 created (Medicaid outreach). \
+**Transaction** — PENDING APPROVAL: plan_id=plan-careplanbundle-1-1731612345678 \
+(housing referral, sdoh_outreach_agent); plan_id=plan-communicationrequest-2-1731612345679 \
+(Medicaid outreach, sdoh_outreach_agent). All awaiting clinician approval via \
+commit_pending_write. \
 Requires clinician approval.
 
 AI-generated analysis. Not for clinical use.
@@ -160,7 +169,7 @@ AI-generated analysis. Not for clinical use.
 
 sdoh_outreach_agent = Agent(
     name="sdoh_outreach_agent",
-    model="gemini-2.5-flash",
+    model=build_agent_model(),
     description="Social determinants of health screening and outreach specialist. Identifies coverage gaps, language barriers, and community resources, and writes FHIR CarePlans/Goals for matched referrals.",
     instruction=SDOH_INSTRUCTION,
     tools=[
@@ -168,8 +177,8 @@ sdoh_outreach_agent = Agent(
         get_patient_summary,
         get_care_gaps,
         find_sdoh_resources,
-        write_care_plan,
-        create_communication_request,
+        plan_care_plan,
+        plan_communication_request,
     ],
     before_model_callback=extract_fhir_context,
     after_model_callback=safety_after_model_callback,

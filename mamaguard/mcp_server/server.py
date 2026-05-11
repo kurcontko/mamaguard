@@ -1,8 +1,10 @@
 """
 MamaGuard MCP Server
 
-Exposes all 15 FHIR tools from mamaguard/shared/tools/ via the MCP protocol.
-Shares tool implementations with the ADK agents — no duplication.
+Exposes 19 FHIR tools via the MCP protocol: 16 granular tools drawn directly from
+mamaguard/shared/tools/ (shared implementation with the ADK agents) plus 3 compound
+tools (assess_maternal_risk / assess_pediatric_status / screen_sdoh) that wrap the
+parallel domain fetchers for one-shot consumption by other marketplace agents.
 
 SHARP context: each tool accepts fhir_url, fhir_token, and patient_id as
 explicit parameters so any MCP client (Cursor, Claude Desktop, custom)
@@ -25,37 +27,59 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 
-from .context import FhirContext
-
 # FhirContext duck-types ToolContext (implements .state dict) for MCP use.
 # mypy can't verify structural compatibility, so tool calls use type: ignore.
-
 # -- Shared tool imports (single source of truth) ----------------------------
 from mamaguard.shared.tools.fhir_base import (
     find_linked_newborn as _find_linked_newborn,
-    get_patient_summary as _get_patient_summary,
+)
+from mamaguard.shared.tools.fhir_base import (
     get_active_medications as _get_active_medications,
+)
+from mamaguard.shared.tools.fhir_base import (
+    get_current_plan as _get_current_plan,
+)
+from mamaguard.shared.tools.fhir_base import (
+    get_patient_summary as _get_patient_summary,
 )
 from mamaguard.shared.tools.maternal import (
     get_bp_trend as _get_bp_trend,
+)
+from mamaguard.shared.tools.maternal import (
     get_glucose_trend as _get_glucose_trend,
-    get_pregnancy_history as _get_pregnancy_history,
+)
+from mamaguard.shared.tools.maternal import (
     get_maternal_risk_profile as _get_maternal_risk_profile,
+)
+from mamaguard.shared.tools.maternal import (
+    get_pregnancy_history as _get_pregnancy_history,
+)
+from mamaguard.shared.tools.pediatric import (
+    get_care_gaps as _get_care_gaps,
+)
+from mamaguard.shared.tools.pediatric import (
+    get_developmental_screening_status as _get_developmental_screening_status,
 )
 from mamaguard.shared.tools.pediatric import (
     get_immunization_gaps as _get_immunization_gaps,
-    get_developmental_screening_status as _get_developmental_screening_status,
-    get_care_gaps as _get_care_gaps,
+)
+from mamaguard.shared.tools.sdoh import (
+    find_sdoh_resources as _find_sdoh_resources,
 )
 from mamaguard.shared.tools.sdoh import (
     get_sdoh_screening as _get_sdoh_screening,
-    find_sdoh_resources as _find_sdoh_resources,
+)
+from mamaguard.shared.tools.writeback import (
+    create_communication_request as _create_communication_request,
+)
+from mamaguard.shared.tools.writeback import (
+    write_care_plan as _write_care_plan,
 )
 from mamaguard.shared.tools.writeback import (
     write_risk_assessment as _write_risk_assessment,
-    create_communication_request as _create_communication_request,
-    write_care_plan as _write_care_plan,
 )
+
+from .context import FhirContext
 
 # ---------------------------------------------------------------------------
 mcp = FastMCP(
@@ -128,7 +152,31 @@ def get_active_medications(
 
 
 # ---------------------------------------------------------------------------
-# Tool 3: find_linked_newborn
+# Tool 3: get_current_plan
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_current_plan(
+    fhir_url: str,
+    fhir_token: str,
+    patient_id: str,
+) -> str:
+    """
+    Fetch the patient's active structured plan from FHIR.
+
+    Returns active/draft CarePlan, Goal, CommunicationRequest,
+    ServiceRequest, and RiskAssessment resources attached to the patient.
+
+    Args:
+        fhir_url: Base URL of the FHIR R4 server
+        fhir_token: Bearer token for FHIR server authentication
+        patient_id: FHIR Patient resource ID
+    """
+    return _json(_get_current_plan(_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Tool 4: find_linked_newborn
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
@@ -437,7 +485,7 @@ def create_communication_request(
 
 
 # ---------------------------------------------------------------------------
-# Tool 13: find_sdoh_resources (Phase 2c actionable SDOH)
+# Tool 13: find_sdoh_resources
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
@@ -474,7 +522,7 @@ def find_sdoh_resources(
 
 
 # ---------------------------------------------------------------------------
-# Tool 14: write_care_plan (Phase 2c actionable SDOH)
+# Tool 14: write_care_plan
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
@@ -519,6 +567,84 @@ def write_care_plan(
         z_code=z_code,
         tool_context=_ctx(fhir_url, fhir_token, patient_id),  # type: ignore[arg-type]
     ))
+
+
+# ---------------------------------------------------------------------------
+# Compound tools -- parallel fetchers wrapping the domain tool stack so that
+# other A2A agents on the Prompt Opinion marketplace can consume a single
+# pre-computed maternal/pediatric/sdoh payload per MCP call (rather than
+# orchestrating 3-6 raw tool calls themselves). Cross-domain clinical
+# SYNTHESIS is intentionally NOT exposed as an MCP tool -- that is the
+# unique value of the MamaGuard A2A agent and is reached via POST /agent.
+# ---------------------------------------------------------------------------
+
+import asyncio  # noqa: E402
+
+from mamaguard.shared.fetchers import (  # noqa: E402
+    fetch_maternal_data as _fetch_maternal_data,
+)
+from mamaguard.shared.fetchers import (  # noqa: E402
+    fetch_pediatric_data as _fetch_pediatric_data,
+)
+from mamaguard.shared.fetchers import (  # noqa: E402
+    fetch_sdoh_data as _fetch_sdoh_data,
+)
+
+
+@mcp.tool()
+def assess_maternal_risk(
+    fhir_url: str,
+    fhir_token: str,
+    patient_id: str,
+) -> str:
+    """
+    Compound maternal risk assessment -- one MCP call, three FHIR domains fetched
+    in parallel: patient_summary + maternal_risk_profile (BP + glucose + pregnancy)
+    + active_medications.
+
+    Returns a structured MaternalData payload (patient_summary, risk_profile,
+    medications, errors, status). Use this when another agent wants the full
+    maternal picture without orchestrating raw tool calls.
+    """
+    data = asyncio.run(_fetch_maternal_data(fhir_url, fhir_token, patient_id))
+    return _json(data.to_dict())
+
+
+@mcp.tool()
+def assess_pediatric_status(
+    fhir_url: str,
+    fhir_token: str,
+    patient_id: str,
+) -> str:
+    """
+    Compound pediatric assessment with maternal-to-child handoff.
+
+    Step 1: find linked newborn via RelatedPerson lookup on the mother's patient_id.
+    Step 2: if found, parallel-fetch immunization_gaps + developmental_screening
+            + care_gaps on the child's patient context.
+    Returns status="no_linked_child" when no newborn is discovered, so the caller
+    can skip the pediatric domain gracefully.
+    """
+    data = asyncio.run(_fetch_pediatric_data(fhir_url, fhir_token, patient_id))
+    return _json(data.to_dict())
+
+
+@mcp.tool()
+def screen_sdoh(
+    fhir_url: str,
+    fhir_token: str,
+    patient_id: str,
+) -> str:
+    """
+    Compound SDOH screening with resource matching -- parallel-fetches sdoh_screening
+    (Z-codes + coverage + language) and care_gaps, then looks up concrete community
+    resources for each identified risk category (housing / food / insurance /
+    language / ...).
+
+    Returns a structured SdohData payload with matched resources ready for referral.
+    """
+    data = asyncio.run(_fetch_sdoh_data(fhir_url, fhir_token, patient_id))
+    return _json(data.to_dict())
 
 
 # ---------------------------------------------------------------------------

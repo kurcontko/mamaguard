@@ -146,7 +146,7 @@ Optional:
 | `MAMAGUARD_SMART_TICKETS_SECRET` | (none) | HS256 key for dev/test ticket signing |
 | `MAMAGUARD_SMART_TICKETS_AUDIENCE` | (none) | Expected JWT `aud` claim |
 | `LOG_HOOK_RAW_OBJECTS` | `false` | Log raw callback objects (debug only) |
-| `LOG_FULL_PAYLOAD` | `true` | Log incoming HTTP payloads (tokens redacted) |
+| `LOG_FULL_PAYLOAD` | `false` | Log incoming HTTP payloads (tokens redacted). Dev only — leave off in production. |
 
 ## Troubleshooting
 

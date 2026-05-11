@@ -20,9 +20,10 @@ so this test is deterministic (Tier-1, no LLM, no network).
 import unittest
 from unittest.mock import patch
 
-from benchmarks.e2e.fhir_bundles.maria_high_risk import BUNDLE as MARIA_BUNDLE, PATIENT_ID as MARIA_ID
-from benchmarks.e2e.fhir_bundles.baby_santos import BUNDLE as BABY_BUNDLE, PATIENT_ID as BABY_ID
-
+from benchmarks.e2e.fhir_bundles.baby_santos import BUNDLE as BABY_BUNDLE
+from benchmarks.e2e.fhir_bundles.baby_santos import PATIENT_ID as BABY_ID
+from benchmarks.e2e.fhir_bundles.maria_high_risk import BUNDLE as MARIA_BUNDLE
+from benchmarks.e2e.fhir_bundles.maria_high_risk import PATIENT_ID as MARIA_ID
 
 # ---------------------------------------------------------------------------
 # Mock FHIR server: serves resources from the actual benchmark bundles
@@ -435,11 +436,18 @@ class TestHandoffProtocol(unittest.TestCase):
         from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
 
         lower = ORCHESTRATOR_INSTRUCTION.lower()
-        self.assertTrue(
-            "all three" in lower or "maternal -> pediatric -> sdoh" in lower
-            or "sequential" in lower,
-            "Comprehensive assessment must route through all agents",
-        )
+        # Comprehensive assessment now uses a two-turn fan-out:
+        # turn 1 dispatches find_linked_newborn + maternal + sdoh in parallel,
+        # turn 2 dispatches pediatric only if a child was found.
+        self.assertIn("first turn", lower)
+        self.assertIn("second turn", lower)
+        for sub_agent in (
+            "maternal_risk_agent",
+            "pediatric_transition_agent",
+            "sdoh_outreach_agent",
+            "find_linked_newborn",
+        ):
+            self.assertIn(sub_agent, lower, f"missing routing for {sub_agent}")
 
     def test_pediatric_instruction_acknowledges_maternal_context(self):
         from mamaguard.pediatric_agent.agent import PEDIATRIC_INSTRUCTION

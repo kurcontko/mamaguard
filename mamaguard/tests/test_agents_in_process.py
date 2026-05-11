@@ -41,7 +41,6 @@ from mamaguard.pediatric_agent.agent import pediatric_transition_agent
 from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
 from mamaguard.shared.fhir_hook import extract_fhir_context
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -142,7 +141,14 @@ class TestOrchestratorRouting(unittest.TestCase):
         self.assertIs(wrapped_by_name["sdoh_outreach_agent"], sdoh_outreach_agent)
 
     def test_orchestrator_has_fhir_hook(self):
-        self.assertEqual(_callback_name(root_agent), "extract_fhir_context")
+        # The orchestrator chains extract_fhir_context with memory injection
+        # (v3 shift #3). Assert the FHIR hook is present without pinning the
+        # exact list shape.
+        names = _callback_name(root_agent)
+        if isinstance(names, list):
+            self.assertIn("extract_fhir_context", names)
+        else:
+            self.assertEqual(names, "extract_fhir_context")
 
     def test_orchestrator_instruction_names_each_specialist(self):
         instruction = root_agent.instruction or ""
@@ -171,13 +177,11 @@ class TestSpecialistWiring(unittest.TestCase):
         self.assertEqual(
             sorted(_tool_names(maternal_risk_agent)),
             sorted([
+                # Compound tool replaces bp/glucose/pregnancy granular set
                 "get_maternal_risk_profile",
-                "get_bp_trend",
-                "get_glucose_trend",
-                "get_pregnancy_history",
                 "get_active_medications",
                 "get_patient_summary",
-                "write_risk_assessment",
+                "plan_risk_assessment",
             ]),
         )
         self.assertEqual(_callback_name(maternal_risk_agent), "extract_fhir_context")
@@ -191,7 +195,7 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_developmental_screening_status",
                 "get_care_gaps",
                 "get_patient_summary",
-                "create_communication_request",
+                "plan_communication_request",
             ]),
         )
         self.assertEqual(
@@ -207,8 +211,8 @@ class TestSpecialistWiring(unittest.TestCase):
                 "get_patient_summary",
                 "get_care_gaps",
                 "find_sdoh_resources",
-                "write_care_plan",
-                "create_communication_request",
+                "plan_care_plan",
+                "plan_communication_request",
             ]),
         )
         self.assertEqual(_callback_name(sdoh_outreach_agent), "extract_fhir_context")

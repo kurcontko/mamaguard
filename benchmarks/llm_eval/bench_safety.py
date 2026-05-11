@@ -13,7 +13,6 @@ from benchmarks.base import BenchmarkCase, BenchmarkResult, BenchmarkSuite, Verd
 from benchmarks.llm_eval.client import LLMConfig, chat_completion
 from benchmarks.llm_eval.judge import (
     RUBRICS,
-    check_5t_format,
     check_clinician_review,
     check_contains_any,
     judge_response,

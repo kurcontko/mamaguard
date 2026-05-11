@@ -15,25 +15,28 @@ Starlette app + ``TestClient`` — no ADK imports, no network. Module-level
 
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
+from dataclasses import dataclass
+from typing import Any
 from unittest.mock import patch
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
-from starlette.testclient import TestClient
 
 from mamaguard.shared import middleware as mw
 from mamaguard.shared.middleware import (
     A2A_EXTENSIONS_HEADER,
-    ApiKeyMiddleware,
     FHIR_EXTENSION_URI,
+    A2aV1OutboundMiddleware,
+    ApiKeyMiddleware,
+    JsonRpcMethodAliasMiddleware,
     _activate_extension,
     _is_valid_key,
 )
-
 
 FHIR_KEY = "https://app.promptopinion.ai/schemas/a2a/v1/fhir-context"
 
@@ -52,6 +55,48 @@ async def _agent_card(request: Request) -> JSONResponse:
     return JSONResponse({"name": "mamaguard", "version": "test"})
 
 
+async def _a2a_json_response(request: Request) -> JSONResponse:
+    """Return a minimal SDK-like JSON-RPC task response."""
+    body = await request.json()
+    message = (body.get("params") or {}).get("message") or {}
+    parts = message.get("parts") or [{}]
+    return JSONResponse(
+        {
+            "jsonrpc": "2.0",
+            "id": body.get("id"),
+            "received": body,
+            "observedMethod": body.get("method"),
+            "observedRole": message.get("role"),
+            "observedPartKind": parts[0].get("kind"),
+            "result": {
+                "kind": "task",
+                "status": {
+                    "state": "completed",
+                    "message": {
+                        "kind": "message",
+                        "role": "agent",
+                        "parts": [{"kind": "text", "text": "done"}],
+                    },
+                },
+            },
+        }
+    )
+
+
+async def _a2a_sse_response(request: Request) -> StreamingResponse:
+    """Return minimal SDK-like SSE events."""
+    await request.body()
+
+    async def events():
+        yield (
+            b'data: {"kind":"status-update","status":{"state":"completed",'
+            b'"message":{"kind":"message","role":"agent",'
+            b'"parts":[{"kind":"text","text":"done"}]}}}\n\n'
+        )
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
 def _build_app() -> Starlette:
     app = Starlette(
         routes=[
@@ -63,7 +108,144 @@ def _build_app() -> Starlette:
     return app
 
 
-def _client(valid_keys: set[str] | None = None) -> TestClient:
+def _build_a2a_wire_app() -> Starlette:
+    app = Starlette(
+        routes=[
+            Route("/json", _a2a_json_response, methods=["POST"]),
+            Route("/stream", _a2a_sse_response, methods=["POST"]),
+        ],
+    )
+    app.add_middleware(JsonRpcMethodAliasMiddleware)
+    app.add_middleware(A2aV1OutboundMiddleware)
+    return app
+
+
+class _Headers:
+    def __init__(self, values: dict[str, str]):
+        self._values = {key.lower(): value for key, value in values.items()}
+
+    def __contains__(self, key: object) -> bool:
+        if isinstance(key, str):
+            return key.lower() in self._values
+        return False
+
+    def __getitem__(self, key: str) -> str:
+        return self._values[key.lower()]
+
+    def get(self, key: str, default: str | None = None) -> str | None:
+        return self._values.get(key.lower(), default)
+
+
+@dataclass
+class _ASGIResponse:
+    status_code: int
+    headers: _Headers
+    content: bytes
+
+    @property
+    def text(self) -> str:
+        return self.content.decode("utf-8", errors="replace")
+
+    def json(self) -> Any:
+        return json.loads(self.text)
+
+
+class _ASGIClient:
+    def __init__(self, app):
+        self._app = app
+
+    def get(self, path: str, headers: dict[str, str] | None = None) -> _ASGIResponse:
+        return asyncio.run(_asgi_request(self._app, "GET", path, headers=headers))
+
+    def post(
+        self,
+        path: str,
+        json: dict[str, Any] | None = None,
+        content: bytes | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> _ASGIResponse:
+        return asyncio.run(
+            _asgi_request(
+                self._app,
+                "POST",
+                path,
+                json_body=json,
+                content=content,
+                headers=headers,
+            )
+        )
+
+
+async def _asgi_request(
+    app,
+    method: str,
+    path: str,
+    json_body: dict[str, Any] | None = None,
+    content: bytes | None = None,
+    headers: dict[str, str] | None = None,
+) -> _ASGIResponse:
+    body = content or b""
+    raw_headers: list[tuple[bytes, bytes]] = []
+    if json_body is not None:
+        body = json.dumps(json_body).encode("utf-8")
+        raw_headers.append((b"content-type", b"application/json"))
+
+    for name, value in (headers or {}).items():
+        raw_headers.append((name.lower().encode("latin-1"), value.encode("latin-1")))
+
+    request_sent = False
+
+    async def receive():
+        nonlocal request_sent
+        if not request_sent:
+            request_sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
+
+    messages: list[dict[str, Any]] = []
+
+    async def send(message):
+        messages.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": method,
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": b"",
+        "headers": raw_headers,
+        "client": ("testclient", 50000),
+        "server": ("testserver", 80),
+        "root_path": "",
+        "state": {},
+    }
+
+    await app(scope, receive, send)
+
+    status_code = 500
+    response_headers: dict[str, str] = {}
+    chunks: list[bytes] = []
+    for message in messages:
+        if message["type"] == "http.response.start":
+            status_code = message["status"]
+            response_headers = {
+                key.decode("latin-1"): value.decode("latin-1")
+                for key, value in message.get("headers", [])
+            }
+        elif message["type"] == "http.response.body":
+            chunks.append(message.get("body", b""))
+
+    return _ASGIResponse(
+        status_code=status_code,
+        headers=_Headers(response_headers),
+        content=b"".join(chunks),
+    )
+
+
+def _client(valid_keys: set[str] | None = None) -> _ASGIClient:
     """Patch VALID_API_KEYS for the life of the returned TestClient.
 
     We cannot use a decorator/context manager neatly for every test because
@@ -73,7 +255,7 @@ def _client(valid_keys: set[str] | None = None) -> TestClient:
     if valid_keys is None:
         valid_keys = {"good-key"}
     # Caller is expected to patch via context manager; helper just builds app.
-    return TestClient(_build_app())
+    return _ASGIClient(_build_app())
 
 
 class TestAgentCardBypass(unittest.TestCase):
@@ -338,6 +520,91 @@ class TestBodyEdgeCases(unittest.TestCase):
             )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["received"], {})
+
+
+class TestA2aV1WireFormat(unittest.TestCase):
+    """PO speaks A2A v1 while the SDK speaks v0.3 internally."""
+
+    def setUp(self):
+        self.client = _ASGIClient(_build_a2a_wire_app())
+
+    def _payload(self, method: str = "SendMessage", *, v1_enums: bool = True):
+        role = "ROLE_USER" if v1_enums else "user"
+        part_kind = "KIND_TEXT" if v1_enums else "text"
+        return {
+            "jsonrpc": "2.0",
+            "method": method,
+            "id": "wire-test-1",
+            "params": {
+                "message": {
+                    "messageId": "msg-wire-test-1",
+                    "role": role,
+                    "parts": [{"kind": part_kind, "text": "hello"}],
+                }
+            },
+        }
+
+    def test_v1_json_request_gets_v1_task_enums_back(self):
+        resp = self.client.post("/json", json=self._payload())
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["observedMethod"], "message/send")
+        self.assertEqual(body["observedRole"], "user")
+        self.assertEqual(body["observedPartKind"], "text")
+        # Task is wrapped under result.task so PO's `$.result.task` validator
+        # finds it. State uses canonical A2A v1 proto naming TASK_STATE_*.
+        task = body["result"]["task"]
+        self.assertEqual(task["kind"], "KIND_TASK")
+        self.assertEqual(task["status"]["state"], "TASK_STATE_COMPLETED")
+        self.assertEqual(task["status"]["message"]["role"], "ROLE_AGENT")
+        self.assertEqual(
+            task["status"]["message"]["parts"][0]["kind"],
+            "KIND_TEXT",
+        )
+
+    def test_v0_3_json_request_keeps_v0_3_task_enums(self):
+        resp = self.client.post(
+            "/json",
+            json=self._payload(method="message/send", v1_enums=False),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["observedMethod"], "message/send")
+        self.assertEqual(body["result"]["kind"], "task")
+        self.assertEqual(body["result"]["status"]["state"], "completed")
+        self.assertEqual(body["result"]["status"]["message"]["role"], "agent")
+
+    def test_v1_sse_request_gets_v1_status_update_event(self):
+        resp = self.client.post(
+            "/stream",
+            json=self._payload(method="SendStreamingMessage"),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/event-stream", resp.headers.get("content-type", ""))
+        line = next(row for row in resp.text.splitlines() if row.startswith("data:"))
+        event = json.loads(line[len("data:"):].strip())
+        self.assertEqual(event["kind"], "KIND_STATUS_UPDATE")
+        self.assertEqual(event["status"]["state"], "TASK_STATE_COMPLETED")
+        self.assertEqual(event["status"]["message"]["role"], "ROLE_AGENT")
+        self.assertEqual(event["status"]["message"]["parts"][0]["kind"], "KIND_TEXT")
+
+    def test_v1_enums_mark_response_for_v1_even_with_v0_3_method(self):
+        resp = self.client.post(
+            "/json",
+            json=self._payload(method="message/send", v1_enums=True),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["observedMethod"], "message/send")
+        self.assertEqual(body["observedRole"], "user")
+        # v1 enums on inbound trigger v1 wrapping on outbound even with v0.3 method.
+        self.assertEqual(
+            body["result"]["task"]["status"]["state"], "TASK_STATE_COMPLETED"
+        )
 
 
 class TestA2AExtensionActivation(unittest.TestCase):

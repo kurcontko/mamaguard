@@ -80,7 +80,7 @@ MamaGuard enforces a **Liaison Pattern** — AI recommends, clinician decides. E
 
 ### Interoperability
 
-- **Dual submission**: A2A agent (BYO on Prompt Opinion) + standalone MCP server — same 15 tools, two integration paths
+- **Dual submission**: A2A agent (BYO on Prompt Opinion) + standalone MCP server — 16 shared FHIR tools plus compound MCP assessments, two integration paths
 - **Mother-to-child handoff**: `find_linked_newborn` discovers children via FHIR RelatedPerson, enabling seamless maternal-to-pediatric transitions in a single session
 - **Multilingual**: Patient summaries in Spanish, Arabic, and Hindi when Patient.communication indicates a non-English primary language
 

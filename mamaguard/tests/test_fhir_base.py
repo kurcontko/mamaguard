@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-
 # ---------------------------------------------------------------------------
 # Shared mock
 # ---------------------------------------------------------------------------
@@ -187,7 +186,7 @@ class TestFhirGet(unittest.TestCase):
 
     @patch("mamaguard.shared.tools.fhir_base.httpx.get")
     def test_uses_timeout(self, mock_get):
-        from mamaguard.shared.tools.fhir_base import _fhir_get, _FHIR_TIMEOUT
+        from mamaguard.shared.tools.fhir_base import _FHIR_TIMEOUT, _fhir_get
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {}
@@ -990,6 +989,155 @@ class TestGetActiveMedicationsEdgeCases(unittest.TestCase):
         }
         result = get_active_medications(_valid_ctx())
         self.assertEqual(result["medications"][0]["dosage"], "No dosage text")
+
+
+# ===========================================================================
+# get_current_plan
+# ===========================================================================
+
+class TestGetCurrentPlan(unittest.TestCase):
+    """Tests for the current-plan FHIR reader."""
+
+    @staticmethod
+    def _bundle(*resources):
+        return {
+            "resourceType": "Bundle",
+            "entry": [{"resource": r} for r in resources],
+        }
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_returns_current_plan_resources(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import get_current_plan
+
+        active_cp = {
+            "resourceType": "CarePlan",
+            "id": "cp-active",
+            "status": "active",
+            "intent": "plan",
+            "title": "SDOH housing referral",
+            "category": [{"text": "SDOH-housing"}],
+            "period": {"start": "2026-05-01"},
+            "goal": [{"reference": "Goal/g-active"}],
+            "activity": [{
+                "detail": {
+                    "status": "not-started",
+                    "description": "Contact housing navigator",
+                }
+            }],
+        }
+        completed_cp = {
+            "resourceType": "CarePlan",
+            "id": "cp-done",
+            "status": "completed",
+            "title": "Old plan",
+        }
+        goal = {
+            "resourceType": "Goal",
+            "id": "g-active",
+            "lifecycleStatus": "active",
+            "description": {"text": "Secure stable housing"},
+        }
+        comm = {
+            "resourceType": "CommunicationRequest",
+            "id": "cr-active",
+            "status": "active",
+            "priority": "urgent",
+            "authoredOn": "2026-05-11",
+            "medium": [{"text": "phone"}],
+            "payload": [{"contentString": "Call benefits navigator"}],
+        }
+        service = {
+            "resourceType": "ServiceRequest",
+            "id": "sr-active",
+            "status": "active",
+            "intent": "order",
+            "priority": "asap",
+            "code": {"text": "Cardiology referral"},
+        }
+        risk = {
+            "resourceType": "RiskAssessment",
+            "id": "ra-final",
+            "status": "final",
+            "occurrenceDateTime": "2026-05-11",
+            "prediction": [{
+                "outcome": {"text": "postpartum-hypertensive-crisis"},
+                "probabilityDecimal": 0.82,
+            }],
+            "mitigation": "Urgent clinician review",
+        }
+
+        def side_effect(_fhir_url, _token, path, params=None):
+            params = params or {}
+            if path == "CarePlan" and "patient" in params:
+                return self._bundle(active_cp, completed_cp)
+            if path == "Goal" and "patient" in params:
+                return self._bundle(goal)
+            if path == "CommunicationRequest" and "subject" in params:
+                return self._bundle(comm)
+            if path == "ServiceRequest" and "subject" in params:
+                return self._bundle(service)
+            if path == "RiskAssessment" and "patient" in params:
+                return self._bundle(risk)
+            return self._bundle()
+
+        mock_fhir_get.side_effect = side_effect
+        result = get_current_plan(_valid_ctx())
+
+        self.assertEqual(result["status"], "success")
+        data = result["data"]
+        self.assertTrue(data["current_plan_present"])
+        self.assertEqual(data["counts"]["total_current_items"], 5)
+        self.assertEqual(data["care_plans"][0]["resource_id"], "cp-active")
+        self.assertEqual(data["care_plans"][0]["activities"][0]["description"], "Contact housing navigator")
+        self.assertEqual(data["goals"][0]["description"], "Secure stable housing")
+        self.assertEqual(data["communication_requests"][0]["payload"], ["Call benefits navigator"])
+        self.assertEqual(data["service_requests"][0]["code"], "Cardiology referral")
+        self.assertEqual(data["risk_assessments"][0]["predictions"][0]["probability"], 0.82)
+        self.assertNotIn("cp-done", {p["resource_id"] for p in data["care_plans"]})
+        self.assertEqual(data["query_errors"], [])
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_empty_plan_has_clinician_review_flag(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import get_current_plan
+
+        mock_fhir_get.return_value = self._bundle()
+        result = get_current_plan(_valid_ctx())
+
+        self.assertEqual(result["status"], "success")
+        self.assertFalse(result["data"]["current_plan_present"])
+        self.assertEqual(result["data"]["counts"]["total_current_items"], 0)
+        self.assertTrue(result["clinician_review"]["required"])
+
+    def test_risk_assessment_preserves_zero_probability(self):
+        from mamaguard.shared.tools.fhir_base import _summarize_risk_assessment
+
+        result = _summarize_risk_assessment({
+            "resourceType": "RiskAssessment",
+            "id": "ra-zero",
+            "status": "final",
+            "prediction": [{
+                "outcome": {"text": "low-risk-outcome"},
+                "probabilityDecimal": 0.0,
+            }],
+        })
+
+        self.assertEqual(result["predictions"][0]["probability"], 0.0)
+
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_query_errors_surface_when_all_search_aliases_fail(self, mock_fhir_get):
+        from mamaguard.shared.tools.fhir_base import get_current_plan
+
+        def side_effect(_fhir_url, _token, path, params=None):
+            if path == "ServiceRequest":
+                raise httpx.ConnectError("service request search unavailable")
+            return self._bundle()
+
+        mock_fhir_get.side_effect = side_effect
+        result = get_current_plan(_valid_ctx())
+
+        self.assertEqual(result["status"], "success")
+        self.assertGreaterEqual(len(result["data"]["query_errors"]), 2)
+        self.assertIn("ServiceRequest", result["data"]["query_errors"][0])
 
 
 # ===========================================================================

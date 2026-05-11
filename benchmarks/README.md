@@ -56,6 +56,8 @@ python3.11 -m benchmarks.runner --medagent
 | `BENCH_API_KEY` | vLLM API key | `EMPTY` |
 | `JUDGE_API_BASE` | Judge LLM endpoint | falls back to `BENCH_API_BASE` |
 | `JUDGE_MODEL` | Judge LLM id | falls back to `BENCH_MODEL` |
+| `JUDGE_REASONING_EFFORT` | Optional judge reasoning effort, e.g. `high` | unset |
+| `JUDGE_THINKING` | Optional judge thinking mode, e.g. `enabled` | unset |
 | `GOOGLE_API_KEY` | Gemini API key | (required for gemini backend) |
 | `HAPI_FHIR_URL` | HAPI endpoint | `http://localhost:8090/fhir` |
 | `HAPI_CONTAINER_NAME` | Docker container name | `mamaguard-hapi-bench` |

@@ -17,7 +17,6 @@ Covers:
 
 from __future__ import annotations
 
-import time
 import unittest
 from types import SimpleNamespace
 from typing import Any
@@ -34,7 +33,6 @@ from mamaguard.shared.timing import (
     format_timing_line,
     inject_timing_callback,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -112,6 +110,14 @@ class TestBeforeToolTiming(unittest.TestCase):
         result = before_tool_timing(tool, {}, ctx)
         self.assertIsNone(result)
 
+    def test_accepts_adk_keyword_arguments(self):
+        """ADK invokes tool callbacks with ``tool_context=`` as a keyword."""
+        ctx = _make_context()
+        tool = _make_tool("maternal_risk_agent")
+        result = before_tool_timing(tool=tool, args={}, tool_context=ctx)
+        self.assertIsNone(result)
+        self.assertIn("maternal_risk_agent", ctx.state[_STATE_KEY_STARTS])
+
 
 # ---------------------------------------------------------------------------
 # after_tool_timing
@@ -167,6 +173,20 @@ class TestAfterToolTiming(unittest.TestCase):
         after_tool_timing(tool, {}, ctx, {"status": "ok"})
         starts = ctx.state.get(_STATE_KEY_STARTS, {})
         self.assertNotIn("maternal_risk_agent", starts)
+
+    def test_accepts_adk_keyword_arguments(self):
+        """ADK invokes tool callbacks with ``tool_context=`` as a keyword."""
+        ctx = _make_context()
+        tool = _make_tool("maternal_risk_agent")
+        before_tool_timing(tool=tool, args={}, tool_context=ctx)
+        result = after_tool_timing(
+            tool=tool,
+            args={},
+            tool_context=ctx,
+            tool_response={"status": "ok"},
+        )
+        self.assertIsNone(result)
+        self.assertEqual(ctx.state[_STATE_KEY_TIMINGS][0]["agent"], "maternal_risk_agent")
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +328,7 @@ class TestOrchestratorWiring(unittest.TestCase):
 
     def test_after_model_chain_includes_timing(self):
         import inspect
+
         from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
         source = inspect.getsource(_orchestrator_after_model_callback)
         self.assertIn("inject_timing_callback", source)
@@ -320,8 +341,9 @@ class TestOrchestratorWiring(unittest.TestCase):
 class TestJsonTimingIntegration(unittest.TestCase):
 
     def test_json_output_includes_timing(self):
-        from mamaguard.shared.json_formatter import json_output_callback
         import json
+
+        from mamaguard.shared.json_formatter import json_output_callback
 
         ctx = _make_context({
             "output_format": "json",
@@ -339,8 +361,9 @@ class TestJsonTimingIntegration(unittest.TestCase):
         self.assertEqual(data["timing"]["agents"]["sdoh_outreach_agent"], 1.8)
 
     def test_json_output_no_timing_when_absent(self):
-        from mamaguard.shared.json_formatter import json_output_callback
         import json
+
+        from mamaguard.shared.json_formatter import json_output_callback
 
         ctx = _make_context({"output_format": "json"})
         resp = _make_response(SAMPLE_5T)

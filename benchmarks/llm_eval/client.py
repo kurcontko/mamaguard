@@ -9,11 +9,15 @@ Configure via env vars or pass directly:
     BENCH_TEMPERATURE — temperature (default: 0.0 for deterministic eval)
     BENCH_TOP_P       — top-p nucleus sampling (default: not set)
     BENCH_TIMEOUT     — request timeout in seconds (default: 120)
+    BENCH_REASONING_EFFORT — optional reasoning effort for compatible APIs
+    BENCH_THINKING    — optional thinking mode: enabled or disabled
 
     JUDGE_API_BASE    — judge model endpoint (falls back to BENCH_API_BASE)
     JUDGE_MODEL       — judge model name (falls back to BENCH_MODEL)
     JUDGE_API_KEY     — judge API key (falls back to BENCH_API_KEY)
     JUDGE_TOP_P       — judge top-p (default: not set)
+    JUDGE_REASONING_EFFORT — optional reasoning effort for compatible APIs
+    JUDGE_THINKING    — optional thinking mode: enabled or disabled
 """
 
 from __future__ import annotations
@@ -35,10 +39,13 @@ class LLMConfig:
     temperature: float = 0.0
     top_p: float | None = None
     timeout: int = 120
+    reasoning_effort: str | None = None
+    thinking: str | None = None
 
     @classmethod
     def from_env(cls, prefix: str = "BENCH") -> LLMConfig:
         top_p_raw = os.environ.get(f"{prefix}_TOP_P")
+        thinking_raw = os.environ.get(f"{prefix}_THINKING")
         return cls(
             api_base=os.environ.get(f"{prefix}_API_BASE", "http://localhost:8000/v1"),
             model=os.environ.get(f"{prefix}_MODEL", ""),
@@ -47,12 +54,15 @@ class LLMConfig:
             temperature=float(os.environ.get(f"{prefix}_TEMPERATURE", "0.0")),
             top_p=float(top_p_raw) if top_p_raw is not None else None,
             timeout=int(os.environ.get(f"{prefix}_TIMEOUT", "120")),
+            reasoning_effort=os.environ.get(f"{prefix}_REASONING_EFFORT") or None,
+            thinking=thinking_raw.lower() if thinking_raw else None,
         )
 
     @classmethod
     def judge_from_env(cls) -> LLMConfig:
         """Load judge config, falling back to BENCH_ vars."""
         top_p_raw = os.environ.get("JUDGE_TOP_P")
+        thinking_raw = os.environ.get("JUDGE_THINKING", os.environ.get("BENCH_THINKING"))
         return cls(
             api_base=os.environ.get("JUDGE_API_BASE", os.environ.get("BENCH_API_BASE", "http://localhost:8000/v1")),
             model=os.environ.get("JUDGE_MODEL", os.environ.get("BENCH_MODEL", "")),
@@ -61,6 +71,8 @@ class LLMConfig:
             temperature=float(os.environ.get("JUDGE_TEMPERATURE", "0.0")),
             top_p=float(top_p_raw) if top_p_raw is not None else None,
             timeout=int(os.environ.get("JUDGE_TIMEOUT", "120")),
+            reasoning_effort=os.environ.get("JUDGE_REASONING_EFFORT", os.environ.get("BENCH_REASONING_EFFORT")) or None,
+            thinking=thinking_raw.lower() if thinking_raw else None,
         )
 
 
@@ -111,6 +123,10 @@ def chat_completion(
     }
     if config.top_p is not None:
         body["top_p"] = config.top_p
+    if config.reasoning_effort:
+        body["reasoning_effort"] = config.reasoning_effort
+    if config.thinking:
+        body["thinking"] = {"type": config.thinking}
     if tools:
         body["tools"] = tools
     if tool_choice is not None:

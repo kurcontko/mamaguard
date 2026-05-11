@@ -1,6 +1,6 @@
 # MamaGuard MCP Server
 
-Standalone MCP server exposing 15 FHIR tools for maternal-pediatric care coordination. Shares tool implementations with the ADK agents (single source of truth -- no duplication).
+Standalone MCP server exposing 19 tools for maternal-pediatric care coordination: 16 shared FHIR tools plus 3 compound assessment tools. Shares tool implementations with the ADK agents (single source of truth -- no duplication).
 
 ## Quick Start
 
@@ -22,7 +22,7 @@ MCP Client (Claude Desktop / Cursor / PO BYO Agent / custom)
     │
     │  MCP protocol (stdio or SSE)
     ▼
-mamaguard/mcp_server/server.py     ← FastMCP server, 15 tool registrations
+mamaguard/mcp_server/server.py     ← FastMCP server, 19 tool registrations
     │
     │  Direct Python imports (no HTTP, no duplication)
     ▼
@@ -64,6 +64,7 @@ Every tool requires three SHARP context parameters:
 |------|------------------|-------------|
 | `get_patient_summary` | -- | Demographics, conditions, medications, recent vitals |
 | `get_active_medications` | -- | Active medications with dosage instructions |
+| `get_current_plan` | -- | Active CarePlan, Goal, CommunicationRequest, ServiceRequest, and RiskAssessment resources |
 | `find_linked_newborn` | `mother_patient_id: str` | Find child Patients linked via RelatedPerson |
 
 ### Maternal Tools
@@ -97,6 +98,14 @@ Every tool requires three SHARP context parameters:
 | `write_risk_assessment` | `risk_type`, `probability`, `basis`, `mitigation` | POST RiskAssessment to FHIR server |
 | `create_communication_request` | `medium`, `content`, `priority="routine"` | POST CommunicationRequest for outreach |
 | `write_care_plan` | `category`, `goal_description`, `resource_name`, `resource_contact`, `resource_url=""`, `z_code=""` | POST linked Goal + CarePlan for SDOH referral |
+
+### Compound Assessment Tools
+
+| Tool | Additional Params | Description |
+|------|------------------|-------------|
+| `assess_maternal_risk` | -- | One-shot maternal data bundle for marketplace consumers |
+| `assess_pediatric_status` | -- | One-shot pediatric transition bundle |
+| `screen_sdoh` | -- | One-shot SDOH screening and resource bundle |
 
 ### Response Format
 
@@ -154,11 +163,11 @@ docker run -p 8080:8080 \
 ## Tests
 
 ```bash
-# MCP server tests only (40 tests)
+# MCP server tests only
 python -m pytest mamaguard/tests/test_mcp_server.py -v
 
 # Full suite
 python -m pytest mamaguard/tests/ -v
 ```
 
-Tests cover: tool registration (all 15), tool invocation with mocked FHIR, FHIR context propagation, SHARP deserialization, and error handling.
+Tests cover: tool registration (all 19), tool invocation with mocked FHIR, FHIR context propagation, SHARP deserialization, and error handling.

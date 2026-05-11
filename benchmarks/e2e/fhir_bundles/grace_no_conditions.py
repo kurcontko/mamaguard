@@ -16,11 +16,11 @@ Clinical profile:
 
 from benchmarks.e2e.fhir_bundles._helpers import (
     bp_observation,
+    condition,
     coverage,
     hba1c_observation,
     patient,
     transaction_bundle,
-    condition,
 )
 
 PATIENT_ID = "bench-grace-008"

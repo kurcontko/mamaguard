@@ -19,7 +19,7 @@
   R2  90.1%  Baseline snapshot
   R3  86.8%  LLM-only subset (13 cases)
   R4  94.0%  + Safety filter (best run)
-  R5  90.0%  Final (73 cases, +3 new)
+  R5  93.1%  Final Tier-2b E2E (47 cases)
 ```
 
 **Net improvement: 88.2% (pre-hardening) --> 90.0% (final) | +1.8 pts, +3 cases, 0 errors**
