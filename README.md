@@ -299,4 +299,4 @@ Python 3.11 | Google ADK | A2A SDK | Gemini 3 Flash | gpt-5.4 | Nemotron 3 Super
 
 ## License
 
-Hackathon submission -- see hackathon rules for usage terms.
+Licensed under the [Apache License, Version 2.0](LICENSE). Copyright 2026 Michal Kurc.
