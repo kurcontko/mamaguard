@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.jpg" alt="MamaGuard logo" width="240" />
+  <img src="assets/logo.png" alt="MamaGuard logo" width="240" />
 </p>
 
 # MamaGuard: AI-Powered Maternal-Pediatric Care Coordination
@@ -33,7 +33,7 @@ What you'll see: three specialist agents (maternal, pediatric, SDOH) coordinatin
 ## What It Does
 
 <p align="center">
-  <img src="assets/agents.jpg" alt="MamaGuard specialist agents: Maternal, Pediatric, SDOH" width="100%" />
+  <img src="assets/agents.png" alt="MamaGuard specialist agents: Maternal, Pediatric, SDOH" width="100%" />
 </p>
 
 MamaGuard is a multi-agent AI care coordination system that analyzes FHIR patient records to support maternal and pediatric health. Three specialist agents coordinate through a single A2A interface:
