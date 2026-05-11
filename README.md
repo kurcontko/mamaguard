@@ -251,7 +251,7 @@ scripts/
 | Component | Choice | Why |
 |-----------|--------|-----|
 | Agent framework | Google ADK + A2A SDK | Reference implementation for A2A protocol |
-| LLM | Gemini 2.5 Flash | Free tier, Google AI Studio |
+| LLMs | Gemini 3 Flash, gpt-5.4 (production via PO routing); Nemotron 3 Super, Gemma 4 (benchmarks); DeepSeek 3.2 (LLM-as-judge) | Free/sponsor-credit tiers; benches run locally on DGX Spark |
 | MCP server | FastMCP | Superpower track, dual submission |
 | Healthcare data | FHIR R4 | Industry standard; SMART + HAPI servers |
 | FHIR context | SHARP extension | EHR session credentials in A2A/MCP metadata |
@@ -275,7 +275,7 @@ scripts/
 
 ## Built With
 
-Python 3.11 | Google ADK | A2A SDK | Gemini 2.5 Flash | FHIR R4 | FastMCP | SMART/HAPI | Google Cloud Run | Docker | httpx | uvicorn | PyJWT
+Python 3.11 | Google ADK | A2A SDK | Gemini 3 Flash | gpt-5.4 | Nemotron 3 Super | Gemma 4 | DeepSeek 3.2 | FHIR R4 | FastMCP | SMART/HAPI | Google Cloud Run | Docker | httpx | uvicorn | PyJWT
 
 ---
 
