@@ -10,6 +10,8 @@ The agent card is served publicly at:
 All other endpoints require an X-API-Key header (see shared/middleware.py).
 """
 
+# ruff: noqa: E402
+
 import os
 
 from dotenv import load_dotenv
@@ -19,8 +21,8 @@ load_dotenv()
 from a2a.types import AgentProvider, AgentSkill
 
 from mamaguard import MAMAGUARD_VERSION
-from mamaguard.shared.app_factory import create_a2a_app
 from mamaguard.orchestrator.agent import root_agent
+from mamaguard.shared.app_factory import create_a2a_app
 
 a2a_app = create_a2a_app(
     agent=root_agent,

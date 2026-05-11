@@ -1,7 +1,10 @@
 """Unit tests for plan/commit split (Phase 3)."""
 
+import os
+import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from unittest.mock import patch
 
 from mamaguard.shared.tools import plan_mode
 
@@ -16,10 +19,13 @@ class MockToolContext:
 
 
 def _reset_plan_store() -> None:
-    """Clear the process-level plan store between tests so cross-test state
-    doesn't leak (the store now lives at module scope so commit_pending_write
-    can find plans across sessions/PO chat threads)."""
+    """Clear the scoped process-level plan store between tests."""
     plan_mode._PROCESS_PLAN_STORE.clear()
+
+
+def _scope_store(ctx: MockToolContext) -> dict:
+    scope = plan_mode._scope_key(ctx.state["fhir_url"], ctx.state["patient_id"])
+    return plan_mode._PROCESS_PLAN_STORE[scope]
 
 
 def _post_ok(fhir_url, token, resource_type, body):
@@ -48,8 +54,8 @@ class TestPlanRiskAssessment(unittest.TestCase):
         self.assertIn("plan_id", result)
         self.assertIn("bundle", result)
         self.assertEqual(result["bundle"]["resourceType"], "RiskAssessment")
-        # Plan should be stored in session state for later commit
-        self.assertIn(result["plan_id"], plan_mode._PROCESS_PLAN_STORE)
+        # Plan should be stored under the current FHIR endpoint + patient scope.
+        self.assertIn(result["plan_id"], _scope_store(ctx))
 
     def test_plan_routine_does_not_require_approval(self):
         from mamaguard.shared.tools.plan_mode import plan_risk_assessment
@@ -100,7 +106,7 @@ class TestCommitPendingWrite(unittest.TestCase):
         self.assertTrue(result["committed_from_plan"])
         mock_post.assert_called_once()
         # Plan status updated in store
-        self.assertEqual(plan_mode._PROCESS_PLAN_STORE[plan["plan_id"]]["status"], "committed")
+        self.assertEqual(_scope_store(ctx)[plan["plan_id"]]["status"], "committed")
 
     @patch("mamaguard.shared.tools.plan_mode._post_resource")
     def test_commit_denied_does_not_post(self, mock_post):
@@ -114,7 +120,7 @@ class TestCommitPendingWrite(unittest.TestCase):
         result = commit_pending_write(plan["plan_id"], approved=False, tool_context=ctx)
         self.assertEqual(result["status"], "denied")
         mock_post.assert_not_called()
-        self.assertEqual(plan_mode._PROCESS_PLAN_STORE[plan["plan_id"]]["status"], "denied")
+        self.assertEqual(_scope_store(ctx)[plan["plan_id"]]["status"], "denied")
 
     def test_commit_unknown_plan_id(self):
         from mamaguard.shared.tools.plan_mode import commit_pending_write
@@ -141,6 +147,22 @@ class TestCommitPendingWrite(unittest.TestCase):
         second = commit_pending_write(plan["plan_id"], approved=True, tool_context=ctx)
         self.assertEqual(second["status"], "error")
         self.assertIn("already committed", second["error_message"])
+
+    @patch("mamaguard.shared.tools.plan_mode._post_resource")
+    def test_cannot_commit_plan_from_different_patient_scope(self, mock_post):
+        from mamaguard.shared.tools.plan_mode import commit_pending_write, plan_risk_assessment
+
+        owner_ctx = MockToolContext(patient_id="p-owner")
+        other_ctx = MockToolContext(patient_id="p-other")
+        plan = plan_risk_assessment(
+            risk_type="x", probability=0.8, basis="b", mitigation="m",
+            risk_level="HIGH", tool_context=owner_ctx,
+        )
+
+        result = commit_pending_write(plan["plan_id"], approved=True, tool_context=other_ctx)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("p-other", result["error_message"])
+        mock_post.assert_not_called()
 
 
 class TestPlanCarePlan(unittest.TestCase):
@@ -193,7 +215,9 @@ class TestListPendingWrites(unittest.TestCase):
 
     def test_lists_pending_and_committed_separately(self):
         from mamaguard.shared.tools.plan_mode import (
-            commit_pending_write, list_pending_writes, plan_risk_assessment,
+            commit_pending_write,
+            list_pending_writes,
+            plan_risk_assessment,
         )
 
         ctx = MockToolContext()
@@ -214,6 +238,35 @@ class TestListPendingWrites(unittest.TestCase):
         self.assertEqual(len(result["pending"]), 1)
         self.assertEqual(len(result["history"]), 1)
         self.assertEqual(result["history"][0]["status"], "denied")
+
+
+class TestScopedPlanStorePersistence(unittest.TestCase):
+    def setUp(self):
+        _reset_plan_store()
+
+    def test_optional_json_store_survives_memory_clear(self):
+        from mamaguard.shared.tools.plan_mode import list_pending_writes, plan_risk_assessment
+
+        ctx = MockToolContext(patient_id="p-persist")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store_path = Path(tmpdir) / "plans.json"
+            with patch.dict(os.environ, {"MAMAGUARD_PLAN_STORE_PATH": str(store_path)}):
+                plan = plan_risk_assessment(
+                    risk_type="x",
+                    probability=0.8,
+                    basis="b",
+                    mitigation="m",
+                    risk_level="HIGH",
+                    tool_context=ctx,
+                )
+                self.assertTrue(store_path.exists())
+
+                plan_mode._PROCESS_PLAN_STORE.clear()
+                result = list_pending_writes(tool_context=ctx)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["pending"][0]["plan_id"], plan["plan_id"])
+        self.assertEqual(result["pending"][0]["patient_id"], "p-persist")
 
 
 if __name__ == "__main__":

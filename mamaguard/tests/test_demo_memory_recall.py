@@ -4,7 +4,7 @@ import base64
 import importlib.util
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -29,7 +29,7 @@ class TestBuildMemoryDoc(unittest.TestCase):
         """The doc MUST match the category/type/subject fields that
         mamaguard.shared.memory.inject_memory_block queries against."""
         doc = self.mod._build_memory_doc(
-            "p-1", "test note content", datetime.now(timezone.utc),
+            "p-1", "test note content", datetime.now(UTC),
         )
         self.assertEqual(doc["resourceType"], "DocumentReference")
         self.assertEqual(doc["status"], "current")
@@ -51,7 +51,7 @@ class TestBuildMemoryDoc(unittest.TestCase):
 
     def test_content_is_base64_markdown(self):
         note = "## Visit 2026-03-10\n\nDr. Kim declined metformin."
-        doc = self.mod._build_memory_doc("p-1", note, datetime.now(timezone.utc))
+        doc = self.mod._build_memory_doc("p-1", note, datetime.now(UTC))
         att = doc["content"][0]["attachment"]
         self.assertEqual(att["contentType"], "text/markdown")
         decoded = base64.b64decode(att["data"]).decode("utf-8")

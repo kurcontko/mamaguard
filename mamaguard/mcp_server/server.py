@@ -1,7 +1,7 @@
 """
 MamaGuard MCP Server
 
-Exposes 18 FHIR tools via the MCP protocol: 15 granular tools drawn directly from
+Exposes 19 FHIR tools via the MCP protocol: 16 granular tools drawn directly from
 mamaguard/shared/tools/ (shared implementation with the ADK agents) plus 3 compound
 tools (assess_maternal_risk / assess_pediatric_status / screen_sdoh) that wrap the
 parallel domain fetchers for one-shot consumption by other marketplace agents.
@@ -27,37 +27,59 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 
-from .context import FhirContext
-
 # FhirContext duck-types ToolContext (implements .state dict) for MCP use.
 # mypy can't verify structural compatibility, so tool calls use type: ignore.
-
 # -- Shared tool imports (single source of truth) ----------------------------
 from mamaguard.shared.tools.fhir_base import (
     find_linked_newborn as _find_linked_newborn,
-    get_patient_summary as _get_patient_summary,
+)
+from mamaguard.shared.tools.fhir_base import (
     get_active_medications as _get_active_medications,
+)
+from mamaguard.shared.tools.fhir_base import (
+    get_current_plan as _get_current_plan,
+)
+from mamaguard.shared.tools.fhir_base import (
+    get_patient_summary as _get_patient_summary,
 )
 from mamaguard.shared.tools.maternal import (
     get_bp_trend as _get_bp_trend,
+)
+from mamaguard.shared.tools.maternal import (
     get_glucose_trend as _get_glucose_trend,
-    get_pregnancy_history as _get_pregnancy_history,
+)
+from mamaguard.shared.tools.maternal import (
     get_maternal_risk_profile as _get_maternal_risk_profile,
+)
+from mamaguard.shared.tools.maternal import (
+    get_pregnancy_history as _get_pregnancy_history,
+)
+from mamaguard.shared.tools.pediatric import (
+    get_care_gaps as _get_care_gaps,
+)
+from mamaguard.shared.tools.pediatric import (
+    get_developmental_screening_status as _get_developmental_screening_status,
 )
 from mamaguard.shared.tools.pediatric import (
     get_immunization_gaps as _get_immunization_gaps,
-    get_developmental_screening_status as _get_developmental_screening_status,
-    get_care_gaps as _get_care_gaps,
+)
+from mamaguard.shared.tools.sdoh import (
+    find_sdoh_resources as _find_sdoh_resources,
 )
 from mamaguard.shared.tools.sdoh import (
     get_sdoh_screening as _get_sdoh_screening,
-    find_sdoh_resources as _find_sdoh_resources,
+)
+from mamaguard.shared.tools.writeback import (
+    create_communication_request as _create_communication_request,
+)
+from mamaguard.shared.tools.writeback import (
+    write_care_plan as _write_care_plan,
 )
 from mamaguard.shared.tools.writeback import (
     write_risk_assessment as _write_risk_assessment,
-    create_communication_request as _create_communication_request,
-    write_care_plan as _write_care_plan,
 )
+
+from .context import FhirContext
 
 # ---------------------------------------------------------------------------
 mcp = FastMCP(
@@ -130,7 +152,31 @@ def get_active_medications(
 
 
 # ---------------------------------------------------------------------------
-# Tool 3: find_linked_newborn
+# Tool 3: get_current_plan
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_current_plan(
+    fhir_url: str,
+    fhir_token: str,
+    patient_id: str,
+) -> str:
+    """
+    Fetch the patient's active structured plan from FHIR.
+
+    Returns active/draft CarePlan, Goal, CommunicationRequest,
+    ServiceRequest, and RiskAssessment resources attached to the patient.
+
+    Args:
+        fhir_url: Base URL of the FHIR R4 server
+        fhir_token: Bearer token for FHIR server authentication
+        patient_id: FHIR Patient resource ID
+    """
+    return _json(_get_current_plan(_ctx(fhir_url, fhir_token, patient_id)))  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Tool 4: find_linked_newborn
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
@@ -536,7 +582,11 @@ import asyncio  # noqa: E402
 
 from mamaguard.shared.fetchers import (  # noqa: E402
     fetch_maternal_data as _fetch_maternal_data,
+)
+from mamaguard.shared.fetchers import (  # noqa: E402
     fetch_pediatric_data as _fetch_pediatric_data,
+)
+from mamaguard.shared.fetchers import (  # noqa: E402
     fetch_sdoh_data as _fetch_sdoh_data,
 )
 

@@ -46,7 +46,7 @@ def bench_maternal_tools():
     required_tools = [
         "get_maternal_risk_profile",
         "get_patient_summary",
-        "write_risk_assessment",
+        "plan_risk_assessment",
     ]
     checks = {}
     for tool in required_tools:
@@ -95,7 +95,8 @@ def bench_sdoh_tools():
     required_tools = [
         "get_sdoh_screening",
         "get_patient_summary",
-        "create_communication_request",
+        "plan_care_plan",
+        "plan_communication_request",
     ]
     checks = {}
     for tool in required_tools:
@@ -140,8 +141,8 @@ def bench_routing_rules():
 
 @suite.case("safety_all_agents_have_fhir_hook", "All agents use FHIR context hook", "orchestration")
 def bench_safety_fhir_hooks():
-    from mamaguard.orchestrator.agent import root_agent
     from mamaguard.maternal_agent.agent import maternal_risk_agent
+    from mamaguard.orchestrator.agent import root_agent
     from mamaguard.pediatric_agent.agent import pediatric_transition_agent
     from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
     from mamaguard.shared.fhir_hook import extract_fhir_context
@@ -195,7 +196,7 @@ def bench_safety_liaison():
 
 # -- Write-back Tool Validation ------------------------------------------------
 
-@suite.case("writeback_only_maternal_has_risk_assessment", "Only maternal agent can write RiskAssessment", "orchestration")
+@suite.case("writeback_only_maternal_plans_risk_assessment", "Only maternal agent can plan RiskAssessment", "orchestration")
 def bench_writeback_risk_assessment():
     from mamaguard.maternal_agent.agent import maternal_risk_agent
     from mamaguard.pediatric_agent.agent import pediatric_transition_agent
@@ -208,13 +209,13 @@ def bench_writeback_risk_assessment():
         )
 
     checks = {
-        "maternal_has_write_risk": has_tool(maternal_risk_agent, "write_risk_assessment"),
-        "pediatric_no_write_risk": not has_tool(pediatric_transition_agent, "write_risk_assessment"),
-        "sdoh_no_write_risk": not has_tool(sdoh_outreach_agent, "write_risk_assessment"),
+        "maternal_has_plan_risk": has_tool(maternal_risk_agent, "plan_risk_assessment"),
+        "pediatric_no_plan_risk": not has_tool(pediatric_transition_agent, "plan_risk_assessment"),
+        "sdoh_no_plan_risk": not has_tool(sdoh_outreach_agent, "plan_risk_assessment"),
     }
     score = sum(checks.values()) / len(checks)
     return BenchmarkResult(
-        name="writeback_only_maternal_has_risk_assessment",
+        name="writeback_only_maternal_plans_risk_assessment",
         verdict=Verdict.PASS if score == 1.0 else Verdict.FAIL,
         score=score,
         details=checks,
@@ -226,6 +227,7 @@ def bench_writeback_risk_assessment():
 @suite.case("json_output_mode_converts_5t", "JSON formatter produces valid structured output from 5T markdown", "orchestration")
 def bench_json_output_mode():
     import json
+
     from mamaguard.shared.json_formatter import markdown_to_json
 
     sample = (
@@ -280,6 +282,7 @@ def bench_json_output_mode():
 @suite.case("json_output_mode_callback_wired", "Orchestrator callback chain includes JSON formatter", "orchestration")
 def bench_json_callback_wired():
     import inspect
+
     from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
 
     source = inspect.getsource(_orchestrator_after_model_callback)

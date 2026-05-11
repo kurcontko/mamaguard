@@ -1,6 +1,5 @@
 """Unit tests for FHIR AuditEvent generation."""
 
-import json
 import os
 import unittest
 from datetime import datetime
@@ -76,7 +75,7 @@ class TestBuildAuditEvent(unittest.TestCase):
 class TestPostAuditEvent(unittest.TestCase):
     @patch("mamaguard.shared.audit_event.httpx.post")
     def test_successful_post(self, mock_post):
-        from mamaguard.shared.audit_event import post_audit_event, build_audit_event
+        from mamaguard.shared.audit_event import build_audit_event, post_audit_event
 
         mock_response = MagicMock()
         mock_response.status_code = 201
@@ -97,7 +96,7 @@ class TestPostAuditEvent(unittest.TestCase):
 
     @patch("mamaguard.shared.audit_event.httpx.post")
     def test_http_error_swallowed(self, mock_post):
-        from mamaguard.shared.audit_event import post_audit_event, build_audit_event
+        from mamaguard.shared.audit_event import build_audit_event, post_audit_event
 
         mock_post.side_effect = httpx.HTTPStatusError(
             "405",
@@ -111,7 +110,7 @@ class TestPostAuditEvent(unittest.TestCase):
 
     @patch("mamaguard.shared.audit_event.httpx.post")
     def test_connection_error_swallowed(self, mock_post):
-        from mamaguard.shared.audit_event import post_audit_event, build_audit_event
+        from mamaguard.shared.audit_event import build_audit_event, post_audit_event
 
         mock_post.side_effect = httpx.ConnectError("unreachable")
 
@@ -121,7 +120,7 @@ class TestPostAuditEvent(unittest.TestCase):
 
     @patch("mamaguard.shared.audit_event.httpx.post")
     def test_timeout_swallowed(self, mock_post):
-        from mamaguard.shared.audit_event import post_audit_event, build_audit_event
+        from mamaguard.shared.audit_event import build_audit_event, post_audit_event
 
         mock_post.side_effect = httpx.ReadTimeout("timeout")
 
@@ -210,7 +209,7 @@ class TestAuditedDecorator(unittest.TestCase):
             return {"status": "success", "resource_id": "cr-1"}
 
         ctx = MockToolContext()
-        result = create_communication_request("phone", tool_context=ctx)
+        create_communication_request("phone", tool_context=ctx)
 
         mock_emit.assert_called_once_with(
             "https://fhir.example.org", "tok", "p1",
@@ -245,7 +244,7 @@ class TestAuditedDecorator(unittest.TestCase):
             return {"status": "partial", "message": "Goal created, CarePlan rejected"}
 
         ctx = MockToolContext()
-        result = write_care_plan(tool_context=ctx)
+        write_care_plan(tool_context=ctx)
 
         mock_emit.assert_called_once_with(
             "https://fhir.example.org", "tok", "p1",

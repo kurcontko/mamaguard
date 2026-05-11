@@ -42,6 +42,9 @@ def build_agent_model() -> Any:
                 + ", ".join(missing)
             )
 
+        assert model is not None
+        assert api_base is not None
+        assert api_key is not None
         lite_model = model if model.startswith("openai/") else f"openai/{model}"
         return LiteLlm(model=lite_model, api_base=api_base, api_key=api_key)
 
@@ -49,4 +52,3 @@ def build_agent_model() -> Any:
         f"Unsupported MAMAGUARD_MODEL_BACKEND={backend!r}. "
         "Use 'gemini' or 'openai'."
     )
-

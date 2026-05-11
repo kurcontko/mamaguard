@@ -4,7 +4,6 @@ Tests for SHARP context validation in mamaguard.shared.fhir_hook.
 Covers validate_sharp_context() and its integration into extract_fhir_context().
 """
 
-import json
 import unittest
 from types import SimpleNamespace
 
@@ -12,7 +11,6 @@ from mamaguard.shared.fhir_hook import (
     extract_fhir_context,
     validate_sharp_context,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fakes (same pattern as test_fhir_hook.py)

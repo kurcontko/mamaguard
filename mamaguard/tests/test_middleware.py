@@ -15,15 +15,17 @@ Starlette app + ``TestClient`` — no ADK imports, no network. Module-level
 
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
+from dataclasses import dataclass
+from typing import Any
 from unittest.mock import patch
 
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
-from starlette.testclient import TestClient
 
 from mamaguard.shared import middleware as mw
 from mamaguard.shared.middleware import (
@@ -118,7 +120,132 @@ def _build_a2a_wire_app() -> Starlette:
     return app
 
 
-def _client(valid_keys: set[str] | None = None) -> TestClient:
+class _Headers:
+    def __init__(self, values: dict[str, str]):
+        self._values = {key.lower(): value for key, value in values.items()}
+
+    def __contains__(self, key: object) -> bool:
+        if isinstance(key, str):
+            return key.lower() in self._values
+        return False
+
+    def __getitem__(self, key: str) -> str:
+        return self._values[key.lower()]
+
+    def get(self, key: str, default: str | None = None) -> str | None:
+        return self._values.get(key.lower(), default)
+
+
+@dataclass
+class _ASGIResponse:
+    status_code: int
+    headers: _Headers
+    content: bytes
+
+    @property
+    def text(self) -> str:
+        return self.content.decode("utf-8", errors="replace")
+
+    def json(self) -> Any:
+        return json.loads(self.text)
+
+
+class _ASGIClient:
+    def __init__(self, app):
+        self._app = app
+
+    def get(self, path: str, headers: dict[str, str] | None = None) -> _ASGIResponse:
+        return asyncio.run(_asgi_request(self._app, "GET", path, headers=headers))
+
+    def post(
+        self,
+        path: str,
+        json: dict[str, Any] | None = None,
+        content: bytes | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> _ASGIResponse:
+        return asyncio.run(
+            _asgi_request(
+                self._app,
+                "POST",
+                path,
+                json_body=json,
+                content=content,
+                headers=headers,
+            )
+        )
+
+
+async def _asgi_request(
+    app,
+    method: str,
+    path: str,
+    json_body: dict[str, Any] | None = None,
+    content: bytes | None = None,
+    headers: dict[str, str] | None = None,
+) -> _ASGIResponse:
+    body = content or b""
+    raw_headers: list[tuple[bytes, bytes]] = []
+    if json_body is not None:
+        body = json.dumps(json_body).encode("utf-8")
+        raw_headers.append((b"content-type", b"application/json"))
+
+    for name, value in (headers or {}).items():
+        raw_headers.append((name.lower().encode("latin-1"), value.encode("latin-1")))
+
+    request_sent = False
+
+    async def receive():
+        nonlocal request_sent
+        if not request_sent:
+            request_sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
+
+    messages: list[dict[str, Any]] = []
+
+    async def send(message):
+        messages.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": method,
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": b"",
+        "headers": raw_headers,
+        "client": ("testclient", 50000),
+        "server": ("testserver", 80),
+        "root_path": "",
+        "state": {},
+    }
+
+    await app(scope, receive, send)
+
+    status_code = 500
+    response_headers: dict[str, str] = {}
+    chunks: list[bytes] = []
+    for message in messages:
+        if message["type"] == "http.response.start":
+            status_code = message["status"]
+            response_headers = {
+                key.decode("latin-1"): value.decode("latin-1")
+                for key, value in message.get("headers", [])
+            }
+        elif message["type"] == "http.response.body":
+            chunks.append(message.get("body", b""))
+
+    return _ASGIResponse(
+        status_code=status_code,
+        headers=_Headers(response_headers),
+        content=b"".join(chunks),
+    )
+
+
+def _client(valid_keys: set[str] | None = None) -> _ASGIClient:
     """Patch VALID_API_KEYS for the life of the returned TestClient.
 
     We cannot use a decorator/context manager neatly for every test because
@@ -128,7 +255,7 @@ def _client(valid_keys: set[str] | None = None) -> TestClient:
     if valid_keys is None:
         valid_keys = {"good-key"}
     # Caller is expected to patch via context manager; helper just builds app.
-    return TestClient(_build_app())
+    return _ASGIClient(_build_app())
 
 
 class TestAgentCardBypass(unittest.TestCase):
@@ -399,7 +526,7 @@ class TestA2aV1WireFormat(unittest.TestCase):
     """PO speaks A2A v1 while the SDK speaks v0.3 internally."""
 
     def setUp(self):
-        self.client = TestClient(_build_a2a_wire_app())
+        self.client = _ASGIClient(_build_a2a_wire_app())
 
     def _payload(self, method: str = "SendMessage", *, v1_enums: bool = True):
         role = "ROLE_USER" if v1_enums else "user"

@@ -102,7 +102,7 @@ class HapiFhirServer:
         self._run(["docker", "stop", self.container_name], check=False)
         self._run(["docker", "rm", self.container_name], check=False)
 
-    def __enter__(self) -> "HapiFhirServer":
+    def __enter__(self) -> HapiFhirServer:
         self.start()
         self.load_all_bundles()
         return self

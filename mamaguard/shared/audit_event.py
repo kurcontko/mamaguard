@@ -16,7 +16,7 @@ from __future__ import annotations
 import functools
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -65,7 +65,7 @@ def build_audit_event(
             }
         ],
         "action": action,
-        "recorded": datetime.now(timezone.utc).isoformat(),
+        "recorded": datetime.now(UTC).isoformat(),
         "outcome": outcome,
         "purposeOfEvent": [
             {

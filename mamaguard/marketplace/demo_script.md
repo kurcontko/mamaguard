@@ -11,9 +11,9 @@
 
 ## Scene 1: Introduction (0:00 – 0:15) ~15s
 
-**Voiceover:** "MamaGuard is an AI care coordination agent for maternal and pediatric health. It analyzes FHIR patient records using three specialist agents and fifteen tools — maternal risk, pediatric transitions, and social determinants — with seamless mother-to-child handoff and the clinician always in control. Every response follows the 5T framework: Talk, Template, Table, Task, Transaction. It ships as both an A2A agent and an MCP server."
+**Voiceover:** "MamaGuard is an AI care coordination agent for maternal and pediatric health. It analyzes FHIR patient records using three specialist agents, 16 shared FHIR tools, and approval-gated write planning — maternal risk, pediatric transitions, and social determinants — with seamless mother-to-child handoff and the clinician always in control. Every response follows the 5T framework: Talk, Template, Table, Task, Transaction. It ships as both an A2A agent and an MCP server."
 
-**Visual:** Architecture diagram (dual A2A + MCP paths, 3 agents, 15 FHIR tools, Liaison pattern, 5T output)
+**Visual:** Architecture diagram (dual A2A + MCP paths, 3 agents, 16 FHIR tools, Liaison pattern, 5T output)
 
 ## Scene 2: Launch from Marketplace (0:15 – 0:30) ~15s
 
@@ -158,13 +158,13 @@
 5. Response filter: formatting cleanup (no triple backticks, collapsed rules, duplicate headers stripped)
 6. Session-level tool response caching: second sub-agent reuses FHIR data from first — fewer server round-trips
 7. FHIR error recovery: partial data triggers "⚠ DATA UNAVAILABLE" markers with manual review tasks, not silent failures
-8. MCP server exposing same 15 tools (dual submission: A2A + MCP)
+8. MCP server exposing 19 tools: 16 shared FHIR tools plus 3 compound assessments (dual submission: A2A + MCP)
 
-**Voiceover:** "Under the hood: A2A protocol with FHIR context and SMART Permission Tickets, Liaison Agent pattern for human-in-the-loop, bidirectional FHIR write-back with field validation, a safety filter that prevents autonomous prescribing, session-level tool caching across sub-agents, graceful FHIR error recovery, and a standalone MCP server exposing the same fifteen tools for any MCP-compatible client."
+**Voiceover:** "Under the hood: A2A protocol with FHIR context and SMART Permission Tickets, Liaison Agent pattern for human-in-the-loop, bidirectional FHIR write-back with field validation, a safety filter that prevents autonomous prescribing, session-level tool caching across sub-agents, graceful FHIR error recovery, and a standalone MCP server exposing the same FHIR tool layer plus compound assessments for any MCP-compatible client."
 
 ## Scene 7: Closing (2:45 – 3:00) ~15s
 
-**Voiceover:** "MamaGuard targets the coordination gap responsible for 80% of preventable maternal deaths. Three specialist agents, fifteen FHIR tools, structured 5T output, seamless mother-to-child handoff, dual A2A and MCP submission — with the clinician always in control."
+**Voiceover:** "MamaGuard targets the coordination gap responsible for 80% of preventable maternal deaths. Three specialist agents, 16 FHIR tools, structured 5T output, seamless mother-to-child handoff, dual A2A and MCP submission — with the clinician always in control."
 
 **Visual:** Impact metrics table from Devpost description
 

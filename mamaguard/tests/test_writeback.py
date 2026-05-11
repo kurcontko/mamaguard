@@ -1,7 +1,7 @@
 """Unit tests for FHIR write-back tools."""
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import httpx
 

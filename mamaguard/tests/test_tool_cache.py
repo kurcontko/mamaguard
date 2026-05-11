@@ -12,7 +12,7 @@ Covers:
 """
 
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import patch
 
 import httpx
 
@@ -106,7 +106,7 @@ class TestCachePrimitives(unittest.TestCase):
         self.assertIsNone(get_cache(state, "get_bp_trend", "p1", extra_args=(12,)))
 
     def test_invalidate_all(self):
-        from mamaguard.shared.tools.cache import get_cache, put_cache, invalidate_cache
+        from mamaguard.shared.tools.cache import get_cache, invalidate_cache, put_cache
         state = {}
         put_cache(state, "tool_a", "p1", {"status": "success"})
         put_cache(state, "tool_b", "p2", {"status": "success"})
@@ -115,7 +115,7 @@ class TestCachePrimitives(unittest.TestCase):
         self.assertIsNone(get_cache(state, "tool_b", "p2"))
 
     def test_invalidate_by_patient(self):
-        from mamaguard.shared.tools.cache import get_cache, put_cache, invalidate_cache
+        from mamaguard.shared.tools.cache import get_cache, invalidate_cache, put_cache
         state = {}
         put_cache(state, "tool", "p1", {"status": "success", "v": 1})
         put_cache(state, "tool", "p2", {"status": "success", "v": 2})

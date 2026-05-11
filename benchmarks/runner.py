@@ -43,17 +43,23 @@ import os
 import sys
 
 from benchmarks.base import BenchmarkResult, BenchmarkSuite, Verdict
+from benchmarks.clinical_reasoning.bench_ai_factor_comparison import (
+    suite as ai_factor_comparison_suite,
+)
+from benchmarks.clinical_reasoning.bench_baseline_comparison import reasoning_trace_suite
+from benchmarks.clinical_reasoning.bench_baseline_comparison import (
+    suite as baseline_comparison_suite,
+)
+from benchmarks.clinical_reasoning.bench_care_plan_synthesis import (
+    suite as care_plan_synthesis_suite,
+)
+from benchmarks.clinical_reasoning.bench_risk_assessment import suite as clinical_suite
 from benchmarks.config import CATEGORY_WEIGHTS
 
 # Tier 1 — deterministic unit-regression suites
 from benchmarks.fhir_tools.bench_maternal import suite as fhir_maternal_suite
 from benchmarks.fhir_tools.bench_pediatric import suite as fhir_pediatric_suite
 from benchmarks.fhir_tools.bench_sdoh import suite as fhir_sdoh_suite
-from benchmarks.clinical_reasoning.bench_risk_assessment import suite as clinical_suite
-from benchmarks.clinical_reasoning.bench_baseline_comparison import suite as baseline_comparison_suite
-from benchmarks.clinical_reasoning.bench_baseline_comparison import reasoning_trace_suite
-from benchmarks.clinical_reasoning.bench_care_plan_synthesis import suite as care_plan_synthesis_suite
-from benchmarks.clinical_reasoning.bench_ai_factor_comparison import suite as ai_factor_comparison_suite
 from benchmarks.orchestration.bench_routing import suite as orchestration_suite
 
 DETERMINISTIC_SUITES: dict[str, BenchmarkSuite] = {
@@ -71,8 +77,8 @@ DETERMINISTIC_SUITES: dict[str, BenchmarkSuite] = {
 
 def _build_llm_suites(use_judge: bool = False) -> dict[str, BenchmarkSuite]:
     """Build tier-2a LLM eval suites (no real agent, simulated tool output)."""
+    from benchmarks.llm_eval import bench_clinical, bench_routing, bench_safety
     from benchmarks.llm_eval.client import LLMConfig, check_endpoint
-    from benchmarks.llm_eval import bench_routing, bench_clinical, bench_safety
 
     config = LLMConfig.from_env()
     judge_config = LLMConfig.judge_from_env() if use_judge else None
@@ -131,8 +137,8 @@ def _build_medagent_suites(
     task_types: set[str] | None,
 ) -> dict[str, BenchmarkSuite]:
     """Build tier-3 MedAgentBench-style suite."""
-    from benchmarks.medagent.bench_medagent import build_suite as build_ma
     from benchmarks.llm_eval.client import LLMConfig
+    from benchmarks.medagent.bench_medagent import build_suite as build_ma
 
     judge_config = LLMConfig.judge_from_env() if use_judge else None
     return {

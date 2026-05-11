@@ -8,7 +8,7 @@ Tools:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from google.adk.tools import ToolContext
@@ -162,7 +162,7 @@ def write_risk_assessment(
         "resourceType": "RiskAssessment",
         "status": "final",
         "subject": {"reference": f"Patient/{patient_id}"},
-        "occurrenceDateTime": datetime.now(timezone.utc).isoformat(),
+        "occurrenceDateTime": datetime.now(UTC).isoformat(),
         "prediction": [
             {
                 "outcome": {
@@ -228,7 +228,7 @@ def create_communication_request(
         "status": "active",
         "priority": priority,
         "subject": {"reference": f"Patient/{patient_id}"},
-        "authoredOn": datetime.now(timezone.utc).isoformat(),
+        "authoredOn": datetime.now(UTC).isoformat(),
         "medium": [
             {
                 "text": medium,
@@ -309,7 +309,7 @@ def write_care_plan(
         patient_id, category, resource_name,
     )
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     subject = {"reference": f"Patient/{patient_id}"}
 
     # -- 1. Goal --------------------------------------------------------

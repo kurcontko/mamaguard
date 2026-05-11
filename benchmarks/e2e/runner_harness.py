@@ -25,7 +25,6 @@ from google.genai import types as genai_types
 from benchmarks.e2e.agent_factory import build_agent_tree
 from benchmarks.e2e.trace_capture import TraceCollector
 
-
 # Defaults for multi-turn safety
 MAX_TURNS = 10
 TURN_TIMEOUT_SECONDS = 120.0
@@ -205,14 +204,14 @@ class MamaGuardHarness:
                 trace_before = len(self.trace.calls)
                 turn_t0 = time.perf_counter()
 
-                async def _consume_turn():
+                async def _consume_turn(new_message, events):
                     nonlocal turn_text
                     async for event in self.runner.run_async(
                         user_id=user_id,
                         session_id=session_id,
-                        new_message=msg,
+                        new_message=new_message,
                     ):
-                        turn_events.append(event)
+                        events.append(event)
                         content = getattr(event, "content", None)
                         if content is not None:
                             parts = getattr(content, "parts", None) or []
@@ -222,8 +221,8 @@ class MamaGuardHarness:
                                     turn_text = text
 
                 try:
-                    await asyncio.wait_for(_consume_turn(), timeout=turn_timeout)
-                except asyncio.TimeoutError:
+                    await asyncio.wait_for(_consume_turn(msg, turn_events), timeout=turn_timeout)
+                except TimeoutError:
                     turn_elapsed = (time.perf_counter() - turn_t0) * 1000
                     turn_tools = [c.tool_name for c in self.trace.calls[trace_before:]]
                     turn_traces.append(TurnTrace(

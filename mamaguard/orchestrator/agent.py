@@ -18,7 +18,12 @@ from mamaguard.shared.timing import (
     before_tool_timing,
     inject_timing_callback,
 )
-from mamaguard.shared.tools import commit_pending_write, find_linked_newborn
+from mamaguard.shared.tools import (
+    commit_pending_write,
+    find_linked_newborn,
+    get_current_plan,
+    list_pending_writes,
+)
 
 
 def _orchestrator_after_model_callback(callback_context, llm_response):
@@ -49,6 +54,11 @@ to specialist sub-agents and synthesize their responses.
 3. **sdoh_outreach_agent** — Insurance, language barriers, housing/food insecurity, referrals.
 
 **Routing Rules:**
+- "Current plan", "what is pending", "history", or "what should I know" → call \
+`get_current_plan` and `list_pending_writes` first. Use `get_current_plan` for \
+FHIR-persisted CarePlan/Goal/CommunicationRequest/ServiceRequest/RiskAssessment \
+resources and `list_pending_writes` for staged-but-not-approved MamaGuard plans. \
+If clinical risk is also requested, continue with the relevant specialist agents.
 - Maternal health → maternal_risk_agent
 - Child/pediatric → pediatric_transition_agent
 - Insurance/social needs → sdoh_outreach_agent
@@ -81,7 +91,8 @@ respond with a short confirmation Transaction listing the resource that was crea
 `commit_pending_write(plan_id=<id>, approved=False)`. Confirm in the response that \
 no FHIR write occurred.
 - If the user asks "approve all", iterate through every pending plan_id from the prior \
-turn. Do not invent plan_ids — only commit ones the user has been shown.
+turn or from `list_pending_writes`. Do not invent plan_ids — only commit ones the user \
+has been shown.
 
 **Pediatric Transition — Mother-to-Child Handoff:**
 1. Call **find_linked_newborn** with mother's Patient ID to discover linked children. \
@@ -239,7 +250,9 @@ root_agent = Agent(
         AgentTool(agent=maternal_risk_agent),
         AgentTool(agent=pediatric_transition_agent),
         AgentTool(agent=sdoh_outreach_agent),
+        get_current_plan,
         find_linked_newborn,
+        list_pending_writes,
         commit_pending_write,
     ],
     before_model_callback=[extract_fhir_context, inject_memory_block],

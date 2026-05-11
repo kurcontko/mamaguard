@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from mamaguard.shared.tools import (
     find_linked_newborn,
@@ -129,11 +129,14 @@ async def fetch_maternal_data(
     """Parallel maternal-domain fetch: patient summary + risk profile + meds."""
     ctx = _StateCtx(fhir_url, fhir_token, patient_id)
 
-    summary, risk, meds = await asyncio.gather(
-        asyncio.to_thread(get_patient_summary, ctx),
-        asyncio.to_thread(get_maternal_risk_profile, ctx),
-        asyncio.to_thread(get_active_medications, ctx),
-        return_exceptions=True,
+    summary, risk, meds = cast(
+        tuple[Any, Any, Any],
+        await asyncio.gather(
+            asyncio.to_thread(get_patient_summary, ctx),
+            asyncio.to_thread(get_maternal_risk_profile, ctx),
+            asyncio.to_thread(get_active_medications, ctx),
+            return_exceptions=True,
+        ),
     )
 
     data = MaternalData()
@@ -207,11 +210,14 @@ async def fetch_pediatric_data(
 
     child_ctx = _StateCtx(fhir_url, fhir_token, child_id)
 
-    imm, dev, gaps = await asyncio.gather(
-        asyncio.to_thread(get_immunization_gaps, child_ctx),
-        asyncio.to_thread(get_developmental_screening_status, child_ctx),
-        asyncio.to_thread(get_care_gaps, child_ctx),
-        return_exceptions=True,
+    imm, dev, gaps = cast(
+        tuple[Any, Any, Any],
+        await asyncio.gather(
+            asyncio.to_thread(get_immunization_gaps, child_ctx),
+            asyncio.to_thread(get_developmental_screening_status, child_ctx),
+            asyncio.to_thread(get_care_gaps, child_ctx),
+            return_exceptions=True,
+        ),
     )
 
     data = PediatricData(linked_child=child)
@@ -242,10 +248,13 @@ async def fetch_sdoh_data(
     """
     ctx = _StateCtx(fhir_url, fhir_token, patient_id)
 
-    screening, gaps = await asyncio.gather(
-        asyncio.to_thread(get_sdoh_screening, ctx),
-        asyncio.to_thread(get_care_gaps, ctx),
-        return_exceptions=True,
+    screening, gaps = cast(
+        tuple[Any, Any],
+        await asyncio.gather(
+            asyncio.to_thread(get_sdoh_screening, ctx),
+            asyncio.to_thread(get_care_gaps, ctx),
+            return_exceptions=True,
+        ),
     )
 
     data = SdohData()
@@ -269,7 +278,7 @@ async def fetch_sdoh_data(
             for cat in categories
         ]
         results = await asyncio.gather(*lookups, return_exceptions=True)
-        for cat, res in zip(categories, results):
+        for cat, res in zip(categories, results, strict=True):
             value = _unpack(f"resources[{cat}]", res, data.errors)
             if value is not None:
                 data.resources.append({"category": cat, "result": value})
@@ -332,5 +341,10 @@ def _infer_sdoh_categories(screening: dict) -> list[str]:
 
     # Deduplicate preserving order
     seen: set[str] = set()
-    unique = [c for c in categories if not (c in seen or seen.add(c))]
+    unique: list[str] = []
+    for category in categories:
+        if category in seen:
+            continue
+        seen.add(category)
+        unique.append(category)
     return unique[:5]

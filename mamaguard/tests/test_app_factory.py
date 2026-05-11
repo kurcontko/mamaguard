@@ -10,15 +10,19 @@ the contract Prompt Opinion and ``scripts/deploy.sh`` depend on:
 2. Auth enforcement — middleware is attached and enforcing on the real app.
 3. Agent card public bypass — ``/.well-known/agent-card.json`` requires no key.
 
-The tests boot the real ``a2a_app`` via Starlette's ``TestClient`` context
-manager (which triggers the lifespan that registers A2A routes).
+The tests call the real ``a2a_app`` through ASGI directly and verify the
+lifespan route registration separately.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 import unittest
 import warnings
+from dataclasses import dataclass
+from typing import Any
 
 # Ensure required env vars are set before any mamaguard import triggers
 # dotenv loading or middleware initialization.
@@ -29,8 +33,6 @@ os.environ.setdefault("GOOGLE_API_KEY", "fake-key-for-test")
 warnings.filterwarnings("ignore", message=".*EXPERIMENTAL.*")
 
 from unittest.mock import patch
-
-from starlette.testclient import TestClient
 
 from mamaguard.shared import middleware as mw
 
@@ -49,21 +51,130 @@ FHIR_EXTENSION_URI = "https://app.promptopinion.ai/schemas/a2a/v1/fhir-context"
 
 
 class _AppTestCase(unittest.TestCase):
-    """Base class that boots the real A2A app in a TestClient context manager."""
+    """Base class that exercises the real A2A app through ASGI directly."""
 
     app = None
-    client: TestClient
+    client: _ASGIClient
 
     @classmethod
     def setUpClass(cls):
         cls.app = _get_app()
-        cls.client = TestClient(cls.app)
-        # Enter the context manager to trigger lifespan (route registration).
-        cls.client.__enter__()
+        cls.client = _ASGIClient(cls.app)
 
     @classmethod
     def tearDownClass(cls):
-        cls.client.__exit__(None, None, None)
+        pass
+
+
+@dataclass
+class _ASGIResponse:
+    status_code: int
+    headers: dict[str, str]
+    content: bytes
+
+    def json(self) -> Any:
+        return json.loads(self.content.decode("utf-8"))
+
+
+class _ASGIClient:
+    """Small synchronous ASGI test client.
+
+    Starlette's TestClient currently hangs in this sandbox at anyio's thread
+    portal boundary. These tests do not need a network client; calling the ASGI
+    app directly still exercises routing and middleware.
+    """
+
+    def __init__(self, app):
+        self._app = app
+
+    def get(self, path: str, headers: dict[str, str] | None = None) -> _ASGIResponse:
+        return asyncio.run(_asgi_request(self._app, "GET", path, headers=headers))
+
+    def post(
+        self,
+        path: str,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> _ASGIResponse:
+        return asyncio.run(
+            _asgi_request(self._app, "POST", path, json_body=json, headers=headers)
+        )
+
+
+async def _asgi_request(
+    app,
+    method: str,
+    path: str,
+    json_body: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+) -> _ASGIResponse:
+    body = b""
+    raw_headers: list[tuple[bytes, bytes]] = []
+    if json_body is not None:
+        body = json.dumps(json_body).encode("utf-8")
+        raw_headers.append((b"content-type", b"application/json"))
+
+    for name, value in (headers or {}).items():
+        raw_headers.append((name.lower().encode("latin-1"), value.encode("latin-1")))
+
+    request_sent = False
+
+    async def receive():
+        nonlocal request_sent
+        if not request_sent:
+            request_sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
+
+    messages: list[dict[str, Any]] = []
+
+    async def send(message):
+        messages.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": method,
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": b"",
+        "headers": raw_headers,
+        "client": ("testclient", 50000),
+        "server": ("testserver", 80),
+        "root_path": "",
+        "state": {},
+    }
+
+    await app(scope, receive, send)
+
+    status_code = 500
+    response_headers: dict[str, str] = {}
+    chunks: list[bytes] = []
+    for message in messages:
+        if message["type"] == "http.response.start":
+            status_code = message["status"]
+            response_headers = {
+                key.decode("latin-1").lower(): value.decode("latin-1")
+                for key, value in message.get("headers", [])
+            }
+        elif message["type"] == "http.response.body":
+            chunks.append(message.get("body", b""))
+
+    return _ASGIResponse(
+        status_code=status_code,
+        headers=response_headers,
+        content=b"".join(chunks),
+    )
+
+
+def _bootstrap_a2a_routes(app) -> None:
+    async def _run_lifespan() -> None:
+        async with app.router.lifespan_context(app):
+            pass
+
+    asyncio.run(_run_lifespan())
 
 
 # ===================================================================
@@ -247,6 +358,11 @@ class TestAgentCardCapabilities(_AppTestCase):
             "patient/Immunization.rs",
             "patient/Coverage.rs",
             "patient/RelatedPerson.rs",
+            "patient/RiskAssessment.rs",
+            "patient/CommunicationRequest.rs",
+            "patient/CarePlan.rs",
+            "patient/Goal.rs",
+            "patient/ServiceRequest.rs",
         ):
             self.assertIn(read_scope, names, f"missing read scope {read_scope}")
         # Writes performed by commit_pending_write
@@ -366,6 +482,12 @@ class TestDeprecatedAgentCardPath(_AppTestCase):
         # require an API key. Accept 200 (if middleware updated) or 401 (current).
         self.assertIn(resp.status_code, (200, 401))
 
+    def test_lifespan_registers_a2a_routes(self):
+        _bootstrap_a2a_routes(self.app)
+        paths = [getattr(route, "path", None) for route in self.app.router.routes]
+        self.assertIn("/", paths)
+        self.assertIn("/.well-known/agent.json", paths)
+
 
 # ===================================================================
 # create_a2a_app factory kwargs
@@ -395,15 +517,13 @@ class TestCreateA2aAppFactory(unittest.TestCase):
     def test_no_fhir_extension(self):
         """When fhir_extension_uri is None, no extensions in card."""
         app = self._create_app(fhir_extension_uri=None)
-        with TestClient(app) as client:
-            card = client.get("/.well-known/agent-card.json").json()
+        card = _ASGIClient(app).get("/.well-known/agent-card.json").json()
         exts = card.get("capabilities", {}).get("extensions", [])
         self.assertEqual(len(exts), 0)
 
     def test_custom_fhir_extension_uri(self):
         app = self._create_app(fhir_extension_uri="https://custom.example.com/fhir")
-        with TestClient(app) as client:
-            card = client.get("/.well-known/agent-card.json").json()
+        card = _ASGIClient(app).get("/.well-known/agent-card.json").json()
         exts = card["capabilities"]["extensions"]
         self.assertEqual(len(exts), 1)
         self.assertEqual(exts[0]["uri"], "https://custom.example.com/fhir")
@@ -411,8 +531,7 @@ class TestCreateA2aAppFactory(unittest.TestCase):
     def test_no_api_key_requirement(self):
         """When require_api_key=False, no security scheme in card."""
         app = self._create_app(require_api_key=False)
-        with TestClient(app) as client:
-            card = client.get("/.well-known/agent-card.json").json()
+        card = _ASGIClient(app).get("/.well-known/agent-card.json").json()
         self.assertIsNone(card.get("securitySchemes"))
         self.assertIsNone(card.get("security"))
 
@@ -427,22 +546,19 @@ class TestCreateA2aAppFactory(unittest.TestCase):
             ),
         ]
         app = self._create_app(skills=custom_skills)
-        with TestClient(app) as client:
-            card = client.get("/.well-known/agent-card.json").json()
+        card = _ASGIClient(app).get("/.well-known/agent-card.json").json()
         self.assertEqual(len(card["skills"]), 1)
         self.assertEqual(card["skills"][0]["id"], "custom-skill")
 
     def test_custom_name_and_description(self):
         app = self._create_app(name="Custom Agent", description="Custom desc")
-        with TestClient(app) as client:
-            card = client.get("/.well-known/agent-card.json").json()
+        card = _ASGIClient(app).get("/.well-known/agent-card.json").json()
         self.assertEqual(card["name"], "Custom Agent")
         self.assertEqual(card["description"], "Custom desc")
 
     def test_custom_version(self):
         app = self._create_app(version="2.0.0")
-        with TestClient(app) as client:
-            card = client.get("/.well-known/agent-card.json").json()
+        card = _ASGIClient(app).get("/.well-known/agent-card.json").json()
         self.assertEqual(card["version"], "2.0.0")
 
 

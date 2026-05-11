@@ -33,14 +33,13 @@ from benchmarks.config import (
     HBA1C_POORLY_CONTROLLED,
     PREGNANCY_LOSS_HIGH_RISK,
 )
+from benchmarks.llm_eval.client import LLMConfig
 from benchmarks.runner import (
     _needs_fhir,
     compute_scores,
     print_report,
     run_suites,
 )
-from benchmarks.llm_eval.client import LLMConfig
-
 
 # ---------------------------------------------------------------------------
 # Verdict

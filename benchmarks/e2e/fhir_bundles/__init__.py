@@ -34,6 +34,7 @@ from benchmarks.e2e.fhir_bundles import (
     toddler_jones,
 )
 
+
 def get_bundle_refs(patient_id: str) -> set[str]:
     """Return the set of all FHIR resource references in a patient's bundle.
 

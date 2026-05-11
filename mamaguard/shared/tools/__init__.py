@@ -1,5 +1,5 @@
 """
-Shared tools catalogue -- re-exports all 15 tool functions.
+Shared tools catalogue -- re-exports all 21 tool functions.
 
 When ``MAMAGUARD_AUDIT_EVENTS=true``, every tool invocation emits a FHIR
 AuditEvent recording which agent accessed what data (HIPAA compliance trail).
@@ -7,6 +7,7 @@ AuditEvent recording which agent accessed what data (HIPAA compliance trail).
 Base FHIR tools (fhir_base.py)
     get_patient_summary       Patient demographics + conditions + meds + recent vitals
     get_active_medications    Active MedicationRequest resources
+    get_current_plan          Active CarePlan/Goal/Request/RiskAssessment resources
     find_linked_newborn       Find child Patient linked via RelatedPerson
 
 Maternal tools (maternal.py)
@@ -28,52 +29,85 @@ Write-back tools (writeback.py)
     write_risk_assessment        POST RiskAssessment to FHIR
     create_communication_request POST CommunicationRequest to FHIR
     write_care_plan              POST Goal + CarePlan tied to an SDOH resource
+
+Plan-mode tools (plan_mode.py)
+    plan_risk_assessment         Stage RiskAssessment for clinician approval
+    plan_communication_request   Stage CommunicationRequest for clinician approval
+    plan_care_plan               Stage Goal + CarePlan for clinician approval
+    commit_pending_write         Commit or deny a staged FHIR write
+    list_pending_writes          List staged and completed plan-mode writes
 """
 
 from ..audit_event import audited
-
 from .fhir_base import (
     find_linked_newborn as _find_linked_newborn,
+)
+from .fhir_base import (
     get_active_medications as _get_active_medications,
+)
+from .fhir_base import (
+    get_current_plan as _get_current_plan,
+)
+from .fhir_base import (
     get_patient_summary as _get_patient_summary,
 )
-
 from .maternal import (
     get_bp_trend as _get_bp_trend,
+)
+from .maternal import (
     get_glucose_trend as _get_glucose_trend,
+)
+from .maternal import (
     get_maternal_risk_profile as _get_maternal_risk_profile,
+)
+from .maternal import (
     get_pregnancy_history as _get_pregnancy_history,
 )
-
 from .pediatric import (
     get_care_gaps as _get_care_gaps,
+)
+from .pediatric import (
     get_developmental_screening_status as _get_developmental_screening_status,
+)
+from .pediatric import (
     get_immunization_gaps as _get_immunization_gaps,
 )
-
-from .sdoh import (
-    find_sdoh_resources as _find_sdoh_resources,
-    get_sdoh_screening as _get_sdoh_screening,
-)
-
-from .writeback import (
-    create_communication_request as _create_communication_request,
-    write_care_plan as _write_care_plan,
-    write_risk_assessment as _write_risk_assessment,
-)
-
 from .plan_mode import (
     commit_pending_write as _commit_pending_write,
+)
+from .plan_mode import (
     list_pending_writes as _list_pending_writes,
+)
+from .plan_mode import (
     plan_care_plan as _plan_care_plan,
+)
+from .plan_mode import (
     plan_communication_request as _plan_communication_request,
+)
+from .plan_mode import (
     plan_risk_assessment as _plan_risk_assessment,
+)
+from .sdoh import (
+    find_sdoh_resources as _find_sdoh_resources,
+)
+from .sdoh import (
+    get_sdoh_screening as _get_sdoh_screening,
+)
+from .writeback import (
+    create_communication_request as _create_communication_request,
+)
+from .writeback import (
+    write_care_plan as _write_care_plan,
+)
+from .writeback import (
+    write_risk_assessment as _write_risk_assessment,
 )
 
 # Wrap every tool with the AuditEvent decorator.  When the feature flag
 # is off (default), the wrapper is a no-op passthrough.
 get_patient_summary = audited(_get_patient_summary)
 get_active_medications = audited(_get_active_medications)
+get_current_plan = audited(_get_current_plan)
 find_linked_newborn = audited(_find_linked_newborn)
 get_bp_trend = audited(_get_bp_trend)
 get_glucose_trend = audited(_get_glucose_trend)
@@ -96,6 +130,7 @@ list_pending_writes = audited(_list_pending_writes)
 __all__ = [
     "get_patient_summary",
     "get_active_medications",
+    "get_current_plan",
     "find_linked_newborn",
     "get_bp_trend",
     "get_glucose_trend",

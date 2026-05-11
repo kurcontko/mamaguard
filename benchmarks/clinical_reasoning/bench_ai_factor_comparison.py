@@ -39,11 +39,9 @@ from benchmarks.clinical_reasoning.bench_baseline_comparison import (
     CASES,
     CaseFixture,
     mamaguard_synthesis,
-    rule_engine_baseline,
 )
 from benchmarks.llm_eval.client import LLMConfig, chat_completion
 from benchmarks.llm_eval.judge import RUBRICS, judge_response
-
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -189,7 +187,6 @@ Analyze the tool results below and produce your 5T assessment."""
 def _format_tool_results(case: CaseFixture) -> str:
     """Format the case's data as MamaGuard tool-result output (JSON)."""
     synthesis = mamaguard_synthesis(case)
-    baseline = rule_engine_baseline(case)
 
     maternal = synthesis.get("maternal_profile", {})
     sdoh = synthesis.get("sdoh_profile", {})
@@ -875,12 +872,12 @@ def _print_dry_run() -> None:
         print(f"CASE: {case.display_name} ({case.tier})")
         print(f"{'='*72}")
 
-        print(f"\n--- NAIVE LLM PROMPT ---")
+        print("\n--- NAIVE LLM PROMPT ---")
         print(f"System: {NAIVE_SYSTEM[:200]}...")
         fhir_text = _format_fhir_bundles_as_text(case)
         print(f"\nUser:\n{fhir_text}")
 
-        print(f"\n--- MAMAGUARD AGENT PROMPT ---")
+        print("\n--- MAMAGUARD AGENT PROMPT ---")
         print(f"System: {MAMAGUARD_SYSTEM[:200]}...")
         tool_results = _format_tool_results(case)
         print(f"\nUser (tool results):\n{tool_results[:500]}...")

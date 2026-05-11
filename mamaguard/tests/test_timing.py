@@ -17,7 +17,6 @@ Covers:
 
 from __future__ import annotations
 
-import time
 import unittest
 from types import SimpleNamespace
 from typing import Any
@@ -34,7 +33,6 @@ from mamaguard.shared.timing import (
     format_timing_line,
     inject_timing_callback,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -330,6 +328,7 @@ class TestOrchestratorWiring(unittest.TestCase):
 
     def test_after_model_chain_includes_timing(self):
         import inspect
+
         from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
         source = inspect.getsource(_orchestrator_after_model_callback)
         self.assertIn("inject_timing_callback", source)
@@ -342,8 +341,9 @@ class TestOrchestratorWiring(unittest.TestCase):
 class TestJsonTimingIntegration(unittest.TestCase):
 
     def test_json_output_includes_timing(self):
-        from mamaguard.shared.json_formatter import json_output_callback
         import json
+
+        from mamaguard.shared.json_formatter import json_output_callback
 
         ctx = _make_context({
             "output_format": "json",
@@ -361,8 +361,9 @@ class TestJsonTimingIntegration(unittest.TestCase):
         self.assertEqual(data["timing"]["agents"]["sdoh_outreach_agent"], 1.8)
 
     def test_json_output_no_timing_when_absent(self):
-        from mamaguard.shared.json_formatter import json_output_callback
         import json
+
+        from mamaguard.shared.json_formatter import json_output_callback
 
         ctx = _make_context({"output_format": "json"})
         resp = _make_response(SAMPLE_5T)

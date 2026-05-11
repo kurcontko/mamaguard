@@ -19,9 +19,15 @@ This turns the Liaison pattern from "the agent says it consulted a
 clinician" into "the FHIR bundle was shown, reviewed, and approved".
 """
 
+import hashlib
+import json
 import logging
+import os
+import secrets
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
+from threading import RLock
 from typing import Any
 
 from google.adk.tools import ToolContext
@@ -36,36 +42,85 @@ from .writeback import (
 
 logger = logging.getLogger(__name__)
 
-_PENDING_WRITES_KEY = "pending_fhir_writes"
 _APPROVAL_REQUIRED_LEVELS = {"HIGH", "URGENT"}
+_PLAN_STORE_PATH_ENV = "MAMAGUARD_PLAN_STORE_PATH"
 
 
 # ---------------------------------------------------------------------------
-# Plan store -- process-level so plans survive across sessions and PO chat
-# threads. This is what makes Scene 5 (clinician approval) work even when the
-# clinician opens a brand-new conversation to issue the approval: the
-# orchestrator's ``commit_pending_write`` can find the plan by id regardless
-# of which session staged it.
-#
-# Tradeoffs:
-#   - Plans don't survive a container restart (in-memory only). Production
-#     deployments should persist plans as FHIR resources with status=draft
-#     instead, scoped to the originating workspace.
-#   - Plan ids are timestamp + random, so collisions across users are vanishingly
-#     unlikely; but a malicious actor with a guessed plan_id could commit
-#     someone else's plan. Acceptable for single-tenant demo; real deployments
-#     need per-workspace scoping in the store key.
+# Plan store -- scoped by FHIR endpoint + patient. This keeps approvals working
+# across PO chat threads while preventing a plan id from one patient/workspace
+# from being committed under another patient's context. Set
+# MAMAGUARD_PLAN_STORE_PATH to a writable JSON path for restart persistence; a
+# production deployment can swap this narrow API for an encrypted durable store
+# without changing the tool contract.
 # ---------------------------------------------------------------------------
 
-_PROCESS_PLAN_STORE: dict[str, dict] = {}
+_PROCESS_PLAN_STORE: dict[str, dict[str, dict]] = {}
+_STORE_LOCK = RLock()
 
 
-def _store(tool_context: ToolContext | None) -> dict[str, dict]:
-    return _PROCESS_PLAN_STORE
+def _scope_key(fhir_url: str, patient_id: str) -> str:
+    raw = f"{fhir_url.rstrip()}|{patient_id.strip()}".encode()
+    return hashlib.sha256(raw).hexdigest()[:24]
 
 
 def _new_plan_id(store: dict, resource_type: str) -> str:
-    return f"plan-{resource_type.lower()}-{len(store) + 1}-{int(time.time() * 1000)}"
+    return (
+        f"plan-{resource_type.lower()}-{len(store) + 1}-"
+        f"{int(time.time() * 1000)}-{secrets.token_hex(4)}"
+    )
+
+
+def _plan_store_path() -> Path | None:
+    raw = os.getenv(_PLAN_STORE_PATH_ENV, "").strip()
+    return Path(raw) if raw else None
+
+
+def _load_persistent_store() -> None:
+    path = _plan_store_path()
+    if path is None or not path.exists():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("plan_store_load_failed path=%s error=%s", path, exc)
+        return
+    if not isinstance(data, dict):
+        logger.warning("plan_store_load_failed path=%s error=top_level_not_object", path)
+        return
+    for scope, plans in data.items():
+        if isinstance(scope, str) and isinstance(plans, dict):
+            _PROCESS_PLAN_STORE.setdefault(scope, {}).update(
+                {pid: plan for pid, plan in plans.items() if isinstance(plan, dict)}
+            )
+
+
+def _save_persistent_store() -> None:
+    path = _plan_store_path()
+    if path is None:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(
+            json.dumps(_PROCESS_PLAN_STORE, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        os.replace(tmp, path)
+    except Exception as exc:
+        logger.warning("plan_store_save_failed path=%s error=%s", path, exc)
+
+
+def _store_for_scope(fhir_url: str, patient_id: str) -> tuple[str, dict[str, dict]]:
+    scope = _scope_key(fhir_url, patient_id)
+    with _STORE_LOCK:
+        _load_persistent_store()
+        return scope, _PROCESS_PLAN_STORE.setdefault(scope, {})
+
+
+def _persist_store() -> None:
+    with _STORE_LOCK:
+        _save_persistent_store()
 
 
 def _requires_approval(risk_level: str, priority: str | None = None) -> bool:
@@ -120,13 +175,13 @@ def plan_risk_assessment(
     ctx = _get_fhir_context(tool_context, "plan_risk_assessment")
     if isinstance(ctx, dict):
         return ctx
-    _, _, patient_id = ctx
+    fhir_url, _, patient_id = ctx
 
     body = {
         "resourceType": "RiskAssessment",
         "status": "final",
         "subject": {"reference": f"Patient/{patient_id}"},
-        "occurrenceDateTime": datetime.now(timezone.utc).isoformat(),
+        "occurrenceDateTime": datetime.now(UTC).isoformat(),
         "prediction": [
             {
                 "outcome": {"text": risk_type},
@@ -145,13 +200,14 @@ def plan_risk_assessment(
         ],
     }
 
-    store = _store(tool_context)
+    scope, store = _store_for_scope(fhir_url, patient_id)
     plan_id = _new_plan_id(store, "RiskAssessment")
     needs_approval = _requires_approval(risk_level)
     summary = f"{risk_type} (p={probability:.2f}, level={risk_level})"
 
     store[plan_id] = {
         "plan_id": plan_id,
+        "scope": scope,
         "resource_type": "RiskAssessment",
         "body": body,
         "patient_id": patient_id,
@@ -159,8 +215,9 @@ def plan_risk_assessment(
         "requires_approval": needs_approval,
         "status": "pending",
         "summary": summary,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
+    _persist_store()
     logger.info(
         "tool_plan_risk_assessment plan_id=%s patient_id=%s requires_approval=%s",
         plan_id, patient_id, needs_approval,
@@ -198,14 +255,14 @@ def plan_communication_request(
     ctx = _get_fhir_context(tool_context, "plan_communication_request")
     if isinstance(ctx, dict):
         return ctx
-    _, _, patient_id = ctx
+    fhir_url, _, patient_id = ctx
 
     body = {
         "resourceType": "CommunicationRequest",
         "status": "active",
         "priority": priority,
         "subject": {"reference": f"Patient/{patient_id}"},
-        "authoredOn": datetime.now(timezone.utc).isoformat(),
+        "authoredOn": datetime.now(UTC).isoformat(),
         "medium": [{"text": medium}],
         "payload": [{"contentString": content}],
         "note": [
@@ -218,13 +275,14 @@ def plan_communication_request(
         ],
     }
 
-    store = _store(tool_context)
+    scope, store = _store_for_scope(fhir_url, patient_id)
     plan_id = _new_plan_id(store, "CommunicationRequest")
     needs_approval = _requires_approval("", priority=priority)
     summary = f"{medium} / {priority}: {content[:60]}"
 
     store[plan_id] = {
         "plan_id": plan_id,
+        "scope": scope,
         "resource_type": "CommunicationRequest",
         "body": body,
         "patient_id": patient_id,
@@ -232,8 +290,9 @@ def plan_communication_request(
         "requires_approval": needs_approval,
         "status": "pending",
         "summary": summary,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
+    _persist_store()
     logger.info(
         "tool_plan_communication_request plan_id=%s patient_id=%s priority=%s",
         plan_id, patient_id, priority,
@@ -273,9 +332,9 @@ def plan_care_plan(
     ctx = _get_fhir_context(tool_context, "plan_care_plan")
     if isinstance(ctx, dict):
         return ctx
-    _, _, patient_id = ctx
+    fhir_url, _, patient_id = ctx
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     subject = {"reference": f"Patient/{patient_id}"}
 
     goal_body: dict = {
@@ -362,13 +421,14 @@ def plan_care_plan(
         ],
     }
 
-    store = _store(tool_context)
+    scope, store = _store_for_scope(fhir_url, patient_id)
     plan_id = _new_plan_id(store, "CarePlanBundle")
     needs_approval = _requires_approval(risk_level)
     summary = f"SDOH {category} -> {resource_name}"
 
     store[plan_id] = {
         "plan_id": plan_id,
+        "scope": scope,
         "resource_type": "CarePlanBundle",  # compound plan (Goal + CarePlan)
         "goal_body": goal_body,
         "care_plan_body": care_plan_body,
@@ -381,6 +441,7 @@ def plan_care_plan(
         "summary": summary,
         "created_at": now,
     }
+    _persist_store()
     logger.info(
         "tool_plan_care_plan plan_id=%s patient_id=%s category=%s",
         plan_id, patient_id, category,
@@ -417,13 +478,33 @@ def commit_pending_write(
         approved: True to POST, False to record a denial
         approver: Display name of the approver (for audit trail)
     """
-    store = _store(tool_context)
+    ctx = _get_fhir_context(tool_context, "commit_pending_write")
+    if isinstance(ctx, dict):
+        return ctx
+    fhir_url, fhir_token, patient_id = ctx
+
+    _scope, store = _store_for_scope(fhir_url, patient_id)
     plan = store.get(plan_id)
     if plan is None:
         return {
             "status": "error",
             "action": "commit_failed",
-            "error_message": f"No pending plan with id {plan_id}",
+            "error_message": (
+                f"No pending plan with id {plan_id} for patient {patient_id}"
+            ),
+        }
+    if plan.get("patient_id") != patient_id:
+        logger.warning(
+            "tool_commit_scope_mismatch plan_id=%s plan_patient=%s session_patient=%s",
+            plan_id,
+            plan.get("patient_id"),
+            patient_id,
+        )
+        return {
+            "status": "error",
+            "action": "commit_failed",
+            "plan_id": plan_id,
+            "error_message": "Plan is not scoped to the current patient context.",
         }
     if plan["status"] != "pending":
         return {
@@ -436,6 +517,7 @@ def commit_pending_write(
     if not approved:
         plan["status"] = "denied"
         plan["approver"] = approver
+        _persist_store()
         logger.info("tool_commit_denied plan_id=%s approver=%s", plan_id, approver)
         return {
             "status": "denied",
@@ -444,11 +526,6 @@ def commit_pending_write(
             "resource_type": plan["resource_type"],
             "approver": approver,
         }
-
-    ctx = _get_fhir_context(tool_context, "commit_pending_write")
-    if isinstance(ctx, dict):
-        return ctx
-    fhir_url, fhir_token, patient_id = ctx
 
     if plan["resource_type"] == "CarePlanBundle":
         return _commit_care_plan_bundle(plan, fhir_url, fhir_token, patient_id, approver, store)
@@ -459,11 +536,13 @@ def commit_pending_write(
     if err:
         plan["status"] = "failed"
         plan["error"] = err.get("error_message")
+        _persist_store()
         return {**err, "plan_id": plan_id}
 
     plan["status"] = "committed"
     plan["approver"] = approver
     plan["resource_id"] = result["resource_id"]
+    _persist_store()
     logger.info(
         "tool_commit_pending_write plan_id=%s resource=%s id=%s approver=%s",
         plan_id, plan["resource_type"], result["resource_id"], approver,
@@ -490,6 +569,7 @@ def _commit_care_plan_bundle(
     if err:
         plan["status"] = "failed"
         plan["error"] = err.get("error_message")
+        _persist_store()
         return {**err, "plan_id": plan["plan_id"]}
 
     goal_id = goal_result["resource_id"]
@@ -502,6 +582,7 @@ def _commit_care_plan_bundle(
     if err:
         plan["status"] = "partial"
         plan["goal_id"] = goal_id
+        _persist_store()
         err.update(
             status="partial",
             action="care_plan_write_failed",
@@ -516,6 +597,7 @@ def _commit_care_plan_bundle(
     plan["approver"] = approver
     plan["goal_id"] = goal_id
     plan["care_plan_id"] = plan_result["resource_id"]
+    _persist_store()
     logger.info(
         "tool_commit_care_plan plan_id=%s goal=%s care_plan=%s approver=%s",
         plan["plan_id"], goal_id, plan_result["resource_id"], approver,
@@ -538,10 +620,16 @@ def list_pending_writes(tool_context: ToolContext | None = None) -> dict:
 
     Returns a snapshot the agent / clinician can inspect before approving.
     """
-    store = _store(tool_context)
+    ctx = _get_fhir_context(tool_context, "list_pending_writes")
+    if isinstance(ctx, dict):
+        return ctx
+    fhir_url, _, patient_id = ctx
+
+    _scope, store = _store_for_scope(fhir_url, patient_id)
     pending = [
         {
             "plan_id": p["plan_id"],
+            "patient_id": p.get("patient_id", ""),
             "resource_type": p["resource_type"],
             "status": p["status"],
             "requires_approval": p["requires_approval"],

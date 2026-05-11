@@ -28,6 +28,14 @@ from mamaguard.shared.fetchers import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _run_fetcher_threads_inline(monkeypatch):
+    async def _inline_to_thread(func, /, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(f.asyncio, "to_thread", _inline_to_thread)
+
+
 # -- Maternal ----------------------------------------------------------------
 
 def test_maternal_fetch_happy_path():

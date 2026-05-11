@@ -3,7 +3,7 @@ Tests for the MamaGuard MCP server.
 
 Covers:
 1. FhirContext adapter (context.py)
-2. MCP tool registration (all 15 tools visible)
+2. MCP tool registration (all 19 tools visible)
 3. Tool invocation — happy path with mocked FHIR responses
 4. Error propagation — missing credentials surfaced cleanly
 5. SHARP context constructor (from_sharp)
@@ -20,10 +20,9 @@ from unittest.mock import MagicMock, patch
 
 import anyio
 from anyio import create_memory_object_stream
-from mcp.shared.message import SessionMessage
 from mcp.client.session import ClientSession
+from mcp.shared.message import SessionMessage
 from mcp.types import Implementation
-
 
 # ---------------------------------------------------------------------------
 # FhirContext tests
@@ -86,6 +85,7 @@ EXPECTED_TOOLS = {
     "get_immunization_gaps",
     "get_developmental_screening_status",
     "get_care_gaps",
+    "get_current_plan",
     "get_sdoh_screening",
     "find_sdoh_resources",
     "write_risk_assessment",
@@ -253,6 +253,47 @@ class TestGetActiveMedicationsTool(unittest.TestCase):
         self.assertEqual(data["medications"][0]["medication"], "Labetalol 200mg")
 
 
+class TestGetCurrentPlanTool(unittest.TestCase):
+    @patch("mamaguard.shared.tools.fhir_base._fhir_get")
+    def test_returns_current_plan(self, mock_get):
+        mock_get.side_effect = [
+            {
+                "resourceType": "Bundle",
+                "entry": [
+                    {
+                        "resource": {
+                            "resourceType": "CarePlan",
+                            "id": "cp-1",
+                            "status": "active",
+                            "intent": "plan",
+                            "title": "Postpartum follow-up",
+                        }
+                    }
+                ],
+            },
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+            _make_empty_bundle(),
+        ]
+        from mamaguard.mcp_server.server import get_current_plan
+
+        result = get_current_plan(
+            fhir_url="https://fhir.example.org",
+            fhir_token="tok",
+            patient_id="p1",
+        )
+        data = json.loads(result)
+        self.assertEqual(data["status"], "success")
+        self.assertTrue(data["data"]["current_plan_present"])
+        self.assertEqual(data["data"]["care_plans"][0]["resource_id"], "cp-1")
+
+
 class TestGetBpTrendTool(unittest.TestCase):
     @patch("mamaguard.shared.tools.fhir_base._fhir_get")
     def test_returns_readings_and_trend(self, mock_get):
@@ -396,8 +437,9 @@ class TestCareGapsTool(unittest.TestCase):
 
 class TestFindSdohResourcesTool(unittest.TestCase):
     def test_z590_housing_offline(self):
-        from mamaguard.mcp_server.server import find_sdoh_resources
         import os as _os
+
+        from mamaguard.mcp_server.server import find_sdoh_resources
         _os.environ.pop("MAMAGUARD_SDOH_API_URL", None)
         result = find_sdoh_resources(
             fhir_url="https://fhir.example.org",
@@ -620,7 +662,7 @@ class TestMcpProtocolListTools(unittest.TestCase):
         require the three SHARP params (plus optional defaults)."""
         read_tools = {
             "get_patient_summary", "get_active_medications",
-            "get_pregnancy_history", "get_maternal_risk_profile",
+            "get_current_plan", "get_pregnancy_history", "get_maternal_risk_profile",
             "get_sdoh_screening",
         }
         async def _test():
@@ -1026,8 +1068,9 @@ class TestSseAppExport(unittest.TestCase):
     """Verify that the module-level sse_app is a valid Starlette ASGI app."""
 
     def test_sse_app_is_starlette_instance(self):
-        from mamaguard.mcp_server.server import sse_app
         from starlette.applications import Starlette
+
+        from mamaguard.mcp_server.server import sse_app
         self.assertIsInstance(sse_app, Starlette)
 
     def test_sse_app_is_callable(self):

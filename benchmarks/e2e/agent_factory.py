@@ -22,12 +22,17 @@ without contaminating the production module-level root_agent.
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from google.adk.agents import Agent
 from google.adk.tools.agent_tool import AgentTool
 from google.genai import types as genai_types
 
+from mamaguard.maternal_agent.agent import MATERNAL_INSTRUCTION
+from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
+from mamaguard.pediatric_agent.agent import PEDIATRIC_INSTRUCTION
+from mamaguard.sdoh_agent.agent import SDOH_INSTRUCTION
 from mamaguard.shared.fhir_hook import extract_fhir_context
 from mamaguard.shared.tools import (
     create_communication_request,
@@ -45,10 +50,6 @@ from mamaguard.shared.tools import (
     write_care_plan,
     write_risk_assessment,
 )
-from mamaguard.maternal_agent.agent import MATERNAL_INSTRUCTION
-from mamaguard.orchestrator.agent import ORCHESTRATOR_INSTRUCTION
-from mamaguard.pediatric_agent.agent import PEDIATRIC_INSTRUCTION
-from mamaguard.sdoh_agent.agent import SDOH_INSTRUCTION
 
 
 def build_model(backend: str = "gemini") -> Any:

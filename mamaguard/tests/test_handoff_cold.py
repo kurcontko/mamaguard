@@ -20,9 +20,10 @@ so this test is deterministic (Tier-1, no LLM, no network).
 import unittest
 from unittest.mock import patch
 
-from benchmarks.e2e.fhir_bundles.maria_high_risk import BUNDLE as MARIA_BUNDLE, PATIENT_ID as MARIA_ID
-from benchmarks.e2e.fhir_bundles.baby_santos import BUNDLE as BABY_BUNDLE, PATIENT_ID as BABY_ID
-
+from benchmarks.e2e.fhir_bundles.baby_santos import BUNDLE as BABY_BUNDLE
+from benchmarks.e2e.fhir_bundles.baby_santos import PATIENT_ID as BABY_ID
+from benchmarks.e2e.fhir_bundles.maria_high_risk import BUNDLE as MARIA_BUNDLE
+from benchmarks.e2e.fhir_bundles.maria_high_risk import PATIENT_ID as MARIA_ID
 
 # ---------------------------------------------------------------------------
 # Mock FHIR server: serves resources from the actual benchmark bundles

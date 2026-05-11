@@ -22,7 +22,7 @@ from __future__ import annotations
 import base64
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -218,7 +218,7 @@ def write_agent_memory(
             }],
         }],
         "author": [{"display": _MEMORY_AUTHOR_DISPLAY}],
-        "date": datetime.now(timezone.utc).isoformat(),
+        "date": datetime.now(UTC).isoformat(),
         "content": [{
             "attachment": {
                 "contentType": "text/markdown",

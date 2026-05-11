@@ -41,7 +41,6 @@ from mamaguard.pediatric_agent.agent import pediatric_transition_agent
 from mamaguard.sdoh_agent.agent import sdoh_outreach_agent
 from mamaguard.shared.fhir_hook import extract_fhir_context
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

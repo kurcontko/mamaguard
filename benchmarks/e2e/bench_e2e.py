@@ -19,7 +19,7 @@ Optionally, an LLM-as-judge scores the answer against clinical rubrics.
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from benchmarks.base import BenchmarkCase, BenchmarkResult, BenchmarkSuite, Verdict
 from benchmarks.e2e.cases import ALL_CASES, E2ECase

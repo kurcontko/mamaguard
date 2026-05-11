@@ -29,7 +29,6 @@ from mamaguard.shared.json_formatter import (
     markdown_to_json,
 )
 
-
 # ---------------------------------------------------------------------------
 # Sample 5T markdown response (matches orchestrator example output)
 # ---------------------------------------------------------------------------
@@ -329,8 +328,9 @@ class TestOrchestratorJsonWiring(unittest.TestCase):
 
     def test_orchestrator_callback_chains_json(self):
         """The orchestrator callback should include json_output_callback."""
-        from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
         import inspect
+
+        from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
 
         source = inspect.getsource(_orchestrator_after_model_callback)
         self.assertIn("json_output_callback", source)
@@ -363,8 +363,9 @@ class TestOrchestratorJsonWiring(unittest.TestCase):
         JSON blob, erasing the `**Template**` marker that
         persist_memory_note keys on. persist must run first.
         """
-        from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
         import inspect
+
+        from mamaguard.orchestrator.agent import _orchestrator_after_model_callback
 
         source = inspect.getsource(_orchestrator_after_model_callback)
         persist_pos = source.find("persist_memory_note(")

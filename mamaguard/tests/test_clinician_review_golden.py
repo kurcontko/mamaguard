@@ -38,7 +38,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 _FIXTURE_DIR = Path(__file__).parent / "fixtures" / "clinician_review"
 _UPDATE = os.environ.get("UPDATE_GOLDENS") == "1"
 
